@@ -1,5 +1,7 @@
 # DACTIE
 
+Repository for Fabian Pröbstle's Masters thesis with the working title "**D**evelopment of a P2P **A**rchitecture for **CTI**
+**E**xchange".
 
 
 ## Getting started
@@ -44,9 +46,11 @@ Use the built-in continuous integration in GitLab.
 
 ***
 
-# Editing this README
+# Installation
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+https://git-int.aisec.fraunhofer.de/fab67549/ps16
+https://git-int.aisec.fraunhofer.de/fab67549/dactie.git
+
 
 ## Suggestions for a good README
 
