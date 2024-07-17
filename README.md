@@ -2,7 +2,7 @@
 
 Repository for Fabian Pröbstle's Masters thesis with the working title "**D**evelopment of a P2P **A**rchitecture for **CTI**
 **E**xchange".
-
+Masterthesis in: https://sharelatex.tum.de/project/668d39660baa8b7fc4447fde
 
 
 
@@ -27,8 +27,12 @@ git push -uf origin main
 
 Install Fabians projects for the MANTRA research project.
 
-- [ ] [Pointcheval Sanders Group Signature Implementaion]https://git-int.aisec.fraunhofer.de/fab67549/ps16
-- [ ] [DACTIE: Decentral Anoymous CTI Exchange]https://git-int.aisec.fraunhofer.de/fab67549/dactie.git
+- [ ] [Pointcheval Sanders Group Signature Implementaion](https://git-int.aisec.fraunhofer.de/fab67549/ps16)
+- [ ] [DACTIE: Decentral Anoymous CTI Exchange](https://git-int.aisec.fraunhofer.de/fab67549/dactie.git)
+
+
+
+
 
 
 ## Suggestions for a good README
