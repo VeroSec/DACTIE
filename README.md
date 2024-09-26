@@ -1,12 +1,62 @@
-# DACTIE
+# DACTIE: Decentral Anoymous CTI Exchange
+This repository contains the results of my master thesis on the development of a p2p architecture for CTI Exchange.
+This ReadMe gives you an overview of the Repos Content and a short usage example. More detailed explanations can be found in the subdirectories.
+## Folder Structure
 
-Repository for Fabian Pröbstle's Masters thesis with the working title "**D**evelopment of a P2P **A**rchitecture for **CTI**
-**E**xchange". This work is part of the MANTRA research project.
-Masterthesis in: https://sharelatex.tum.de/project/668d39660baa8b7fc4447fde
+- Thesis: Master Thesis and Presentation
+- dactie-authority: Implementation of the Authority Peer Type
+- dactie-peer: Implementation of the standard Sharing Peer Type
+- dactie-archive: Implementation of the Archive Peer Type
+- dactie-utils: Helper functions and wrappers, that are used in all peers
+- dactie-experiment-anonymity: The setup of the experiment used to show that gossipsub provides source anonymity
+- ps16: Implementation of the Pointcheval-Sanders Group Signature
 
+## How to use:
+Here we explain of how to use our concept based on a simple example. We will have one authority, one archive and two peers.
 
-# Installation
+### Build from Source
+This is an explanation of how to build the concept from source. For the Docker Version look below.
+1. Install rust(not via Packagemanager)
+2. Clone the repos and navigate to the stored folder
+3. Build the project by running `cargo build`
+4. Create a key material folder for each of the 4 peers
+5. Open four terminals and navigate to the dactie folder
+6. Either use an own PostgresDB or start the docker container with `docker compose start db`
 
-- [ ] [Pointcheval Sanders Group Signature Implementaion](https://git-int.aisec.fraunhofer.de/fab67549/ps16)
-- [ ] [DACTIE: Decentral Anoymous CTI Exchange Network using MLS](https://git-int.aisec.fraunhofer.de/fab67549/dactie.git)
+In each terminal start:   
+1. Start authorization authority(aa) with `RUST_LOG=info cargo run --package dactie-authority -- -K <folder aa_key_material>`
+2. Start archive with `RUST_LOG=info cargo run --package dactie-archive --bin dactie-archive -- -K <folder archive_key_material> -u "postgres://archive:archivepw@localhost/archivedb" -i archive1 -a <peer_id_aa> -B /ip4/127.0.0.1/tcp/10001`
+3. Start peer1 with `RUST_LOG=info cargo run --package dactie-peer --bin dactie-peer -- -K <folder peer1_key_material> -b <peer_id_aa> -B /ip4/127.0.0.1/tcp/10001`
+4. Start peer2 with `RUST_LOG=info cargo run --package dactie-peer --bin dactie-peer -- -K <folder peer2_key_material> -b <peer_id_aa> -B /ip4/127.0.0.1/tcp/10001`
 
+### Docker
+This section explains the docker setup. If docker is choosen the part above can be ignored
+1. Clone the GitRepo and move to the folder
+2. Run `build.sh` to create the Docker-Images and create the Key-Material folders
+3. Run only the authority node with docker containers with `docker compose up authority_node`. This creates a new peer ID.
+4. Copy the BootPeerID into `./key_material/boot_id.env`.  The authority can be stopped after copying the address
+5. Start the whole network with `docker compose up`
+6. Attach to each container by using `docker attach <container_id>`
+7. adminer interface can be found under [https://localhost:8080](https://localhost:8080) with credentials `Username: archive`, `Password: archivepw` and `Database: archivedb`
+
+### Register Identity for each peer(Peer1 and Peer2):
+1. `register_identity <peer_id_aa> <peer_name>`, peer name can be anything for example peer1 peer2
+
+### Subscribe to Topics:
+1. `sub <topic>`
+
+### Exchange a public message:
+1. `broad <topic> <msg>`
+
+### Create a group and exchange a private message(all from one Peer):
+1. `req_kps <peer_id_bootstrap_peer>`
+2. `create_group <peer_id_bootstrap_peer>`
+3. `ls_groups` to get group_number
+4. `enc_broad <group_number> <msg>`
+
+### Open a message:
+1. Send a message over the network to get its signature
+2. Enter the following command in the authority: `open <signature>`
+
+### Other functions
+Other network functions like adding more group members, etc are described in the ReadMe.md in dactie-peer.
