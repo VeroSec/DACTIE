@@ -5,6 +5,7 @@ members = [
     "dactie-utils",
     "dactie-authority",
     "ps16",
-    "dactie-experiment-anonymity"]
+    "dactie-experiment-anonymity",
+    "dactie-experiment-eclipse"]
 resolver = "2"
 

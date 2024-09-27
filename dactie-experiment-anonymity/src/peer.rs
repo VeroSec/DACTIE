@@ -193,7 +193,7 @@ impl Peer {
                             if val == self.get_peer_id(){
                                  println!("Stopping");
                                 let message = "Stop".repeat(30);
-                                self.swarm.behaviour_mut().gossipsub.publish(IdentTopic::new("Test"),message).unwrap(); //Not handled
+                                let _ = self.swarm.behaviour_mut().gossipsub.publish(IdentTopic::new("Test"),message); //Not handled
                             }
                         }
                     }
@@ -202,7 +202,7 @@ impl Peer {
                 _ = Self::tick(&mut timer), if timer.is_some() => {
 
                     let message = generate_random_string(120);
-                    self.swarm.behaviour_mut().gossipsub.publish(IdentTopic::new("Test"),message).unwrap(); //Not handled
+                    let _ = self.swarm.behaviour_mut().gossipsub.publish(IdentTopic::new("Test"),message); //Not handled
                 },
                 event = self.swarm.select_next_some() => self.handle_event(event)
             }
