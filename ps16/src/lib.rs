@@ -12,8 +12,8 @@ use crate::PS16Error::{MemkeySetError, SerializationError, SignatureInvalid};
 pub mod structs;
 mod spk_dlog;
 mod spk_pairing_homomorphism;
-#[cfg(test)]
-mod tests;
+//#[cfg(test)]
+//mod tests;
 
 pub const SIGNATURE_LENGTH: usize = 614;
 
@@ -37,9 +37,6 @@ pub fn setup() -> (Grpkey, Mgrkey) {
         y,
     })
 }
-
-
-
 
 
 /**

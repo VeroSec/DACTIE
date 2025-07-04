@@ -17,17 +17,16 @@ fn test_setup() {
 
 #[test]
 fn test_flow() {
-    let mut gml:Vec<(G1,G2)> = vec![];
+    let mut gml:Vec<(usize,G1,G2)> = vec![];
 
     let (grpkey, mgrkey) = setup();
     let n = join_mgr1();
-    let (n2,tau,ttau,pi,sk) = join_mem1(&n, &grpkey);
-    let partial_memkey = join_mgr2(&mut gml, &mgrkey, &grpkey, &n2, &tau, &ttau, pi).unwrap();
+    let (tau,ttau,pi,sk) = join_mem1(&n, &grpkey);
+    let (id,partial_memkey) = join_mgr2(&mut gml, &mgrkey, &grpkey, &n, &tau, &ttau, pi).unwrap();
     let memkey1= join_mem2(&sk, &partial_memkey);
     let y = sign(&memkey1, "Hallo".as_bytes());
 
-
-    assert_eq!(n,n2);
+    
     assert_eq!(partial_memkey.sigma1,memkey1.sigma1);
     assert_eq!(partial_memkey.sigma2,memkey1.sigma2);
     assert_eq!(partial_memkey.e,memkey1.e);
