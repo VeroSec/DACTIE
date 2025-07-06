@@ -79,6 +79,8 @@ pub(crate) enum AbstSwarmError {
     MLSError(#[from] MyOpenMLSError),
     #[error("Failed to validate Message")]
     MessageValidationError,
+    #[error("Failed to send Joingrequest to group `{group_id:?}`")]
+    SendJoinGroupError { group_id: Vec<u8>},
     #[error("Failed to send response")]
     SendResponseError,
 }

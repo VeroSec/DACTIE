@@ -8,7 +8,7 @@ pub use amcl_wrapper::group_elem_g2::G2;
 use serde::Serialize;
 use thiserror::Error;
 use structs::*;
-use crate::PS16Error::{MemkeySetError, SerializationError, SignatureInvalid};
+use crate::ThressigError::{MemkeySetError, SerializationError, SignatureInvalid};
 use sha2::{Sha256, Digest};
 pub mod structs;
 mod spk_dlog;
@@ -187,9 +187,11 @@ pub fn verify_enc_share_correctness(
     EncShare{index, c0,c1,c,s}: &EncShare,
     groupkey: &Grpkey,
     f_i: &G2,
-    h: &G1,
+    id: usize,
     h_coms: &[G1],
 ) -> bool {
+    let (_,h) = h0(id);
+    let h = &(&groupkey.g * &h);
     //Recompute t0 without knowledge of r
     let t0 = &groupkey.g_tilde * s - c0 * c;
 
@@ -235,14 +237,14 @@ pub fn verify_enc_share_correctness(
  * Executes part 1 of the member-side join of the PS16 scheme.
  * Member generates sk and provides ZKP.
  */
-pub fn join_mem1(id: usize, n:G1, grpkey: &Grpkey, opener_pubkeys: &[G2]) -> (G1, G1, (FieldElement, FieldElement), (FieldElement, FieldElement), FieldElement, Vec<EncShare>, Vec<G1>) {
+pub fn join_mem1(id: usize, n:G1, grpkey: &Grpkey, threshold: usize,opener_pubkeys: &[G2]) -> (G1, G1, (FieldElement, FieldElement), (FieldElement, FieldElement), FieldElement, Vec<EncShare>, Vec<G1>) {
     let (_,h) = h0(id);
     let sk = FieldElement::random();
     let g_sk = &grpkey.g * &sk;
     let h_sk = &grpkey.g * &h * &sk;
     let pi1 = spk_dlog::sign(&g_sk,&grpkey.g,&n.to_bytes(false),&sk);
     let pi2 = spk_dlog::sign(&h_sk,&(&grpkey.g * &h),&n.to_bytes(false),&sk);
-    let (shares,commits) = shamir_feldman_share(&sk,3,opener_pubkeys.len(),&(&grpkey.g * &h));
+    let (shares,commits) = shamir_feldman_share(&sk,threshold,opener_pubkeys.len(),&(&grpkey.g * &h));
     let mut enc_shares = Vec::new();
     for (i,s) in shares.iter().enumerate(){
         let enc_share = prove_enc_share(&grpkey,&s,&opener_pubkeys[i],&(&grpkey.g*&h),&commits);
@@ -294,7 +296,7 @@ pub fn join_mgr2(id: usize, gml: &mut HashSet<usize>, mgrkey: &Mgrkey, grpkey: &
     }
 
     for (i,enc_share) in enc_shares.iter().enumerate() {
-        if verify_enc_share_correctness(enc_share, grpkey, &opener_pubkeys[i],&(&grpkey.g*&h),commits) == false {
+        if verify_enc_share_correctness(enc_share, grpkey, &opener_pubkeys[i],id,commits) == false {
             return Err(String::from("error"));
         }
     }
@@ -307,7 +309,7 @@ pub fn join_mgr2(id: usize, gml: &mut HashSet<usize>, mgrkey: &Mgrkey, grpkey: &
     gml.insert(id);
     Ok(Memkey{
         sk:FieldElement::new(),
-        a_prime,
+        a_prime: Some(a_prime),
         sigma1: Some(sigma1),
         sigma2: Some(sigma2),
         e1: Some(e1),
@@ -318,9 +320,10 @@ pub fn join_mgr2(id: usize, gml: &mut HashSet<usize>, mgrkey: &Mgrkey, grpkey: &
 /**
  * Signs a message using the member key and provide a ZKP of Knowledge sk.
  **/
-pub fn sign<T: Serialize>(memkey: &Memkey, msg: &T) -> Result<Signature, PS16Error>{
+pub fn sign<T: Serialize>(memkey: &Memkey, msg: &T) -> Result<Signature, ThressigError>{
 
     let msg = bincode::serialize(msg).map_err(|_| SerializationError)?;
+    let a_prime= &memkey.clone().a_prime.ok_or(MemkeySetError{val:"a_prime".to_string()})?;
     let sigma1= &memkey.clone().sigma1.ok_or(MemkeySetError{val:"sigma1".to_string()})?;
     let sigma2= &memkey.clone().sigma2.ok_or(MemkeySetError{val:"sigma2".to_string()})?;
     let e1= &memkey.clone().e1.ok_or(MemkeySetError{val:"e1".to_string()})?;
@@ -344,7 +347,7 @@ pub fn sign<T: Serialize>(memkey: &Memkey, msg: &T) -> Result<Signature, PS16Err
     /* c = hash(ps16_sig->sigma1,ps16_sig->sigma2,e,m) */ //TODO Add ipk to hash as seen on page 22 in threshold sig paper
     let c = FieldElement::from_msg_hash(&msg_to_send);
     let s1 = (&c * &memkey.sk) + &k1;
-    let s2 = (&c * &memkey.a_prime) + &k2;
+    let s2 = (&c * a_prime) + &k2;
 
     Ok(Signature{
         sigma1,
@@ -358,7 +361,7 @@ pub fn sign<T: Serialize>(memkey: &Memkey, msg: &T) -> Result<Signature, PS16Err
 /**
  * Verifier checks signature and ZKP of sk.
 **/
-pub fn verify<T: Serialize+ ?Sized>(sig: &Signature, grpkey: &Grpkey, msg: &T) -> Result<(), PS16Error>{
+pub fn verify<T: Serialize+ ?Sized>(sig: &Signature, grpkey: &Grpkey, msg: &T) -> Result<(), ThressigError>{
     let msg = bincode::serialize(msg).map_err(|_| SerializationError)?;
 
     /* e1 = e(sigma1^-1,X) */
@@ -479,7 +482,7 @@ pub fn open(sig: &Signature, grpkey: &Grpkey, gml: &HashSet<usize>, all_sj: &Has
 }
 
 #[derive(Debug, Error)]
-pub enum PS16Error {
+pub enum ThressigError {
     #[error("Memkey is not set. Missing value: {val}")]
     MemkeySetError{val:String},
     #[error("Could not serialize Value")]

@@ -13,7 +13,7 @@ Example: dactie-archive -K ./key_material/ -u "postgres://archive:archivepw@loca
 Options:
   -K, --km-dir <KM_DIR>      Location of the folder, where the keymaterial should be saved
   -p, --port <PORT>          Port to run service on
-  -u, --url <URL>            Port to run service on
+  -u, --url <URL>            URL of the database
   -a, --aa-id <AA_ID>        Authorization Authority ID
   -B, --aa-addr <AA_ADDR>    Address of a Authorization Node [default: /ip4/127.0.0.1/tcp/5005]
   -i, --identity <IDENTITY>  Identity of Archive

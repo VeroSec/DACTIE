@@ -20,7 +20,7 @@ use crate::abstswarm::{AbstSwarmError, PeerId};
 
 use dactie_utils::mls_wrapper::{MyOpenMls, MyOpenMLSError};
 use dactie_utils::mls_wrapper::MyOpenMLSError::{GroupNotAvailable, SerializationError};
-use crate::abstswarm::AbstSwarmError::{MLSError, MessageValidationError, SendResponseError};
+use crate::abstswarm::AbstSwarmError::{MLSError, MessageValidationError, SendJoinGroupError, SendResponseError};
 use crate::abstswarm::instruction_handler::InstructionHandler;
 
 const NUM_CHANNELS: u64 = 10;
@@ -382,6 +382,28 @@ impl MyBehaviour {
 
                                 self.request_response.send_response(channel, Response{body:ResponseMessage::ResUpdate {group_id,messages},signature: None}).map_err(|_| SendResponseError)?;
                             }
+
+                            RequestMessage::AddPeerShare {id,enc_share,commits} => {
+                                //Verify Share
+                                if my_open_mls.verify_enc_share(id,enc_share,&commits) {
+                                    
+                                }
+                                //Add to DB
+
+                                //TODO self.request_response.send_response(channel, Response{body:ResponseMessage::ResUpdate {group_id,messages},signature: None}).map_err(|_| SendResponseError)?;
+                            }
+                            RequestMessage::JoinGroup {welcome,ratchet_tree, .. } => {
+                                //Only add to commongroup if it comes from authority
+                                if my_open_mls.get_authorityid() == peer {
+                                    log::info!("Received a JoinGroup Request from Authority {}", peer.to_string());
+                                    let group_id = my_open_mls.add_group_from_welcome(welcome, ratchet_tree)?;
+                                    my_open_mls.move_to_common_id(group_id.clone())?;
+                                    log::info!("Added Common Group {group_id:?}");
+                                    self.subscribe(group_id.clone(), my_open_mls)?;
+                                    self.request_response.send_response(channel, Response{body:ResponseMessage::JoinGroup, signature:None}).map_err(|_| SendJoinGroupError {group_id})?
+                                }
+                            }
+
                             _ => {}
                         }
                     }
@@ -396,16 +418,13 @@ impl MyBehaviour {
                                 let keypackage = bincode::serialize(&keypackage)
                                     .map_err(|x| SerializationError(x.to_string()))?;
                                 my_open_mls.set_grpkey(group_key)?;
-                                self.request_response.send_request(&peer, Request{body:RequestMessage::JoinKeyPackage {keypackage},signature:None});
+                                my_open_mls.generate_elgamal_key_pair()?;
+                                self.request_response.send_request(&peer, Request{body:RequestMessage::JoinKeyPackage {keypackage,elgamal_pk: my_open_mls.get_elgamal_pubkey()?},signature:None});
 
                             }
-                            ResponseMessage::MemKey {welcome,ratchet_tree, .. } => {
-                                log::info!("Received a JoinGroup Request from Peer {}", peer.to_string());
-                                let group_id = my_open_mls.add_group_from_welcome(welcome, ratchet_tree)?;
-                                my_open_mls.move_to_common_id(group_id.clone())?;
-                                log::info!("Added Common Group {group_id:?}");
-                                self.subscribe(group_id.clone(), my_open_mls)?;
-                            }
+                            ResponseMessage::MemKey {.. } => {  }
+
+
                             //Ignore all other Responses for now
                             _ => {}
                         }

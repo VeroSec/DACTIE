@@ -27,7 +27,7 @@ pub struct Mgrkey {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Memkey {
     pub sk: FieldElement,
-    pub a_prime: FieldElement,
+    pub a_prime: Option<FieldElement>,
     pub sigma1: Option<G1>,
     pub sigma2: Option<G1>,
     pub e1: Option<GT>,

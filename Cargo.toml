@@ -7,6 +7,6 @@ members = [
     "ps16",
     "dactie-experiment-anonymity",
     "dactie-experiment-eclipse",
-    "thresig"]
+    "thressig"]
 resolver = "2"
 

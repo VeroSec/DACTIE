@@ -13,6 +13,7 @@ use libp2p::kad::{Mode, PROTOCOL_NAME};
 use libp2p::kad::store::MemoryStore;
 use libp2p::request_response::{ProtocolSupport};
 use libp2p::swarm::{NetworkBehaviour, SwarmEvent};
+use log::max_level;
 use crate::mybehaviour::MyBehaviourError::PubSubBehaviourError;
 
 use crate::abstswarm::{AbstSwarmError, Notification};
@@ -151,7 +152,7 @@ impl MyBehaviour {
         if let Some(welcome) = welcome_option.clone(){
             self.send_out_welcomes(my_open_mls,peer_ids, welcome,my_open_mls.get_ratchet_tree(&group_id)?)?;
         }
-        self.send(message,my_open_mls)
+        self.send(message,my_open_mls)  //TODO send out commits signed
     }
 
     fn send_out_welcomes(&mut self, my_open_mls: &MyOpenMls,peer_ids: Vec<PeerId>, welcome: Vec<u8>,ratchet_tree: Vec<u8>) -> Result<(), AbstSwarmError>{
@@ -205,18 +206,23 @@ impl MyBehaviour {
                         match request.body.clone() {
 
                             // Verify Identity and Return public group key if valid
+                            // !!!!For testing purpose this expects a unique identity!!!!
                             RequestMessage::VerifyIdentity {identity, with_signature} => {
                                 //Do important identity checks here
-                                if !identity.is_empty() {
-                                    let (n, group_key) = storage.return_new_n(peer);
-                                    // Archives do not get a memberkey, therefore they do not need an n
-                                    let res = if with_signature{
-                                        ResponseMessage::IdentityVerified {n, group_key}
+                                let mut hasher = DefaultHasher::new();
+                                identity.hash(&mut hasher);
+                                let id = hasher.finish() as usize;
+                                if !identity.is_empty() && !storage.id_exists(&id){
+                                    let (n, group_key) = storage.return_new_n(peer,id);
+                                    //Archives can only be created in the init phase
+                                    let res = if with_signature && !storage.get_archive_init_mode(){
+                                        let opener_pubkeys = storage.get_opener_pubkeys();
+                                        ResponseMessage::IdentityVerified {id, n, group_key,opener_pubkeys:Some(opener_pubkeys)}
                                     } else {
-                                        ResponseMessage::IdentityVerified {n: None, group_key}
+                                        ResponseMessage::IdentityVerified {id, n: None, group_key, opener_pubkeys:None}
                                     };
                                     log::info!("Verified Identity sending out respones...");
-                                    self.request_response.send_response(channel, my_open_mls.sign(res)?).unwrap_or(());
+                                    self.request_response.send_response(channel, Response{body:res,signature:None}).unwrap_or(());
 
                                 }
                             }
@@ -225,49 +231,41 @@ impl MyBehaviour {
                             Manages Join Requests of Sharing Peers
                             Create Memberkey,
                             Add Peer to Commongroup
-                            Store Peer information for opening
                              */
-                            RequestMessage::JoinKeyMaterial {tau, ttau, pi: (pi1, pi2), keypackage} => {
-                                let (id,partial_memkey) = storage.return_memkey(&peer, tau, ttau, pi1, pi2)?;
+                            RequestMessage::JoinKeyMaterial {g_sk,h_sk, pi1,pi2, enc_shares,commits,keypackage} => {
+                                let (id,partial_memkey) = storage.return_memkey(&peer, &g_sk,&h_sk,&commits,&enc_shares,pi1,pi2)?;
                                 let keypackage: KeyPackage = bincode::deserialize(&keypackage).map_err(|x| SerializationError(x.to_string()))?;
                                 log::info!("Created Key Material adding peer to common group...");
                                 storage.allow_peer(&keypackage, peer.clone())?;
                                 let group_id = my_open_mls.get_common_group_id()?;
                                 let (_, commit, welcome_option, epoch)
                                     = my_open_mls.add_group_members(group_id.clone(), &[(peer, keypackage.clone())])?;
-                                self.publish_commit(my_open_mls,group_id.to_vec(),Vec::new(),commit,None,epoch)?;
-                                let res = ResponseMessage::MemKey {partial_memkey: Some(partial_memkey), welcome: welcome_option.unwrap(), ratchet_tree: my_open_mls.get_ratchet_tree(&group_id.to_vec())?};
-                                if let Ok(_) = self.request_response.send_response(channel, my_open_mls.sign(res)?){
-                                    storage.add_peer_id(&id, peer, false)?;
-                                }
-
-
-
+                                self.publish_commit(my_open_mls,group_id.to_vec(),vec![peer],commit,welcome_option,epoch)?;
+                                let res = ResponseMessage::MemKey {partial_memkey: Some(partial_memkey),/* welcome: welcome_option.unwrap(), ratchet_tree: my_open_mls.get_ratchet_tree(&group_id.to_vec())?*/};
+                                self.request_response.send_response(channel, my_open_mls.sign(res)?).unwrap(); //TODO Handle Error
+                                
                             },
 
                             /*
                             Manages Join Requests of Archive Peers
                             Add Peer to Commongroup
                              */
-                            RequestMessage::JoinKeyPackage {keypackage} => {
+                            RequestMessage::JoinKeyPackage {keypackage, elgamal_pk} => {
                                 if let Some(_) = storage.remove_n(&peer){
                                     let keypackage: KeyPackage = bincode::deserialize(&keypackage).map_err(|x| SerializationError(x.to_string()))?;
-                                    log::info!("Adding Archive to common group...");
-                                    let group_id = my_open_mls.get_common_group_id()?;
-                                    let ( _, commit, welcome_option, epoch)
-                                        = my_open_mls.add_group_members(group_id.clone(), &[(peer, keypackage.clone())])?;
-                                    self.publish_commit(my_open_mls,group_id.to_vec(),Vec::new(),commit,None,epoch)?;
-                                    let res = ResponseMessage::MemKey {partial_memkey: None, welcome: welcome_option.unwrap(), ratchet_tree: my_open_mls.get_ratchet_tree(&group_id.to_vec())?};
-                                    if let Ok(_) = self.request_response.send_response(channel, my_open_mls.sign(res)?) {
+                                    let res = ResponseMessage::MemKey {partial_memkey: None};
+                                    if let Ok(_) = self.request_response.send_response(channel, Response{body:res, signature:None}) {
                                         storage.allow_peer(&keypackage,peer)?;
+                                        my_open_mls.insert_foreign_kp(peer, keypackage);
+                                        storage.add_archive(peer);
+                                        storage.add_opener_pubkey(elgamal_pk);
                                     }
-
                                 }
                             }
 
                             /*
                             Register Peer with existing Group Signature.
-                            */
+                            TODO Rewrite code for threshold setting
                             RequestMessage::AddPeerToSig {keypackage} => {
                                 let keypackage: KeyPackage = bincode::deserialize(&keypackage).map_err(|x| SerializationError(x.to_string()))?;
                                 let id = storage.open(request.signature.ok_or(SignatureOpenError)?.to_bytes())?;
@@ -281,7 +279,7 @@ impl MyBehaviour {
                                     storage.add_peer_id(&id, peer,true)?;
                                 }
 
-                            }
+                            }*/
                             _ => {}
                         }
                     }
@@ -354,7 +352,7 @@ impl InstructionHandler for MyBehaviour {
         notification_tx: &mpsc::UnboundedSender<Notification>,
         my_open_mls: & MyOpenMls,
         instruction: Instruction,
-        storage: &Storage
+        storage: & Storage
     ) {
         match instruction {
             Instruction::Commit {group_id,peer_ids, commit, welcome, epoch} => {
@@ -363,7 +361,7 @@ impl InstructionHandler for MyBehaviour {
                 }
             }
             Instruction::Open {signature} => {
-                match storage.open(signature){
+               /* match storage.open(signature){
                     Ok(val ) => {
                         if let Some(peer_ids) = storage.get_peer_ids(&val) {
                             log::info!("Signature belongs to the following ids: {peer_ids:?}");
@@ -372,8 +370,28 @@ impl InstructionHandler for MyBehaviour {
                         }
                     }
                     Err(_) => log::info!("Was not able to open signature")
-                }
+                }*/
             }
+            Instruction::EndInitArchive => {
+                storage.end_init_archive();
+                let peer = my_open_mls.get_peerid();
+                let id = 0usize;
+                let (n, group_key) = storage.return_new_n(peer,id);
+                let opener_pubkeys = storage.get_opener_pubkeys();
+                //TODO Check number of archives bigger 2
+                let (g_sk, h_sk, pi1,pi2,enc_shares,commits) = my_open_mls.generate_join_key_material(id, n.unwrap(),group_key, &opener_pubkeys); // n.unwrap should be safe
+                let (_,partial_memkey) = storage.return_memkey(&my_open_mls.get_peerid(), &g_sk,&h_sk,&commits,&enc_shares,pi1,pi2).unwrap(); //TODO Handle Error
+                my_open_mls.add_partial_memkey(partial_memkey).unwrap(); //TODO Handle Error
+
+                log::info!("Creating common group with archives...");
+                let archive_ids = storage.get_archive_peer_ids();
+                let group_numb = my_open_mls.create_mls_group(&archive_ids).unwrap();  //TODO Handle Error
+                my_open_mls.move_to_common(group_numb);
+                //TODO Save config to file
+                storage.to_file().unwrap(); //TODO Handle Error
+            }
+
+            
             //Ignore other instructions
             _ => {}
 

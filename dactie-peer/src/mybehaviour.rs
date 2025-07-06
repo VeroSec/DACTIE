@@ -65,10 +65,7 @@ impl MyBehaviour {
             .map_err(|msg| io::Error::new(io::ErrorKind::Other, msg)).unwrap(); // Temporary hack because `build` does not return a proper `std::error::Error`.
 
 
-
-
-
-
+        
 
         let mut gossipsub = gossipsub::Behaviour::new(
             gossipsub::MessageAuthenticity::Anonymous,
@@ -596,6 +593,10 @@ impl MyBehaviour {
                             RequestMessage::JoinGroup { welcome, ratchet_tree } => {
                                 log::info!("Received a JoinGroup Request from Peer {}", peer.to_string());
                                 let group_id = my_open_mls.add_group_from_welcome(welcome, ratchet_tree)?;
+                                //If from authority it is the common group
+                                if my_open_mls.get_authorityid() == peer {
+                                    my_open_mls.move_to_common_id(group_id.clone())?;
+                                }
                                 log::info!("Added Group {group_id:?}");
                                 self.subscribe(group_id.clone(), my_open_mls)?;
                                 self.request_response.send_response(channel, my_open_mls.sign(ResponseMessage::JoinGroup)?).map_err(|_| SendJoinGroupError {group_id})?
@@ -630,26 +631,25 @@ impl MyBehaviour {
                                 log::info!("Got an update for group ´{group_id:?}´ with {} messages", messages.len());
                                 self.handle_update(my_open_mls,group_id,messages)?;
                             }
-                            ResponseMessage::IdentityVerified {n, group_key} => {
+                            ResponseMessage::IdentityVerified {id, n, group_key, opener_pubkeys} => {
                                 log::info!("Identity was verified, proceeding with memkey creation.");
                                 let n = match n {
                                     Some(val) => val,
                                     None => return Ok(())
                                 };
-                                let (tau, ttau, pi) = my_open_mls.generate_join_key_material(n,group_key);
+                                let opener_pubkeys = match opener_pubkeys {
+                                    Some(val) => val,
+                                    None => return Ok(())
+                                };
+                                let (g_sk, h_sk, pi1,pi2,enc_shares,commits) = my_open_mls.generate_join_key_material(id, n,group_key, &opener_pubkeys);
                                 let keypackage = my_open_mls.generate_key_package()?;
                                 let keypackage = bincode::serialize(&keypackage)
                                     .map_err(|x|SerializationError(x.to_string()))?;
-                                self.request_response.send_request(&peer, Request{body:RequestMessage::JoinKeyMaterial {tau,ttau,pi, keypackage}, signature:None});
+                                self.request_response.send_request(&peer, Request{body:RequestMessage::JoinKeyMaterial {g_sk,h_sk,pi1,pi2,enc_shares,commits, keypackage}, signature:None});
 
                             }
-                            ResponseMessage::MemKey {partial_memkey, welcome, ratchet_tree} => {
+                            ResponseMessage::MemKey {partial_memkey} => {
                                 if let Some(memkey) = partial_memkey{
-                                    log::info!("Received a JoinGroup Request from Peer {}", peer.to_string());
-                                    let group_id = my_open_mls.add_group_from_welcome(welcome, ratchet_tree)?;
-                                    my_open_mls.move_to_common_id(group_id.clone())?;
-                                    log::info!("Added Common Group {group_id:?}");
-                                    self.subscribe(group_id.clone(), my_open_mls)?;
                                     my_open_mls.add_partial_memkey(memkey)?;
                                 }
                             }
@@ -780,6 +780,7 @@ impl InstructionHandler for MyBehaviour {
                 }
             }
             Instruction::Open {..} => {} //Ignore
+            Instruction::EndInitArchive {..} => {} //Ignore
 
         }
     }

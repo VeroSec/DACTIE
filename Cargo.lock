@@ -829,10 +829,10 @@ dependencies = [
  "libp2p",
  "log",
  "openmls",
- "ps16",
  "serde",
  "serde_json",
  "thiserror",
+ "thressig",
  "time",
  "tokio",
 ]
@@ -899,10 +899,10 @@ dependencies = [
  "openmls_memory_storage",
  "openmls_rust_crypto",
  "openmls_traits",
- "ps16",
  "serde",
  "serde_json",
  "thiserror",
+ "thressig",
  "tokio",
 ]
 
@@ -4078,7 +4078,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "thresig"
+name = "thressig"
 version = "0.1.0"
 dependencies = [
  "amcl_wrapper",

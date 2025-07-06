@@ -14,6 +14,21 @@ services:
     ports:
       - "5432:5432"
 
+  db2:
+    image: postgres:latest
+    container_name: postgres_db2
+    environment:
+      POSTGRES_USER: archive
+      POSTGRES_PASSWORD: archivepw
+      POSTGRES_DB: archivedb
+    volumes:
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      my_network:
+        ipv4_address: 172.16.238.101
+    ports:
+      - "5433:5432"
+
   adminer:
     image: adminer:latest
     container_name: adminer

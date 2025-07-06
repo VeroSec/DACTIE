@@ -29,7 +29,7 @@ fn test_flow() {
     }
     let n = join_mgr1();
     let id = 0usize;
-    let (g_sk,h_sk,pi1,pi2,sk, enc_shares, commits) = join_mem1(id,n.clone(), &grpkey, &opener_pub_keys);
+    let (g_sk,h_sk,pi1,pi2,sk, enc_shares, commits) = join_mem1(id,n.clone(), &grpkey, 3,&opener_pub_keys);
     let partial_memkey = join_mgr2(id,&mut gml, &mgrkey, &grpkey, &n, &g_sk, &h_sk, &opener_pub_keys, &commits,pi1,pi2, &enc_shares).unwrap();
     let memkey1= join_mem2(&sk, &partial_memkey);
     let y = sign(&memkey1, &"Hallo".as_bytes()).unwrap();
@@ -119,7 +119,7 @@ fn test_correct_encryption_proof() {
 
     // Verify the proof
     let is_valid = verify_enc_share_correctness(
-        &enc_share, &grpkey, &pk,&(&grpkey.g*&h),  &commitments
+        &enc_share, &grpkey, &pk,id,  &commitments
     );
 
     assert!(is_valid, "Encryption proof failed to verify");

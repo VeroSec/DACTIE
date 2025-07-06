@@ -9,7 +9,7 @@
       <sourceFolder url="file://$MODULE_DIR$/dactie-peer/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/dactie-utils/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/ps16/src" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/thresig/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/thressig/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />

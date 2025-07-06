@@ -1,11 +1,11 @@
 use std::fs::{File, OpenOptions};
 use std::path::PathBuf;
-use ps16::{join_mem1};
+use thressig::{join_mem1, FieldElement, G2};
 use libp2p::identity::Keypair;
 use libp2p::PeerId;
 use openmls::prelude::Ciphersuite;
 use openmls_basic_credential::SignatureKeyPair;
-use ps16::structs::{Grpkey, Memkey};
+use thressig::structs::{EncShare, Grpkey, Memkey};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -17,15 +17,16 @@ File is used to store the group and signature key material of Sharing and Archiv
 pub struct StoredKeyMaterial {
     grpkey: Option<Grpkey>,
     memkey: Option<Memkey>,
+    elgamal_keypair: Option<(FieldElement,G2)>,
     signature_key_pair: SignatureKeyPair
 }
 
 impl StoredKeyMaterial {
 
-    pub fn new(grpkey: Option<Grpkey>, memkey: Option<Memkey>) -> StoredKeyMaterial{
+    pub fn new(grpkey: Option<Grpkey>, memkey: Option<Memkey>, elgamal_keypair: Option<(FieldElement,G2)>) -> StoredKeyMaterial{
         let signature_key_pair = SignatureKeyPair::new(Ciphersuite::MLS_128_DHKEMX25519_AES128GCM_SHA256_Ed25519.signature_algorithm())
             .expect("Could not generate Keypair");
-        StoredKeyMaterial{grpkey,memkey, signature_key_pair}
+        StoredKeyMaterial{grpkey,memkey,elgamal_keypair,signature_key_pair}
 
     }
 
@@ -42,7 +43,14 @@ impl StoredKeyMaterial {
         self.signature_key_pair.clone()
     }
 
+    pub fn get_elgamal_pubkey(&self) -> Option<&G2> {
+        self.elgamal_keypair.as_ref().map(|t| &t.1)
+    }
 
+    pub fn get_elgamal_secretkey(&self) -> Option<&FieldElement> {
+        self.elgamal_keypair.as_ref().map(|t| &t.0)
+    }
+    
     pub fn get_keypair(&self) -> Keypair {
         Keypair::ed25519_from_bytes(self.signature_key_pair.private()[..32].to_vec()).unwrap()
     }
@@ -50,12 +58,19 @@ impl StoredKeyMaterial {
         Keypair::ed25519_from_bytes(self.signature_key_pair.private()[..32].to_vec()).unwrap().public().to_peer_id()
     }
 
-    pub fn generate_join_key_material(&mut self, n: ps16::G1, grpkey: Vec<u8>) -> (ps16::G1,ps16::G2,(ps16::FieldElement,ps16::FieldElement)){
+    pub fn generate_join_key_material(&mut self, id:usize, n: thressig::G1, grpkey: Vec<u8>, opener_pubkeys: &[G2]) -> (thressig::G1,thressig::G1, (FieldElement,FieldElement),(FieldElement,FieldElement),Vec<EncShare>,Vec<thressig::G1>){
         let grpkey = Grpkey::from_bytes(&grpkey);
-        let (tau, ttau, (p1,p2),sk) = join_mem1(&n, &grpkey);
-        self.memkey = Some(Memkey{sk, sigma1: None, sigma2:None, e:None});
+        let threshold = opener_pubkeys.len()/2;
+        let (g_sk,h_sk,pi1,pi2,sk,enc_shares,commits) = join_mem1(id, n, &grpkey, threshold,opener_pubkeys);
+        self.memkey = Some(Memkey{sk, a_prime:None,sigma1: None, sigma2:None, e1:None, e2:None});
         self.grpkey = Some(grpkey);
-        (tau, ttau, (p1,p2))
+        (g_sk, h_sk, pi1,pi2,enc_shares,commits) //Return everything except sk
+    }
+
+    pub fn generate_elgamal_key_pair(&mut self) -> Result<(), String>{
+        let g_tilde = &self.grpkey.as_ref().expect("Grpkey has to be set").g_tilde;
+        self.elgamal_keypair = Some(thressig::elgamal_keygen(g_tilde));
+        Ok(())
     }
 
     pub fn add_partial_memkey(&mut self, memkey: Vec<u8>) {

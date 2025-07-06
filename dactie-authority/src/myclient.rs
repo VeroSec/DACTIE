@@ -55,9 +55,12 @@ impl MyClient {
         if input.starts_with("open") && split.len() > 1{
             let signatur = hex::decode(split[1])?;
             Self::send_open(signatur, self.instruction_tx.clone()).await?;
+        } else if input.starts_with("end_init_archive") {
+            Self::send_end_init_archive(self.instruction_tx.clone()).await?;
         } else {
         println!("Available Commands:
-        - open <signatur>: Opens Signatur")
+        - open <signatur>: Opens Signatur
+        - end_init_archive: Ends Init Phase no new archives can join")
         }
 
         Ok(())
@@ -86,7 +89,19 @@ impl MyClient {
 
         instruction_tx.send(instruction)?;
 
-        log::info!("Subscribe sent to Network");
+        log::info!("Open sent to Network");
+
+        Ok(())
+    }
+
+    async fn send_end_init_archive(
+        instruction_tx: mpsc::UnboundedSender<Instruction>,
+    ) -> anyhow::Result<()> {
+        let instruction = Instruction::EndInitArchive;
+
+        instruction_tx.send(instruction)?;
+
+        log::info!("End Init sent to Network");
 
         Ok(())
     }

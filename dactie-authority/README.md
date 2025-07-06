@@ -19,6 +19,7 @@ Options:
 ```
 
 ## Commands
+[//]: <> TODO add new comand
 The authority takes the following commands:
 ```
 open <signatur>: Opens Signatur
