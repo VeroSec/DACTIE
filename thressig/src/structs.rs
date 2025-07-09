@@ -34,7 +34,7 @@ pub struct Memkey {
     pub e2: Option<GT>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct Signature {
     pub sigma1: G1,
     pub sigma2: G1,
@@ -56,6 +56,19 @@ pub struct EncShare {
     pub c1: G2, //Enc Share Part 2
     pub c: FieldElement,    //NIZK Proof challange
     pub s: FieldElement,    //NIZK Proof response
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct EncShareWithID {
+    pub id: usize,
+    pub enc_share:EncShare
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct EncSharePairing {
+    pub id: usize,
+    pub index: usize,
+    pub pairing: GT
 }
 
 impl Signature {
@@ -92,6 +105,16 @@ impl Grpkey {
         // Deserialize the bytes back into the struct using bincode
         bincode::deserialize(bytes).expect("Deserialization failed")
     }
+}
 
+impl EncShare {
+    pub fn to_bytes(&self) -> Vec<u8> {
+        // Serialize the struct to bytes using bincode
+        bincode::serialize(self).expect("Serialization failed")
+    }
 
+    pub fn from_bytes(bytes: &[u8]) -> Self {
+        // Deserialize the bytes back into the struct using bincode
+        bincode::deserialize(bytes).expect("Deserialization failed")
+    }
 }

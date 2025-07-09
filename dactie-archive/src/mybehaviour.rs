@@ -55,6 +55,12 @@ struct Proposal {
     epoch: i64,
 }
 
+
+#[derive(sqlx::FromRow,Debug)]
+struct Share {
+    id: i64,
+    enc_share: Vec<u8>,
+}
 impl MyBehaviour {
     pub(crate) fn new(keypair: &Keypair, boot_peer_id: PeerId, boot_peer_addr: Multiaddr,) -> Result<MyBehaviour, MyBehaviourError> {
         // To content-address message, we can take the hash of message and use it as an ID.
@@ -171,6 +177,17 @@ impl MyBehaviour {
         Ok(())
     }
 
+    async fn insert_enc_share(pool: &sqlx::PgPool, id: usize, enc_share: &[u8], commits: &[u8])-> Result<(),MyBehaviourError> {
+        let result = sqlx::query(
+            "INSERT INTO shares (id, enc_share, commits) VALUES ($1, $2, $3)")
+            .bind(id as i64)//SQLX and probably Postgres do not support usize. Care has to be taken, when retrieving this value from the database
+            .bind(enc_share)
+            .bind(commits)
+            .execute(pool).await?;
+        log::debug!("{result:?}");
+        Ok(())
+    }
+
     /**
     Functions that return DB Content to the peers
     **/
@@ -206,6 +223,19 @@ impl MyBehaviour {
             proposals.push(MessageBody::Proposal {group_id, data, epoch: epoch as u64})
         }
         Ok(proposals)
+    }
+
+    async fn get_all_enc_shares(pool: &sqlx::PgPool)-> Result<Vec<(usize,Vec<u8>)>,MyBehaviourError> {
+        let mut proposal_stream= sqlx::query_as::<_, Share>(
+            "SELECT id, enc_share FROM shares")
+            .fetch(pool);
+
+
+        let mut shares = Vec::new();
+        while let Some(Share{id, enc_share}) = proposal_stream.try_next().await? {
+            shares.push((id as usize,enc_share));
+        }
+        Ok(shares)
     }
 
     /**
@@ -384,13 +414,16 @@ impl MyBehaviour {
                             }
 
                             RequestMessage::AddPeerShare {id,enc_share,commits} => {
-                                //Verify Share
-                                if my_open_mls.verify_enc_share(id,enc_share,&commits) {
-                                    
+                                println!("Got a new Peer Share");
+                                //Verify Share and Add to DB
+                                if my_open_mls.verify_enc_share(id,enc_share.clone(),&commits) {
+                                    let commits = bincode::serialize(&commits).unwrap();
+                                    let enc_share = enc_share.to_bytes();
+                                    Self::insert_enc_share(pool, id,&enc_share,&commits).await?;
                                 }
                                 //Add to DB
 
-                                //TODO self.request_response.send_response(channel, Response{body:ResponseMessage::ResUpdate {group_id,messages},signature: None}).map_err(|_| SendResponseError)?;
+                                self.request_response.send_response(channel, Response{body:ResponseMessage::AddPeerShare,signature: None}).map_err(|_| SendResponseError)?;
                             }
                             RequestMessage::JoinGroup {welcome,ratchet_tree, .. } => {
                                 //Only add to commongroup if it comes from authority
@@ -401,6 +434,15 @@ impl MyBehaviour {
                                     log::info!("Added Common Group {group_id:?}");
                                     self.subscribe(group_id.clone(), my_open_mls)?;
                                     self.request_response.send_response(channel, Response{body:ResponseMessage::JoinGroup, signature:None}).map_err(|_| SendJoinGroupError {group_id})?
+                                }
+                            }
+
+                            RequestMessage::RequestOpen {signature} => {
+                                if my_open_mls.get_authorityid() == peer {
+                                    log::info!("Received a OpenRequest from Authority {}", peer.to_string());
+                                    let enc_shares = Self::get_all_enc_shares(&pool).await?;
+                                    let pairings = bincode::serialize(&my_open_mls.get_enc_share_pairings(enc_shares, &signature)?).map_err(|e| SerializationError(e.to_string()))?;
+                                    self.request_response.send_response(channel,Response{body:ResponseMessage::EncSharePairings {signature,enc_share_pairings:pairings}, signature:None}).map_err(|_| SendResponseError)?;
                                 }
                             }
 

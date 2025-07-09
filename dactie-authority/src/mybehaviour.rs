@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::iter;
 use std::time::Duration;
@@ -23,6 +24,8 @@ use crate::abstswarm::instruction_handler::InstructionHandler;
 use dactie_utils::mls_wrapper::{MyOpenMls};
 use dactie_utils::mls_wrapper::MyOpenMLSError::{SerializationError};
 use dactie_utils::shared_structs::*;
+use dactie_utils::shared_structs::RequestMessage::RequestOpen;
+use thressig::structs::{EncShare, EncSharePairing, Signature};
 use crate::storage::Storage;
 use crate::storage::MyStorageError::{SignatureOpenError};
 
@@ -162,6 +165,16 @@ impl MyBehaviour {
         Ok(())
     }
 
+    fn send_out_enc_shares(&mut self, my_open_mls: &MyOpenMls,archvive_peer_ids: &[PeerId], id:usize,enc_shares: &[EncShare], commits: &Vec<thressig::G1>) -> Result<(), AbstSwarmError>{
+        for (i, peer_id) in archvive_peer_ids.into_iter().enumerate(){
+            self.request_response.send_request(&peer_id,my_open_mls.sign(RequestMessage::AddPeerShare {id,enc_share: enc_shares[i].clone(),commits: commits.clone()})?);
+        }
+        Ok(())
+    }
+
+
+
+
     /// When we receive IdentityInfo, if the peer supports our Kademlia protocol, we add
     /// their listen addresses to the DHT, so they will be propagated to other peers.
     fn handle_identify_event(&mut self, identify_event: Box<identify::Event>) -> Result<(),AbstSwarmError> {
@@ -213,7 +226,7 @@ impl MyBehaviour {
                                 identity.hash(&mut hasher);
                                 let id = hasher.finish() as usize;
                                 if !identity.is_empty() && !storage.id_exists(&id){
-                                    let (n, group_key) = storage.return_new_n(peer,id);
+                                    let (n, group_key) = storage.return_new_n(peer,id,identity);
                                     //Archives can only be created in the init phase
                                     let res = if with_signature && !storage.get_archive_init_mode(){
                                         let opener_pubkeys = storage.get_opener_pubkeys();
@@ -234,6 +247,7 @@ impl MyBehaviour {
                              */
                             RequestMessage::JoinKeyMaterial {g_sk,h_sk, pi1,pi2, enc_shares,commits,keypackage} => {
                                 let (id,partial_memkey) = storage.return_memkey(&peer, &g_sk,&h_sk,&commits,&enc_shares,pi1,pi2)?;
+                                self.send_out_enc_shares(my_open_mls,&storage.get_archive_peer_ids(),id,&enc_shares,&commits)?; //TODO Handle Error
                                 let keypackage: KeyPackage = bincode::deserialize(&keypackage).map_err(|x| SerializationError(x.to_string()))?;
                                 log::info!("Created Key Material adding peer to common group...");
                                 storage.allow_peer(&keypackage, peer.clone())?;
@@ -263,6 +277,9 @@ impl MyBehaviour {
                                 }
                             }
 
+
+
+
                             /*
                             Register Peer with existing Group Signature.
                             TODO Rewrite code for threshold setting
@@ -283,9 +300,23 @@ impl MyBehaviour {
                             _ => {}
                         }
                     }
-                    //Ignore all Responses
-                    _  => {
+                    request_response::Message::Response {
+                        response,..
+                    } => {
+                        match response.body {
+                            //Ignore all other Responses for now
+                            ResponseMessage::EncSharePairings {enc_share_pairings,signature} => {
+
+                                let pairings: Vec<EncSharePairing> = bincode::deserialize(&enc_share_pairings).map_err(|x| SerializationError(x.to_string())).unwrap(); //TODO Handle Error
+                                let signature: Signature = bincode::deserialize(&signature).map_err(|x| SerializationError(x.to_string())).unwrap(); //TODO Handle Error
+                                log::info!("Got {} EncShare Pairing from {}", pairings.len(),peer);
+                                storage.insert_enc_share_pairing(signature, &pairings);
+
+                            }
+                            _ => {}
+                        }
                     }
+
                 }
             }
             _ => {}
@@ -360,34 +391,36 @@ impl InstructionHandler for MyBehaviour {
                     Self::notify(notification_tx, Notification::Err(error));
                 }
             }
-            Instruction::Open {signature} => {
-               /* match storage.open(signature){
-                    Ok(val ) => {
-                        if let Some(peer_ids) = storage.get_peer_ids(&val) {
-                            log::info!("Signature belongs to the following ids: {peer_ids:?}");
-                        } else {
-                            log::info!("Opened Signature and got {val}, but was not able to map to a PeerID");
-                        }
-                    }
-                    Err(_) => log::info!("Was not able to open signature")
-                }*/
+            Instruction::ReqOpen {signature} => {
+                let archive_peer_ids = storage.get_archive_peer_ids();
+                for peer_id in archive_peer_ids {
+                    self.request_response.send_request(&peer_id,my_open_mls.sign(RequestOpen {signature: signature.clone()}).unwrap()); //TODO Handle error
+                }
+
             }
+            Instruction::Open {signature} => {
+                let signature: Signature = bincode::deserialize(&signature).map_err(|x| SerializationError(x.to_string())).unwrap(); //TODO Handle Error
+                if let Some((id,name)) = storage.open_signature(signature, my_open_mls) {
+                    println!("Signature belongs to ID:{:?}, Name:{}", id,name);
+                }
+            }
+            
             Instruction::EndInitArchive => {
                 storage.end_init_archive();
                 let peer = my_open_mls.get_peerid();
                 let id = 0usize;
-                let (n, group_key) = storage.return_new_n(peer,id);
+                let (n, group_key) = storage.return_new_n(peer,id,"Authority".to_string());
                 let opener_pubkeys = storage.get_opener_pubkeys();
                 //TODO Check number of archives bigger 2
                 let (g_sk, h_sk, pi1,pi2,enc_shares,commits) = my_open_mls.generate_join_key_material(id, n.unwrap(),group_key, &opener_pubkeys); // n.unwrap should be safe
-                let (_,partial_memkey) = storage.return_memkey(&my_open_mls.get_peerid(), &g_sk,&h_sk,&commits,&enc_shares,pi1,pi2).unwrap(); //TODO Handle Error
+                let (_,partial_memkey) = storage.return_memkey(&my_open_mls.get_peerid(),&g_sk,&h_sk,&commits,&enc_shares,pi1,pi2).unwrap(); //TODO Handle Error
                 my_open_mls.add_partial_memkey(partial_memkey).unwrap(); //TODO Handle Error
 
                 log::info!("Creating common group with archives...");
                 let archive_ids = storage.get_archive_peer_ids();
                 let group_numb = my_open_mls.create_mls_group(&archive_ids).unwrap();  //TODO Handle Error
                 my_open_mls.move_to_common(group_numb);
-                //TODO Save config to file
+                self.send_out_enc_shares(my_open_mls,&storage.get_archive_peer_ids(),id,&enc_shares,&commits).unwrap(); //TODO Handle Error
                 storage.to_file().unwrap(); //TODO Handle Error
             }
 

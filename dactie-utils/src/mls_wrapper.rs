@@ -1,6 +1,6 @@
 mod mls_crypto_provider;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::fs::create_dir_all;
 use std::hash::{DefaultHasher, Hash, Hasher};
@@ -22,7 +22,7 @@ use tokio::time::{sleep,Duration};
 use crate::shared_structs::Instruction;
 use mls_crypto_provider::{MemoryStorageError, OpenMlsRustCrypto};
 use MyOpenMLSError::*;
-use thressig::structs::EncShare;
+use thressig::structs::{EncShare, EncSharePairing, EncShareWithID, Signature};
 use crate::key_store::StoredKeyMaterial;
 use crate::shared_structs;
 
@@ -638,7 +638,7 @@ impl MyOpenMls {
         Ok(T::new(body, signature))
     }
 
-    pub fn verify<T>(&self, message: T) -> Result<(T::Body,thressig::structs::Signature), MyOpenMLSError>
+    pub fn verify<T>(&self, message: T) -> Result<(T::Body,Signature), MyOpenMLSError>
     where
         T: shared_structs::Verifiable, <T as shared_structs::Verifiable>::Body: serde::Serialize
     {
@@ -649,17 +649,31 @@ impl MyOpenMls {
         Ok((body, signature))
     }
     
-    pub fn verify_enc_share(&self,id:usize,enc_share: EncShare,commits: &[thressig::G1]) -> bool{
-        let keystore = self.key_store.lock().unwrap();
-        let group_key = match keystore.get_grpkey() {
-            Some(v) => v,
-            None => return false,
+    pub fn verify_enc_share(&self,id:usize,enc_share: EncShare,commits: &[thressig::G1]) -> bool {
+        let (group_key, elgamal_pk) = {
+            let keystore = self.key_store.lock().unwrap();
+            let group_key = match keystore.get_grpkey() {
+                Some(v) => v,
+                None => return false,
+            };
+            let elgamal_pk = match keystore.get_elgamal_pubkey() {
+                Some(v) => v.clone(),
+                None => return false,
+            };
+            (group_key,elgamal_pk)
         };
-        let elgamal_pk = match keystore.get_elgamal_pubkey() {
+    thressig::verify_enc_share_correctness(&enc_share,&group_key,&elgamal_pk,id,commits)
+    }
+
+    pub fn open(&self, signature: &Signature,gml: HashSet<usize>, all_sj: HashMap<usize, Vec<(usize, thressig::GT)>>) -> Option<usize> {
+
+        let group_key = match {self.key_store.lock().unwrap().get_grpkey()}  {
             Some(v) => v,
-            None => return false,
+            None => return None,
         };
-        thressig::verify_enc_share_correctness(&enc_share,&group_key,elgamal_pk,id,commits)
+
+        thressig::open(signature, &group_key, &gml, &all_sj)
+
     }
 
 
@@ -796,6 +810,24 @@ impl MyOpenMls {
         }
     }
 
+    pub fn get_enc_share_pairings(&self, enc_shares: Vec<(usize,Vec<u8>)>, signature: &Vec<u8>) -> Result<Vec<EncSharePairing>, MyOpenMLSError> {
+        let keystore = self.key_store.lock().unwrap();
+        let secret_key = match keystore.get_elgamal_secretkey() {
+            Some(v) => v,
+            None => return Err(ElgamalUndefinedError),
+        };
+        let signature: Signature = bincode::deserialize(signature).map_err(|e| SerializationError(e.to_string()))?;
+
+        let enc_shares: Result<Vec<EncShareWithID>, bincode::Error> = enc_shares.iter().map(|(id, enc_share)| {
+            let enc_share: EncShare = bincode::deserialize(enc_share)?;
+            Ok(EncShareWithID {
+                id: *id,
+                enc_share,
+            })
+        }).collect();
+        Ok(thressig::create_open_pairing(&signature,&enc_shares.map_err(|e| SerializationError(e.to_string()))?,secret_key))
+    }
+
     //Notifies the group owner, that there are new proposals
     fn notify_owned_proposal(&self, owned:bool, group_id: GroupId) -> Result<(),MyOpenMLSError>{
         if owned {
@@ -824,6 +856,7 @@ fn generate_openmls_credentials(provider: &impl OpenMlsProvider, skp: SignatureK
         skp,
     ))
 }
+
 
 
 struct GroupStorage {

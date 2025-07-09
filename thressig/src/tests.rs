@@ -18,7 +18,7 @@ fn test_setup() {
 
 #[test]
 fn test_flow() {
-    let mut gml:HashSet<usize> = HashSet::new();
+    let mut gml:HashMap<usize,String> = HashMap::new();
     let (grpkey, mgrkey) = setup();
     let mut opener_pub_keys= Vec::new();
     let mut opener_sec_keys= Vec::new();
@@ -30,23 +30,23 @@ fn test_flow() {
     let n = join_mgr1();
     let id = 0usize;
     let (g_sk,h_sk,pi1,pi2,sk, enc_shares, commits) = join_mem1(id,n.clone(), &grpkey, 3,&opener_pub_keys);
-    let partial_memkey = join_mgr2(id,&mut gml, &mgrkey, &grpkey, &n, &g_sk, &h_sk, &opener_pub_keys, &commits,pi1,pi2, &enc_shares).unwrap();
+    let partial_memkey = join_mgr2(id,&mut gml, "test".to_string(),&mgrkey, &grpkey, &n, &g_sk, &h_sk, &opener_pub_keys, &commits,pi1,pi2, &enc_shares).unwrap();
     let memkey1= join_mem2(&sk, &partial_memkey);
     let y = sign(&memkey1, &"Hallo".as_bytes()).unwrap();
     
     
     //Simuluate 3 Openers who work together 
-    let paring_0 = &create_open_pairing(&y,&grpkey,"Hallo".as_bytes(),&[enc_shares[0].clone()],&opener_sec_keys[0]).unwrap()[0];
-    let paring_1 = &create_open_pairing(&y,&grpkey,"Hallo".as_bytes(),&[enc_shares[1].clone()],&opener_sec_keys[1]).unwrap()[0];
-    let paring_2 = &create_open_pairing(&y,&grpkey,"Hallo".as_bytes(),&[enc_shares[2].clone()],&opener_sec_keys[2]).unwrap()[0];
+    let paring_0 = &create_open_pairing(&y,&[EncShareWithID{id,enc_share: enc_shares[0].clone()}],&opener_sec_keys[0])[0];
+    let paring_1 = &create_open_pairing(&y,&[EncShareWithID{id,enc_share: enc_shares[1].clone()}],&opener_sec_keys[1])[0];
+    let paring_2 = &create_open_pairing(&y,&[EncShareWithID{id,enc_share: enc_shares[2].clone()}],&opener_sec_keys[2])[0];
     
     let mut opener_map = HashMap::new();
-    opener_map.insert(paring_0.0, vec![(id,paring_0.clone().1)]);
-    opener_map.insert(paring_1.0, vec![(id,paring_1.clone().1)]);
-    opener_map.insert(paring_2.0, vec![(id,paring_2.clone().1)]);
+    opener_map.insert(paring_0.index, vec![(paring_0.id,paring_0.pairing.clone())]);
+    opener_map.insert(paring_1.index, vec![(paring_1.id,paring_1.pairing.clone())]);
+    opener_map.insert(paring_2.index, vec![(paring_2.id,paring_2.pairing.clone())]);
     
     
-    let opened_id = open(&y,&grpkey,&gml,&opener_map).unwrap();
+    let opened_id = open(&y,&grpkey,&gml.keys().copied().collect(),&opener_map).unwrap();
 
     assert_eq!(partial_memkey.sigma1,memkey1.sigma1);
     assert_eq!(partial_memkey.sigma2,memkey1.sigma2);

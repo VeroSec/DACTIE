@@ -1,4 +1,3 @@
-use std::cell::Cell;
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::BufReader;
@@ -8,26 +7,28 @@ use libp2p::identity::ed25519::PublicKey;
 use libp2p::PeerId;
 use openmls::prelude::KeyPackage;
 use thressig::{FieldElement, G1, G2};
-use thressig::structs::{EncShare, Grpkey, Mgrkey};
+use thressig::structs::{EncShare, EncSharePairing, Grpkey, Mgrkey, Signature};
 use thiserror::Error;
 use dactie_utils::key_store::StoredKeyMaterial;
 use crate::storage::MyStorageError::{CreateMemkeyError, FileAccessError, GetNError, IdPeerMapError, KeyPackageSenderError, SerializationError};
 use serde::{Deserialize, Serialize};
+use dactie_utils::mls_wrapper::MyOpenMls;
 
 /**
     The storage is used to save information about the added group members and the key material that is required to add new members.
  **/
 #[derive(Serialize,Deserialize)]
 pub(crate) struct Storage {
-    n_store: Mutex<HashMap<PeerId, (G1,usize)>>,
+    n_store: Mutex<HashMap<PeerId, (G1,usize,String)>>,
     grpkey: Grpkey,
     mgrkey: Mgrkey,
-    gml: Mutex<HashSet<usize>>,
+    gml: Mutex<HashMap<usize, String>>, //ID to Register_name
     path_buf: PathBuf,
     archive_peers: Mutex<Vec<PeerId>>,
     allowed_peers: Mutex<Vec<PeerId>>,
     archive_init_mode: Mutex<bool>,
     opener_pubkeys: Mutex<Vec<G2>>,
+    signature_enc_pairing_map: Mutex<HashMap<Signature, Vec<EncSharePairing>>>,
 }
 
 
@@ -35,7 +36,7 @@ impl Storage {
     pub(crate) fn new(path_buf: PathBuf) -> (Storage, StoredKeyMaterial){
         let (grpkey, mgrkey) = thressig::setup();
 
-        let gml = HashSet::new();
+        let gml = HashMap::new();
 
 
         let key_material = StoredKeyMaterial::new(Some(grpkey.clone()),None, None);
@@ -47,11 +48,11 @@ impl Storage {
         id_peer_map.insert(id, vec![peer_id]);
         */
 
-        (Storage{n_store: Mutex::new(HashMap::new()), grpkey, mgrkey,gml:Mutex::new(gml), path_buf, allowed_peers: Mutex::new(Vec::new()),archive_peers: Mutex::new(Vec::new()), archive_init_mode: Mutex::new(true), opener_pubkeys: Mutex::new(Vec::new())}, key_material, )
+        (Storage{n_store: Mutex::new(HashMap::new()), grpkey, mgrkey,gml:Mutex::new(gml), path_buf, allowed_peers: Mutex::new(Vec::new()),archive_peers: Mutex::new(Vec::new()), archive_init_mode: Mutex::new(true), opener_pubkeys: Mutex::new(Vec::new()), signature_enc_pairing_map: Mutex::new(HashMap::new())}, key_material, )
     }
 
     pub(crate) fn id_exists(&self,id: &usize) -> bool{
-        self.gml.lock().unwrap().contains(id)
+        self.gml.lock().unwrap().contains_key(id)
     }
 
     pub(crate) fn get_archive_peer_ids(&self, ) -> Vec<PeerId>{
@@ -107,22 +108,49 @@ impl Storage {
         self.opener_pubkeys.lock().unwrap().push(opener_pubkey);
     }
 
+    //Stores a Slice of EncSharePairings for further use
+    pub fn insert_enc_share_pairing(&self, signature: Signature, enc_share_pairings: &[EncSharePairing]) {
+        let mut map = self.signature_enc_pairing_map.lock().unwrap();
+        map.entry(signature)
+            .or_insert_with(Vec::new)
+            .extend_from_slice(enc_share_pairings);
+    }
 
 
-    pub fn remove_n(&self,peer_id: &PeerId) -> Option<(G1,usize)> {
+    //Retrieves all EncShares of a signature
+    pub fn open_signature(&self, signature: Signature, my_open_mls: &MyOpenMls, ) -> Option<(usize,String)> {
+        let enc_share_pairings = self.signature_enc_pairing_map.lock().unwrap().get(&signature)?.clone();
+        let gml = self.gml.lock().unwrap().keys().copied().collect();
+
+        let all_sj: HashMap<usize, Vec<(usize, thressig::GT)>> = enc_share_pairings
+            .into_iter()
+            .fold(HashMap::new(), |mut map, share| {
+                map.entry(share.index)
+                    .or_insert_with(Vec::new)
+                    .push((share.id, share.pairing));
+                map
+            });
+        if let Some(t) = my_open_mls.open(&signature, gml, all_sj) {
+            self.gml.lock().unwrap().get(&t).cloned().map(|name| (t, name))
+        } else {
+            None
+        }
+
+    }
+
+
+
+    pub fn remove_n(&self,peer_id: &PeerId) -> Option<(G1,usize,String)> {
         self.n_store.lock().unwrap().remove(peer_id)
     }
 
     //Generates n and stores it and returns it with a grpkey
-    pub(crate) fn return_new_n(&self, peer_id: PeerId, id:usize)-> (Option<G1>, Vec<u8>){
+    pub(crate) fn return_new_n(&self, peer_id: PeerId, id:usize, name:String)-> (Option<G1>, Vec<u8>){
         let n = &thressig::join_mgr1();
-        self.n_store.lock().unwrap().insert(peer_id, (n.clone(),id));
+        self.n_store.lock().unwrap().insert(peer_id, (n.clone(),id,name));
         (Some(n.clone()),self.grpkey.to_bytes())
     }
 
-    pub(crate) fn get_groupkey_as_bytes(&self) -> Vec<u8> {
-        self.grpkey.to_bytes()
-    }
 
     pub(crate) fn get_archive_init_mode(&self) -> bool {
         let mode = self.archive_init_mode.lock().unwrap();
@@ -131,12 +159,12 @@ impl Storage {
 
 
     //Creates a Memkey from the member material
-    //TODO send commits and enc to archives
-    pub(crate) fn return_memkey(&self, peer_id: &PeerId, g_sk: &G1, h_sk: &G1, commits: &[G1], enc_shares: &[EncShare], pi1: (FieldElement,FieldElement), pi2: (FieldElement,FieldElement)) -> Result<(usize,Vec<u8>), MyStorageError>{
-        let (n,id) = self.remove_n(peer_id).ok_or(GetNError {peer_id: peer_id.clone()})?;
+    pub(crate) fn return_memkey(&self, peer_id: &PeerId,g_sk: &G1, h_sk: &G1, commits: &[G1], enc_shares: &[EncShare], pi1: (FieldElement,FieldElement), pi2: (FieldElement,FieldElement)) -> Result<(usize,Vec<u8>), MyStorageError>{
+        let (n,id,name) = self.remove_n(peer_id).ok_or(GetNError {peer_id: peer_id.clone()})?;
         let opener_pubkeys = self.opener_pubkeys.lock().unwrap().clone();
-        let part_memkey = thressig::join_mgr2(id,&mut self.gml.lock().unwrap(), &self.mgrkey, &self.grpkey, &n, g_sk, h_sk, &opener_pubkeys,commits,pi1, pi2, enc_shares)
+        let part_memkey = thressig::join_mgr2(id,&mut self.gml.lock().unwrap(), name,&self.mgrkey, &self.grpkey, &n, g_sk, h_sk, &opener_pubkeys,commits,pi1, pi2, enc_shares)
             .map_err(|reason| CreateMemkeyError { reason })?;
+        
         self.to_file()?;
         Ok((id, part_memkey.to_bytes()))
     }

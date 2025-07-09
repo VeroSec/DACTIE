@@ -1,7 +1,7 @@
 use libp2p::PeerId;
 use openmls::group::GroupId;
 use serde::{Deserialize, Serialize};
-use thressig::structs::{EncShare, Signature};
+use thressig::structs::{EncShare, EncSharePairing, Signature};
 
 //Trait that defines a message before it has been signed with the group signature
 pub trait Signable {
@@ -80,6 +80,9 @@ pub enum RequestMessage{
     AddPeerToSig {
         keypackage: Vec<u8>,
     },
+    RequestOpen {
+        signature: Vec<u8>
+    },
 }
 
 impl Signable for RequestMessage {
@@ -110,7 +113,11 @@ pub enum ResponseMessage{
     PeerAdded{
         welcome: Vec<u8>,
         ratchet_tree: Vec<u8>
-    }
+    },
+    AddPeerShare,
+    EncSharePairings{signature: Vec<u8>,
+        enc_share_pairings: Vec<u8>,
+    },
 }
 impl Signable for ResponseMessage {
     type Output = Response;
@@ -197,8 +204,11 @@ pub enum Instruction {
         peer_id: PeerId,
         sig_file_path: String
     },
+    ReqOpen {
+        signature: Vec<u8>
+    },
     Open {
         signature: Vec<u8>
     },
-    EndInitArchive
+    EndInitArchive,
 }

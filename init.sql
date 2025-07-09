@@ -7,7 +7,7 @@ CREATE TABLE broadcast (
 );
 
 CREATE TABLE shares (
-   id BYTEA PRIMARY KEY, --user_id
+   id BIGINT PRIMARY KEY, --user_id
    enc_share BYTEA NOT NULL,
    commits BYTEA NOT NULL
 );

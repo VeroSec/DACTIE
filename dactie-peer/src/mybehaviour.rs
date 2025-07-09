@@ -627,6 +627,12 @@ impl MyBehaviour {
                             ResponseMessage::JoinGroup => {
                                 //Nothing to do for now
                             }
+                            ResponseMessage::AddPeerShare => {
+                                //Nothing to do for now
+                            }
+                            ResponseMessage::EncSharePairings {..} => {
+                                //Nothing to do for now
+                            }
                             ResponseMessage::ResUpdate {group_id,messages} => {
                                 log::info!("Got an update for group ´{group_id:?}´ with {} messages", messages.len());
                                 self.handle_update(my_open_mls,group_id,messages)?;
@@ -779,6 +785,7 @@ impl InstructionHandler for MyBehaviour {
                     Self::notify(notification_tx, Notification::Err(error));
                 }
             }
+            Instruction::ReqOpen {..} => {} //Ignore
             Instruction::Open {..} => {} //Ignore
             Instruction::EndInitArchive {..} => {} //Ignore
 

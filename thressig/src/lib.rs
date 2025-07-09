@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::ops::Neg;
-use amcl_wrapper::extension_field_gt::GT;
+pub use amcl_wrapper::extension_field_gt::GT;
 pub use amcl_wrapper::field_elem::FieldElement;
 pub use amcl_wrapper::group_elem::GroupElement;
 pub use amcl_wrapper::group_elem_g1::G1;
@@ -279,9 +279,9 @@ pub fn join_mgr1() -> G1 {
  * Manager validates Member data and indirectly signs sk if valid
  * Implements the not information theoretical implementation of the aggregate function
  */
-pub fn join_mgr2(id: usize, gml: &mut HashSet<usize>, mgrkey: &Mgrkey, grpkey: &Grpkey, n:&G1, g_sk:&G1, h_sk:&G1, opener_pubkeys: &[G2], commits: &[G1],pi1:(FieldElement, FieldElement),pi2:(FieldElement, FieldElement),enc_shares:&[EncShare]) -> Result<Memkey,String>{
+pub fn join_mgr2(id: usize, gml: &mut HashMap<usize,String>, name: String,mgrkey: &Mgrkey, grpkey: &Grpkey, n:&G1, g_sk:&G1, h_sk:&G1, opener_pubkeys: &[G2], commits: &[G1],pi1:(FieldElement, FieldElement),pi2:(FieldElement, FieldElement),enc_shares:&[EncShare]) -> Result<Memkey,String>{
     //Check if ID is already in gml
-    if gml.contains(&id) {
+    if gml.contains_key(&id) {
         return Err(String::from("ID already in use"));
     }
 
@@ -306,7 +306,7 @@ pub fn join_mgr2(id: usize, gml: &mut HashSet<usize>, mgrkey: &Mgrkey, grpkey: &
     let sigma2 = (&sigma1 * &mgrkey.y2 * &a_prime)+ h_sk  * &mgrkey.y1+(&sigma1 * &mgrkey.x);
     let e1 = GT::ate_pairing(&sigma1,&grpkey.y1_pub_tilde);
     let e2 = GT::ate_pairing(&sigma1,&grpkey.y2_pub_tilde);
-    gml.insert(id);
+    gml.insert(id,name);
     Ok(Memkey{
         sk:FieldElement::new(),
         a_prime: Some(a_prime),
@@ -393,16 +393,16 @@ pub fn verify<T: Serialize+ ?Sized>(sig: &Signature, grpkey: &Grpkey, msg: &T) -
 
 }
 
-pub fn create_open_pairing<T: Serialize+ ?Sized>(sig: &Signature, grpkey: &Grpkey, msg: &T,enc_shares: &[EncShare],open_sk: &FieldElement) -> Result<Vec<(usize,GT)>, String>{
+pub fn create_open_pairing(sig: &Signature,enc_shares: &[EncShareWithID],open_sk: &FieldElement) -> Vec<EncSharePairing>{
     let mut result = Vec::new();
-    if verify(sig, grpkey, msg).is_err() {
-        return Err(String::from("Signature does not belong to message"))
-    }
-    for enc_share in enc_shares{
-        result.push((enc_share.index,GT::ate_pairing(&sig.sigma1,&(&enc_share.c1-(&enc_share.c0*open_sk)))));
+    //if verify(sig, grpkey, msg).is_err() {
+    //    return Err(String::from("Signature does not belong to message"))
+    //}
+    for EncShareWithID{id, enc_share} in enc_shares{
+        result.push(EncSharePairing{id: *id, index: enc_share.index,pairing: GT::ate_pairing(&sig.sigma1,&(&enc_share.c1-(&enc_share.c0*open_sk)))});
     }
 
-    Ok(result)
+    result
 }
 
 /// Compute Lagrange coefficients for interpolation at 0
