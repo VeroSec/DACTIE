@@ -119,7 +119,7 @@ fn test_correct_encryption_proof() {
 
     // Verify the proof
     let is_valid = verify_enc_share_correctness(
-        &enc_share, &grpkey, &pk,id,  &commitments
+        &enc_share, &grpkey, &pk,  &commitments
     );
 
     assert!(is_valid, "Encryption proof failed to verify");

@@ -18,10 +18,10 @@ use log::max_level;
 use crate::mybehaviour::MyBehaviourError::PubSubBehaviourError;
 
 use crate::abstswarm::{AbstSwarmError, Notification};
-use crate::abstswarm::AbstSwarmError::{ SendError};
+use crate::abstswarm::AbstSwarmError::{MLSError, SendError};
 use crate::abstswarm::event_handler::EventHandler;
 use crate::abstswarm::instruction_handler::InstructionHandler;
-use dactie_utils::mls_wrapper::{MyOpenMls};
+use dactie_utils::mls_wrapper::{MyOpenMLSError, MyOpenMls};
 use dactie_utils::mls_wrapper::MyOpenMLSError::{SerializationError};
 use dactie_utils::shared_structs::*;
 use dactie_utils::shared_structs::RequestMessage::RequestOpen;
@@ -165,9 +165,16 @@ impl MyBehaviour {
         Ok(())
     }
 
-    fn send_out_enc_shares(&mut self, my_open_mls: &MyOpenMls,archvive_peer_ids: &[PeerId], id:usize,enc_shares: &[EncShare], commits: &Vec<thressig::G1>) -> Result<(), AbstSwarmError>{
+    fn send_out_id_enc_shares(&mut self, my_open_mls: &MyOpenMls, archvive_peer_ids: &[PeerId], id:usize, enc_shares: &[EncShare], commits: &Vec<thressig::G1>) -> Result<(), AbstSwarmError>{
         for (i, peer_id) in archvive_peer_ids.into_iter().enumerate(){
-            self.request_response.send_request(&peer_id,my_open_mls.sign(RequestMessage::AddPeerShare {id,enc_share: enc_shares[i].clone(),commits: commits.clone()})?);
+            self.request_response.send_request(&peer_id,my_open_mls.sign(RequestMessage::AddIDShare {id,enc_share: enc_shares[i].clone(),commits: commits.clone()})?);
+        }
+        Ok(())
+    }
+
+    fn send_out_peer_enc_shares(&mut self, my_open_mls: &MyOpenMls, archvive_peer_ids: &[PeerId], requester_peer_id: PeerId, enc_shares: &[EncShare], commits: &Vec<thressig::G1>) -> Result<(), AbstSwarmError>{
+        for (i, peer_id) in archvive_peer_ids.into_iter().enumerate(){
+            self.request_response.send_request(&peer_id,my_open_mls.sign(RequestMessage::AddPeerShare {peer_id:requester_peer_id,enc_share: enc_shares[i].clone(),commits: commits.clone()})?);
         }
         Ok(())
     }
@@ -247,7 +254,7 @@ impl MyBehaviour {
                              */
                             RequestMessage::JoinKeyMaterial {g_sk,h_sk, pi1,pi2, enc_shares,commits,keypackage} => {
                                 let (id,partial_memkey) = storage.return_memkey(&peer, &g_sk,&h_sk,&commits,&enc_shares,pi1,pi2)?;
-                                self.send_out_enc_shares(my_open_mls,&storage.get_archive_peer_ids(),id,&enc_shares,&commits)?; //TODO Handle Error
+                                self.send_out_id_enc_shares(my_open_mls, &storage.get_archive_peer_ids(), id, &enc_shares, &commits)?; //TODO Handle Error
                                 let keypackage: KeyPackage = bincode::deserialize(&keypackage).map_err(|x| SerializationError(x.to_string()))?;
                                 log::info!("Created Key Material adding peer to common group...");
                                 storage.allow_peer(&keypackage, peer.clone())?;
@@ -280,23 +287,41 @@ impl MyBehaviour {
 
 
 
-                            /*
-                            Register Peer with existing Group Signature.
-                            TODO Rewrite code for threshold setting
-                            RequestMessage::AddPeerToSig {keypackage} => {
+
+                            //Register Peer with existing Group Signature.
+                            //TODO Rewrite code for threshold setting
+                            RequestMessage::AddPeerToSig {keypackage, enc_shares, commits} => {
+                                match my_open_mls.verify(request) {
+                                    Ok(_) => {}
+                                    Err(e) => return match e {
+                                        MyOpenMLSError::SignatureInvalid {signature: mysig} => {
+                                            log::debug!("Got a Request with Invalid Signature: {}", hex::encode(&mysig.to_bytes()));
+                                            Ok(())
+                                        }
+                                        e => Err(MLSError(e))
+
+                                    },
+                                };
+                                //Verify Keypackage belongs to Peer
+                                //Verify PeerID belongs to Peer
+                                //Verify EncShare
+
+                                self.send_out_peer_enc_shares(my_open_mls, &storage.get_archive_peer_ids(), peer, &enc_shares, &commits)?; //TODO Handle Error
+                                
+                                //Add Peer to commong group
                                 let keypackage: KeyPackage = bincode::deserialize(&keypackage).map_err(|x| SerializationError(x.to_string()))?;
-                                let id = storage.open(request.signature.ok_or(SignatureOpenError)?.to_bytes())?;
+
                                 storage.allow_peer(&keypackage,peer)?;
                                 let group_id = my_open_mls.get_common_group_id()?;
                                 let (_, commit, welcome_option, epoch)
                                     = my_open_mls.add_group_members(group_id.clone(), &[(peer, keypackage.clone())])?;
-                                self.publish_commit(my_open_mls,group_id.to_vec(),Vec::new(),commit,None,epoch)?;
-                                let res = ResponseMessage::PeerAdded{welcome: welcome_option.unwrap(), ratchet_tree: my_open_mls.get_ratchet_tree(&group_id.to_vec())?};
-                                if let Ok(_) = self.request_response.send_response(channel, my_open_mls.sign(res)?) {
-                                    storage.add_peer_id(&id, peer,true)?;
-                                }
+                                self.publish_commit(my_open_mls,group_id.to_vec(),vec![peer],commit,welcome_option,epoch)?;
+                                let res = ResponseMessage::PeerAdded;
+                                self.request_response.send_response(channel, my_open_mls.sign(res)?).unwrap(); //TODO Handle Error
+                                
+          
 
-                            }*/
+                            }
                             _ => {}
                         }
                     }
@@ -420,7 +445,7 @@ impl InstructionHandler for MyBehaviour {
                 let archive_ids = storage.get_archive_peer_ids();
                 let group_numb = my_open_mls.create_mls_group(&archive_ids).unwrap();  //TODO Handle Error
                 my_open_mls.move_to_common(group_numb);
-                self.send_out_enc_shares(my_open_mls,&storage.get_archive_peer_ids(),id,&enc_shares,&commits).unwrap(); //TODO Handle Error
+                self.send_out_id_enc_shares(my_open_mls, &storage.get_archive_peer_ids(), id, &enc_shares, &commits).unwrap(); //TODO Handle Error
                 storage.to_file().unwrap(); //TODO Handle Error
             }
 

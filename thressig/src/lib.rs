@@ -142,24 +142,31 @@ pub fn elgamal_keygen(g_tilde: &G2) -> (FieldElement, G2) {
 }
 
 
-
+//Creates encrypted shares and blinds commits
 pub fn prove_enc_share(
     grpkey: &Grpkey,
     share: &Share,
     f_i: &G2,
     h: &G1,
     h_coms: &[G1],
-) -> EncShare {
+) -> (EncShare,h_coms: &[G1],) {
     //ElGamal Encryption of Share with f_i(key of Archive)
     let r = FieldElement::random();
     let c0 = &grpkey.g_tilde * &r;
     let c1 = (f_i * &r) + (&grpkey.y1_pub_tilde * &share.share);
 
+    // Blind the h value (h_blind = h^α)
+    let alpha = FieldElement::random();
+    let h_blind = h * &alpha;
+
+    // Blind the h_coms using same alpha
+    let blinded_h_coms: Vec<G1> = h_coms.iter().map(|h_j| h_j * &alpha).collect();
+
     //Create necessary values for NI Schnorr Proof
     let k = FieldElement::random();
     let t0 = &grpkey.g_tilde * &k;
     // Compute pairing commitment
-    let t1 = GT::ate_pairing(h, f_i).pow(&k); // e(h,f^k)
+    let t1 = GT::ate_pairing(&h_blind, f_i).pow(&k); // e(h,f^k)
     
 
     // Fiat Shamir Hash challenge
@@ -167,7 +174,7 @@ pub fn prove_enc_share(
     hash_input.extend(&grpkey.g_tilde.to_bytes(false));
     hash_input.extend(f_i.to_bytes(false));
     hash_input.extend(&grpkey.y1_pub_tilde.to_bytes(false));
-    hash_input.extend(h.to_bytes(false));
+    hash_input.extend(h_blind.to_bytes(false));
     for h_l in h_coms {
         hash_input.extend(h_l.to_bytes(false));
     }
@@ -180,18 +187,15 @@ pub fn prove_enc_share(
     let c = FieldElement::from_msg_hash(&hash_input);
     let s = &k + &(&c * r);
 
-    EncShare{index:share.index,c0,c1,c,s}
+    EncShare{index:share.index,c0,c1,c,s,h_blind}
 }
 
 pub fn verify_enc_share_correctness(
-    EncShare{index, c0,c1,c,s}: &EncShare,
+    EncShare{index, c0,c1,c,s,h_blind}: &EncShare,
     groupkey: &Grpkey,
     f_i: &G2,
-    id: usize,
     h_coms: &[G1],
 ) -> bool {
-    let (_,h) = h0(id);
-    let h = &(&groupkey.g * &h);
     //Recompute t0 without knowledge of r
     let t0 = &groupkey.g_tilde * s - c0 * c;
 
@@ -205,7 +209,7 @@ pub fn verify_enc_share_correctness(
     }
 
     //Use the verification value to recompute t1 without knowledge of r_i and s_i
-    let t1 = GT::ate_pairing(h, &(f_i*s)) * GT::ate_pairing(&(h*-c), c1) * GT::ate_pairing(&rhs, &(&groupkey.y1_pub_tilde*c));
+    let t1 = GT::ate_pairing(h_blind, &(f_i*s)) * GT::ate_pairing(&(h_blind*-c), c1) * GT::ate_pairing(&rhs, &(&groupkey.y1_pub_tilde*c));
 
 
     // Recompute Hash based on own calculated values
@@ -213,7 +217,7 @@ pub fn verify_enc_share_correctness(
     hash_input.extend(&groupkey.g_tilde.to_bytes(false));
     hash_input.extend(f_i.to_bytes(false));
     hash_input.extend(&groupkey.y1_pub_tilde.to_bytes(false));
-    hash_input.extend(h.to_bytes(false));
+    hash_input.extend(h_blind.to_bytes(false));
     for h_l in h_coms {
         hash_input.extend(h_l.to_bytes(false));
     }
@@ -296,7 +300,7 @@ pub fn join_mgr2(id: usize, gml: &mut HashMap<usize,String>, name: String,mgrkey
     }
 
     for (i,enc_share) in enc_shares.iter().enumerate() {
-        if verify_enc_share_correctness(enc_share, grpkey, &opener_pubkeys[i],id,commits) == false {
+        if verify_enc_share_correctness(enc_share, grpkey, &opener_pubkeys[i],commits) == false {
             return Err(String::from("error"));
         }
     }

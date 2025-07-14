@@ -56,6 +56,7 @@ pub struct EncShare {
     pub c1: G2, //Enc Share Part 2
     pub c: FieldElement,    //NIZK Proof challange
     pub s: FieldElement,    //NIZK Proof response
+    pub h_blind: G1
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]

@@ -413,7 +413,7 @@ impl MyBehaviour {
                                 self.request_response.send_response(channel, Response{body:ResponseMessage::ResUpdate {group_id,messages},signature: None}).map_err(|_| SendResponseError)?;
                             }
 
-                            RequestMessage::AddPeerShare {id,enc_share,commits} => {
+                            RequestMessage::AddIDShare {id,enc_share,commits} => {
                                 println!("Got a new Peer Share");
                                 //Verify Share and Add to DB
                                 if my_open_mls.verify_enc_share(id,enc_share.clone(),&commits) {

@@ -54,8 +54,13 @@ pub enum RequestMessage{
         group_id: Vec<u8>,
         epoch: u64
     },
-    AddPeerShare {
+    AddIDShare {
         id: usize,
+        enc_share: EncShare,
+        commits: Vec<thressig::G1>
+    },
+    AddPeerShare {
+        peer_id: PeerId,
         enc_share: EncShare,
         commits: Vec<thressig::G1>
     },
@@ -79,6 +84,8 @@ pub enum RequestMessage{
     },
     AddPeerToSig {
         keypackage: Vec<u8>,
+        enc_shares: Vec<EncShare>,
+        commits: Vec<thressig::G1>,
     },
     RequestOpen {
         signature: Vec<u8>
@@ -110,10 +117,7 @@ pub enum ResponseMessage{
     MemKey {
         partial_memkey: Option<Vec<u8>>,
     },
-    PeerAdded{
-        welcome: Vec<u8>,
-        ratchet_tree: Vec<u8>
-    },
+    PeerAdded,
     AddPeerShare,
     EncSharePairings{signature: Vec<u8>,
         enc_share_pairings: Vec<u8>,
