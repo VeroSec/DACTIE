@@ -28,7 +28,8 @@ pub(crate) struct Storage {
     allowed_peers: Mutex<Vec<PeerId>>,
     archive_init_mode: Mutex<bool>,
     opener_pubkeys: Mutex<Vec<G2>>,
-    signature_enc_pairing_map: Mutex<HashMap<Signature, Vec<EncSharePairing>>>,
+    signature_enc_id_pairing_map: Mutex<HashMap<Signature, Vec<(usize,EncSharePairing)>>>,
+    signature_enc_peer_pairing_map: Mutex<HashMap<Signature, Vec<(PeerId,EncSharePairing)>>>,
 }
 
 
@@ -39,7 +40,7 @@ impl Storage {
         let gml = HashMap::new();
 
 
-        let key_material = StoredKeyMaterial::new(Some(grpkey.clone()),None, None);
+        let key_material = StoredKeyMaterial::new(Some(grpkey.clone()),None, None, None);
 
         /* TODO Remove if not needed
         let peer_id = key_material.get_peer_id();
@@ -48,7 +49,7 @@ impl Storage {
         id_peer_map.insert(id, vec![peer_id]);
         */
 
-        (Storage{n_store: Mutex::new(HashMap::new()), grpkey, mgrkey,gml:Mutex::new(gml), path_buf, allowed_peers: Mutex::new(Vec::new()),archive_peers: Mutex::new(Vec::new()), archive_init_mode: Mutex::new(true), opener_pubkeys: Mutex::new(Vec::new()), signature_enc_pairing_map: Mutex::new(HashMap::new())}, key_material, )
+        (Storage{n_store: Mutex::new(HashMap::new()), grpkey, mgrkey,gml:Mutex::new(gml), path_buf, allowed_peers: Mutex::new(Vec::new()),archive_peers: Mutex::new(Vec::new()), archive_init_mode: Mutex::new(true), opener_pubkeys: Mutex::new(Vec::new()), signature_enc_id_pairing_map: Mutex::new(HashMap::new()),signature_enc_peer_pairing_map: Mutex::new(HashMap::new())},key_material, )
     }
 
     pub(crate) fn id_exists(&self,id: &usize) -> bool{
@@ -109,34 +110,65 @@ impl Storage {
     }
 
     //Stores a Slice of EncSharePairings for further use
-    pub fn insert_enc_share_pairing(&self, signature: Signature, enc_share_pairings: &[EncSharePairing]) {
-        let mut map = self.signature_enc_pairing_map.lock().unwrap();
+    pub fn insert_enc_id_share_pairing(&self, signature: Signature, enc_share_id_pairings: &[(usize,EncSharePairing)]) {
+        let mut map = self.signature_enc_id_pairing_map.lock().unwrap();
         map.entry(signature)
             .or_insert_with(Vec::new)
-            .extend_from_slice(enc_share_pairings);
+            .extend_from_slice(enc_share_id_pairings);
     }
+
+    //Stores a Slice of EncSharePairings for further use
+    pub fn insert_enc_peer_share_pairing(&self, signature: Signature, enc_share_peer_pairings: &[(PeerId,EncSharePairing)]) {
+        let mut map = self.signature_enc_peer_pairing_map.lock().unwrap();
+        map.entry(signature)
+            .or_insert_with(Vec::new)
+            .extend_from_slice(enc_share_peer_pairings);
+    }
+
+
 
 
     //Retrieves all EncShares of a signature
-    pub fn open_signature(&self, signature: Signature, my_open_mls: &MyOpenMls, ) -> Option<(usize,String)> {
-        let enc_share_pairings = self.signature_enc_pairing_map.lock().unwrap().get(&signature)?.clone();
-        let gml = self.gml.lock().unwrap().keys().copied().collect();
+    fn open_ids(&self, signature: &Signature, my_open_mls: &MyOpenMls, ) -> Vec<(usize,String)> {
+        let enc_share_pairings = self.signature_enc_id_pairing_map.lock().unwrap().get(signature).unwrap().clone(); //TODO HANDLE UNWRAPT
+        
 
         let all_sj: HashMap<usize, Vec<(usize, thressig::GT)>> = enc_share_pairings
             .into_iter()
-            .fold(HashMap::new(), |mut map, share| {
+            .fold(HashMap::new(), |mut map, (id,share)| {
                 map.entry(share.index)
                     .or_insert_with(Vec::new)
-                    .push((share.id, share.pairing));
+                    .push((id, share.pairing));
                 map
             });
-        if let Some(t) = my_open_mls.open(&signature, gml, all_sj) {
-            self.gml.lock().unwrap().get(&t).cloned().map(|name| (t, name))
-        } else {
-            None
-        }
+        let gml = self.gml.lock().unwrap();
+        let keys = gml.keys().copied().collect();
+        
+        my_open_mls.open(signature, keys, all_sj).iter().map(|t| (t.clone(),gml.get(t).cloned().unwrap())).collect() //TODO HANDEL UNWRAP
 
     }
+
+    //Retrieves all EncShares of a signature
+    fn open_peers(&self, signature: &Signature, my_open_mls: &MyOpenMls, ) -> Vec<PeerId> {
+        let enc_share_pairings = self.signature_enc_peer_pairing_map.lock().unwrap().get(signature).unwrap().clone(); //TODO Handle Error
+        let gml = HashSet::from_iter(self.allowed_peers.lock().unwrap().clone().into_iter());
+
+        let all_sj: HashMap<usize, Vec<(PeerId, thressig::GT)>> = enc_share_pairings
+            .into_iter()
+            .fold(HashMap::new(), |mut map, (id,share)| {
+                map.entry(share.index)
+                    .or_insert_with(Vec::new)
+                    .push((id, share.pairing));
+                map
+            });
+        my_open_mls.open(signature, gml, all_sj)
+    }
+    
+    pub fn open_signature(&self, signature: Signature, my_open_mls: &MyOpenMls) -> (Vec<(usize,String)>,Vec<PeerId>) {
+        (self.open_ids(&signature,my_open_mls),self.open_peers(&signature, my_open_mls))
+    }
+
+
 
 
 

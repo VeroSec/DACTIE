@@ -1,11 +1,13 @@
-# Anonymity Experiment
-This experiment can be used to test the source anonymity of a specific GossipSub Configuration.
-It starts an experiment series that automatically increases the total peer number. The experiment output is saved to a csv file.
-The number of peers that received from the publisher, from other peers and the number of unique propagation peers is outputted.
+# Eclipse Experiment
+This experiment can be used to test if under which conditions attackers can perform an eclipse attack.
+The attacker peers start to ignore all messages from the victim peer, after attack-timer has elapsed.
+At the end of the experiment the number of honest peers that received a message from the victim is reported.
+If an eclipse attack is successful, this number will be zero or at least lower than the number of honest receiver peers.
+
 
 ## Configuration Parameters
 ```
-Usage: dactie-experiments [OPTIONS]
+Usage: dactie-experiment-eclipse [OPTIONS]
 
 Options:
   -n, --n-peers-min <N_PEERS_MIN>
@@ -14,10 +16,14 @@ Options:
           Max number of peers in series [default: 20]
   -S, --n-peers-step-size <N_PEERS_STEP_SIZE>
           Step Size of Series [default: 1]
+  -A, --attack-n <ATTACK_N>
+          Step Size of Series [default: 25]
   -i, --interval <INTERVAL>
           How often Peers Should publish. Input can be fix=<secs> or random=>start,end> [default: fix=5]
-  -t, --time <TIME>
+  -s, --stop-time <STOP_TIME>
           How long before measurement message is send [default: 10]
+  -a, --attack-time <ATTACK_TIME>
+          How long before attackers start to attack [default: 10]
   -r, --repetitions <REPETITIONS>
           How often the experiment should be repeated [default: 5]
   -o, --out-path <OUT_PATH>
@@ -30,6 +36,9 @@ Options:
 
 ```
 ## Example
+Here is an example where only two honest nodes are in the network, and the rest consists of malicious peers. Therefore, an eclipse attack is very likely to succeed.
+After 30 seconds the attackers start to ignore the victims peers messages. 45 seconds after the experiment a measurement message is send trough the network.
+The recipients of this message report if they got it or not.
 ```
-cargo run --package dactie-experiments --bin dactie-experiments -- -r 5 -t 60 -i fix=3 -n 85 -N 100 -S 5
+cargo run --package dactie-experiment-eclipse --bin dactie-experiment-eclipse -- -n 2 -N 2 -A 50 -a 30 -s 45 -r 1 
 ```

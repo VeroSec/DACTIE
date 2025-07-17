@@ -69,7 +69,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let key_material = if !km_path.exists(){
         let instruction = Instruction::RegisterIdentity {peer_id: args.aa_id, identity: args.identity};
         instruction_tx.send(instruction)?;
-        let key_material = StoredKeyMaterial::new(None, None, None);
+        let key_material = StoredKeyMaterial::new(None, None, None,None);
         key_material.to_file(km_path)?;
         key_material
     } else {

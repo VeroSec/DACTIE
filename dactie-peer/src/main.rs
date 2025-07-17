@@ -68,7 +68,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     //Get Group Key Material from Authorization Authority or File
     let key_material = if !km_path.exists(){
-        let key_material = StoredKeyMaterial::new(None,None,None);
+        let key_material = StoredKeyMaterial::new(None,None,None,None);
         key_material.to_file(km_path)?;
         key_material
     } else {

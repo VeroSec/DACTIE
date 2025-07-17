@@ -1,6 +1,6 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="Run Peer2" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
-    <option name="command" value="run --package dactie-peer -- -K ./key_material/peer2 -b 12D3KooWSvhvSfMdCaCBpHKcuUkFjcDSwMfxyHV1Xzpy5MFzRkwS -B /ip4/127.0.0.1/tcp/10001" />
+    <option name="command" value="run --package dactie-peer -- -K ./key_material/peer2 -b 12D3KooWM2zeU7VXV58gwFQVLdEcFxATMf9fBFgzJ8SGD12RgwgQ -B /ip4/127.0.0.1/tcp/10001" />
     <option name="workingDirectory" value="file://$PROJECT_DIR$" />
     <envs>
       <env name="RUST_LOG" value="info" />

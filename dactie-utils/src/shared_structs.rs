@@ -56,6 +56,7 @@ pub enum RequestMessage{
     },
     AddIDShare {
         id: usize,
+        peer_id: PeerId,
         enc_share: EncShare,
         commits: Vec<thressig::G1>
     },
@@ -90,6 +91,7 @@ pub enum RequestMessage{
     RequestOpen {
         signature: Vec<u8>
     },
+    RequestOpenerKeys,
 }
 
 impl Signable for RequestMessage {
@@ -120,8 +122,12 @@ pub enum ResponseMessage{
     PeerAdded,
     AddPeerShare,
     EncSharePairings{signature: Vec<u8>,
-        enc_share_pairings: Vec<u8>,
+        enc_share_id_pairings: Vec<u8>,
+        enc_share_peer_pairings: Vec<u8>,
     },
+    OpenerKeys{
+        opener_pubkeys: Vec<thressig::G2>
+    }
 }
 impl Signable for ResponseMessage {
     type Output = Response;
@@ -207,6 +213,9 @@ pub enum Instruction {
     PeerFromSig {
         peer_id: PeerId,
         sig_file_path: String
+    },
+    GetOpenerKeys {
+        peer_id: PeerId,
     },
     ReqOpen {
         signature: Vec<u8>

@@ -36,17 +36,17 @@ fn test_flow() {
     
     
     //Simuluate 3 Openers who work together 
-    let paring_0 = &create_open_pairing(&y,&[EncShareWithID{id,enc_share: enc_shares[0].clone()}],&opener_sec_keys[0])[0];
-    let paring_1 = &create_open_pairing(&y,&[EncShareWithID{id,enc_share: enc_shares[1].clone()}],&opener_sec_keys[1])[0];
-    let paring_2 = &create_open_pairing(&y,&[EncShareWithID{id,enc_share: enc_shares[2].clone()}],&opener_sec_keys[2])[0];
+    let paring_0 = &create_open_pairing(&y, enc_shares[0].clone(),&opener_sec_keys[0]);
+    let paring_1 = &create_open_pairing(&y, enc_shares[1].clone(),&opener_sec_keys[1]);
+    let paring_2 = &create_open_pairing(&y, enc_shares[2].clone(),&opener_sec_keys[2]);
     
     let mut opener_map = HashMap::new();
-    opener_map.insert(paring_0.index, vec![(paring_0.id,paring_0.pairing.clone())]);
-    opener_map.insert(paring_1.index, vec![(paring_1.id,paring_1.pairing.clone())]);
-    opener_map.insert(paring_2.index, vec![(paring_2.id,paring_2.pairing.clone())]);
+    opener_map.insert(paring_0.index, vec![(id,paring_0.pairing.clone())]);
+    opener_map.insert(paring_1.index, vec![(id,paring_1.pairing.clone())]);
+    opener_map.insert(paring_2.index, vec![(id,paring_2.pairing.clone())]);
     
     
-    let opened_id = open(&y,&grpkey,&gml.keys().copied().collect(),&opener_map).unwrap();
+    let opened_ids = open(&y,&grpkey,&gml.keys().copied().collect(),&opener_map);
 
     assert_eq!(partial_memkey.sigma1,memkey1.sigma1);
     assert_eq!(partial_memkey.sigma2,memkey1.sigma2);
@@ -55,7 +55,7 @@ fn test_flow() {
     
 
     assert!(verify(&y, &grpkey, "Hallo".as_bytes()).is_ok());
-    assert_eq!(opened_id,id);
+    assert_eq!(opened_ids[0],id);
 }
 
 
@@ -64,7 +64,7 @@ fn test_shares_verifiability() {
     let (grpkey, _) = setup();
     let id = 0usize;
     let sk = FieldElement::random();
-    let (_,h) = h0(id);
+    let h = h0(&id);
     let (shares,commits)= shamir_feldman_share(&sk,3,6,&(&grpkey.g*&h));
     
     let z = recover_secret(&shares[..3]);
@@ -100,7 +100,7 @@ fn test_correct_encryption_proof() {
     let (grpkey, _) = setup();
     let id = 0usize;
     let sk = FieldElement::random();
-    let (_,h) = h0(id);
+    let h= h0(&id);
     
     // Feldman commitments: create t-out-of-n shares
     let t = 3;

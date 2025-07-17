@@ -305,11 +305,21 @@ impl MyBehaviour {
         let new_key_store = key_store::StoredKeyMaterial::from_file(path).map_err(|_|KeyMaterialFileError)?;
         my_open_mls.set_grpkey(new_key_store.get_grpkey().ok_or(KeyMaterialFileError)?.to_bytes())?;
         my_open_mls.set_memkey(new_key_store.get_memkey().ok_or(KeyMaterialFileError)?.to_bytes())?;
+        my_open_mls.set_id(new_key_store.get_id().ok_or(KeyMaterialFileError)?)?;
+
+        let (enc_shares, commits) = my_open_mls.generate_enc_shares();
+
         let keypackage = my_open_mls.generate_key_package()?;
         let keypackage = bincode::serialize(&keypackage)
             .map_err(|x|SerializationError(x.to_string()))?;
-        let body = RequestMessage::AddPeerToSig {keypackage};
+        let body = RequestMessage::AddPeerToSig {keypackage,enc_shares,commits};
         self.request_response.send_request(&peer_id,my_open_mls.sign(body)?);
+        Ok(())
+    }
+    
+    fn get_opener_keys(&mut self ,peer_id: PeerId) -> Result<(), AbstSwarmError>{
+        let request= Request{body:RequestMessage::RequestOpenerKeys, signature:None};
+        self.request_response.send_request(&peer_id,request);
         Ok(())
     }
 
@@ -647,7 +657,9 @@ impl MyBehaviour {
                                     Some(val) => val,
                                     None => return Ok(())
                                 };
-                                let (g_sk, h_sk, pi1,pi2,enc_shares,commits) = my_open_mls.generate_join_key_material(id, n,group_key, &opener_pubkeys);
+                                my_open_mls.add_opener_pubkeys(&opener_pubkeys)?;
+                                let (g_sk, h_sk, pi1,pi2,enc_shares,commits) = my_open_mls.generate_join_key_material(id, n,group_key);
+                                my_open_mls.set_id(id)?;
                                 let keypackage = my_open_mls.generate_key_package()?;
                                 let keypackage = bincode::serialize(&keypackage)
                                     .map_err(|x|SerializationError(x.to_string()))?;
@@ -659,12 +671,10 @@ impl MyBehaviour {
                                     my_open_mls.add_partial_memkey(memkey)?;
                                 }
                             }
-                            ResponseMessage::PeerAdded { welcome, ratchet_tree} => {
-                                log::info!("Received a JoinGroup Request from Peer {}", peer.to_string());
-                                let group_id = my_open_mls.add_group_from_welcome(welcome, ratchet_tree)?;
-                                my_open_mls.move_to_common_id(group_id.clone())?;
-                                log::info!("Added Common Group {group_id:?}");
-                                self.subscribe(group_id.clone(), my_open_mls)?;
+                            ResponseMessage::PeerAdded => {  }
+                            ResponseMessage::OpenerKeys {opener_pubkeys} => {
+                                log::info!("Got Opener Keys.");
+                                my_open_mls.add_opener_pubkeys(&opener_pubkeys)?;
                             }
                         }
 
@@ -782,6 +792,11 @@ impl InstructionHandler for MyBehaviour {
             }
             Instruction::PeerFromSig {peer_id, sig_file_path} => {
                 if let Err(error) = self.peer_from_sig(my_open_mls,peer_id,sig_file_path){
+                    Self::notify(notification_tx, Notification::Err(error));
+                }
+            }
+            Instruction::GetOpenerKeys {peer_id} => {
+                if let Err(error) = self.get_opener_keys(peer_id){
                     Self::notify(notification_tx, Notification::Err(error));
                 }
             }

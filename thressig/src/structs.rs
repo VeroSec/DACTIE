@@ -27,11 +27,9 @@ pub struct Mgrkey {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Memkey {
     pub sk: FieldElement,
-    pub a_prime: Option<FieldElement>,
     pub sigma1: Option<G1>,
     pub sigma2: Option<G1>,
     pub e1: Option<GT>,
-    pub e2: Option<GT>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -39,8 +37,7 @@ pub struct Signature {
     pub sigma1: G1,
     pub sigma2: G1,
     pub c: FieldElement,
-    pub s1: FieldElement,
-    pub s2: FieldElement,
+    pub s: FieldElement,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -59,15 +56,10 @@ pub struct EncShare {
     pub h_blind: G1
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-pub struct EncShareWithID {
-    pub id: usize,
-    pub enc_share:EncShare
-}
+
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EncSharePairing {
-    pub id: usize,
     pub index: usize,
     pub pairing: GT
 }
