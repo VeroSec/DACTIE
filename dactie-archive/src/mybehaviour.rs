@@ -20,7 +20,7 @@ use crate::abstswarm::{AbstSwarmError, PeerId};
 
 use dactie_utils::mls_wrapper::{MyOpenMls, MyOpenMLSError};
 use dactie_utils::mls_wrapper::MyOpenMLSError::{GroupNotAvailable, SerializationError};
-use crate::abstswarm::AbstSwarmError::{MLSError, MessageValidationError, SendResponseError};
+use crate::abstswarm::AbstSwarmError::{MLSError, MessageValidationError, SendJoinGroupError, SendResponseError};
 use crate::abstswarm::instruction_handler::InstructionHandler;
 
 const NUM_CHANNELS: u64 = 10;
@@ -53,6 +53,19 @@ struct Proposal {
     group_id: Vec<u8>,
     data: Vec<u8>,
     epoch: i64,
+}
+
+
+#[derive(sqlx::FromRow,Debug)]
+struct IDShare {
+    id: i64,
+    enc_share: Vec<u8>,
+}
+
+#[derive(sqlx::FromRow,Debug)]
+struct PeerShare {
+    peer_id: Vec<u8>,
+    enc_share: Vec<u8>,
 }
 
 impl MyBehaviour {
@@ -171,6 +184,28 @@ impl MyBehaviour {
         Ok(())
     }
 
+    async fn insert_id_enc_share(pool: &sqlx::PgPool, id: usize, enc_share: &[u8], commits: &[u8]) -> Result<(),MyBehaviourError> {
+        let result = sqlx::query(
+            "INSERT INTO id_shares (id, enc_share, commits) VALUES ($1, $2, $3)")
+            .bind(id as i64)//SQLX and probably Postgres do not support usize. Care has to be taken, when retrieving this value from the database
+            .bind(enc_share)
+            .bind(commits)
+            .execute(pool).await?;
+        log::debug!("{result:?}");
+        Ok(())
+    }
+
+    async fn insert_peer_enc_share(pool: &sqlx::PgPool, peer_id: &[u8], enc_share: &[u8], commits: &[u8]) -> Result<(),MyBehaviourError> {
+        let result = sqlx::query(
+            "INSERT INTO peer_shares (peer_id, enc_share, commits) VALUES ($1, $2, $3)")
+            .bind(peer_id)//SQLX and probably Postgres do not support usize. Care has to be taken, when retrieving this value from the database
+            .bind(enc_share)
+            .bind(commits)
+            .execute(pool).await?;
+        log::debug!("{result:?}");
+        Ok(())
+    }
+
     /**
     Functions that return DB Content to the peers
     **/
@@ -207,6 +242,33 @@ impl MyBehaviour {
         }
         Ok(proposals)
     }
+
+    async fn get_all_id_enc_shares(pool: &sqlx::PgPool) -> Result<Vec<(usize, Vec<u8>)>,MyBehaviourError> {
+        let mut proposal_stream= sqlx::query_as::<_, IDShare>(
+            "SELECT id, enc_share FROM id_shares")
+            .fetch(pool);
+
+
+        let mut shares = Vec::new();
+        while let Some(IDShare {id, enc_share}) = proposal_stream.try_next().await? {
+            shares.push((id as usize,enc_share));
+        }
+        Ok(shares)
+    }
+
+    async fn get_all_peer_enc_shares(pool: &sqlx::PgPool) -> Result<Vec<(Vec<u8>, Vec<u8>)>,MyBehaviourError> {
+        let mut proposal_stream= sqlx::query_as::<_, PeerShare>(
+            "SELECT peer_id, enc_share FROM peer_shares")
+            .fetch(pool);
+
+
+        let mut shares = Vec::new();
+        while let Some(PeerShare {peer_id, enc_share}) = proposal_stream.try_next().await? {
+            shares.push((peer_id,enc_share));
+        }
+        Ok(shares)
+    }
+
 
     /**
         Function that register the identity of the archive and handle common group commits.
@@ -382,6 +444,58 @@ impl MyBehaviour {
 
                                 self.request_response.send_response(channel, Response{body:ResponseMessage::ResUpdate {group_id,messages},signature: None}).map_err(|_| SendResponseError)?;
                             }
+
+                            RequestMessage::AddIDShare {id,peer_id,enc_share,commits} => {
+                                println!("Got a new ID Share");
+                                //Verify Share and Add to DB
+                                if my_open_mls.verify_enc_share(&enc_share,&commits,None) {
+                                    let commits = bincode::serialize(&commits).unwrap();
+                                    let enc_share = enc_share.to_bytes();
+                                    let peer_id = peer_id.to_bytes();
+                                    Self::insert_id_enc_share(pool, id, &enc_share, &commits).await?;
+                                    Self::insert_peer_enc_share(pool, &peer_id, &enc_share, &commits).await?;
+                                }
+                                //Add to DB
+                                self.request_response.send_response(channel, Response{body:ResponseMessage::AddPeerShare,signature: None}).map_err(|_| SendResponseError)?;
+                            }
+
+                            RequestMessage::AddPeerShare {peer_id,enc_share,commits} => {
+                                println!("Got a new Peer Share");
+                                //Verify Share and Add to DB
+                                if my_open_mls.verify_enc_share(&enc_share,&commits,None) {
+                                    let commits = bincode::serialize(&commits).unwrap();
+                                    let enc_share = enc_share.to_bytes();
+                                    let peer_id = peer_id.to_bytes();
+                                    Self::insert_peer_enc_share(pool, &peer_id, &enc_share, &commits).await?;
+                                }
+                                //Add to DB
+                                self.request_response.send_response(channel, Response{body:ResponseMessage::AddPeerShare,signature: None}).map_err(|_| SendResponseError)?;
+                            }
+
+
+                            RequestMessage::JoinGroup {welcome,ratchet_tree, .. } => {
+                                //Only add to commongroup if it comes from authority
+                                if my_open_mls.get_authorityid() == peer {
+                                    log::info!("Received a JoinGroup Request from Authority {}", peer.to_string());
+                                    let group_id = my_open_mls.add_group_from_welcome(welcome, ratchet_tree)?;
+                                    my_open_mls.move_to_common_id(group_id.clone())?;
+                                    log::info!("Added Common Group {group_id:?}");
+                                    self.subscribe(group_id.clone(), my_open_mls)?;
+                                    self.request_response.send_response(channel, Response{body:ResponseMessage::JoinGroup, signature:None}).map_err(|_| SendJoinGroupError {group_id})?
+                                }
+                            }
+
+                            RequestMessage::RequestOpen {signature} => {
+                                if my_open_mls.get_authorityid() == peer {
+                                    log::info!("Received a OpenRequest from Authority {}", peer.to_string());
+                                    let id_enc_shares = Self::get_all_id_enc_shares(&pool).await?;
+                                    let peer_enc_shares = Self::get_all_peer_enc_shares(&pool).await?;
+                                    let enc_share_id_pairings = bincode::serialize(&my_open_mls.get_enc_share_pairings(id_enc_shares, &signature)?).map_err(|e| SerializationError(e.to_string()))?;
+                                    let enc_share_peer_pairings = bincode::serialize(&my_open_mls.get_enc_share_pairings(peer_enc_shares, &signature)?).map_err(|e| SerializationError(e.to_string()))?;
+                                    self.request_response.send_response(channel,Response{body:ResponseMessage::EncSharePairings {signature,enc_share_id_pairings,enc_share_peer_pairings}, signature:None}).map_err(|_| SendResponseError)?;
+                                }
+                            }
+
                             _ => {}
                         }
                     }
@@ -396,16 +510,13 @@ impl MyBehaviour {
                                 let keypackage = bincode::serialize(&keypackage)
                                     .map_err(|x| SerializationError(x.to_string()))?;
                                 my_open_mls.set_grpkey(group_key)?;
-                                self.request_response.send_request(&peer, Request{body:RequestMessage::JoinKeyPackage {keypackage},signature:None});
+                                my_open_mls.generate_elgamal_key_pair()?;
+                                self.request_response.send_request(&peer, Request{body:RequestMessage::JoinKeyPackage {keypackage,elgamal_pk: my_open_mls.get_elgamal_pubkey()?},signature:None});
 
                             }
-                            ResponseMessage::MemKey {welcome,ratchet_tree, .. } => {
-                                log::info!("Received a JoinGroup Request from Peer {}", peer.to_string());
-                                let group_id = my_open_mls.add_group_from_welcome(welcome, ratchet_tree)?;
-                                my_open_mls.move_to_common_id(group_id.clone())?;
-                                log::info!("Added Common Group {group_id:?}");
-                                self.subscribe(group_id.clone(), my_open_mls)?;
-                            }
+                            ResponseMessage::MemKey {.. } => {  }
+
+
                             //Ignore all other Responses for now
                             _ => {}
                         }

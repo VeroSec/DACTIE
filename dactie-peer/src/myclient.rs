@@ -148,6 +148,13 @@ impl MyClient {
                 },
                 Err(_) => println!("Failed to convert some of the peer IDs")
             };
+        }else if input.starts_with("get_opener_keys") && split.len() > 1 {
+            match PeerId::from_str(split[1]) {
+                Ok(peer_id) => {println!("Successfully converted: {:?}", peer_id);
+                    Self::get_opener_keys(self.instruction_tx.clone(),peer_id).await?;
+                },
+                Err(_) => println!("Failed to convert some of the peer IDs")
+            };
         }else {
         println!("Available Commands:
         - ls_groups: Lists all available groups and prints the group_number + group ids
@@ -164,7 +171,8 @@ impl MyClient {
         - update_groups <archive_peer_id>: Requests updates for all groups from an archive
         - peer_id: Prints out PeerId
         - register_identity <authorization_peer_id> <identity>: Registers a new identity at Authorization Authority
-        - peer_from_sig <authorization_peer_id> <save_file_path>: Adds a new peer from an existing GroupSignature Memberkey")
+        - peer_from_sig <authorization_peer_id> <save_file_path>: Adds a new peer from an existing GroupSignature Memberkey
+        - get_opener_keys <authorization_peer_id>: Requests Opener Keys from Authority")
         }
 
         Ok(())
@@ -379,7 +387,18 @@ impl MyClient {
     ) -> anyhow::Result<()> {
         let instruction = Instruction::PeerFromSig {peer_id, sig_file_path};
         instruction_tx.send(instruction)?;
-        log::info!("RegisterIdentity Instruction sent to Abstswarm");
+        log::info!("PeerFromSig Instruction sent to Abstswarm");
+
+        Ok(())
+    }
+
+    async fn get_opener_keys(
+        instruction_tx: mpsc::UnboundedSender<Instruction>,
+        peer_id: PeerId,
+    ) -> anyhow::Result<()> {
+        let instruction = Instruction::GetOpenerKeys {peer_id};
+        instruction_tx.send(instruction)?;
+        log::info!("GetOpenerKeys Instruction sent to Abstswarm");
 
         Ok(())
     }

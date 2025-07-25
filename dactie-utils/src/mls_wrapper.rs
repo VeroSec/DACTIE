@@ -1,6 +1,6 @@
 mod mls_crypto_provider;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::fs::create_dir_all;
 use std::hash::{DefaultHasher, Hash, Hasher};
@@ -22,6 +22,7 @@ use tokio::time::{sleep,Duration};
 use crate::shared_structs::Instruction;
 use mls_crypto_provider::{MemoryStorageError, OpenMlsRustCrypto};
 use MyOpenMLSError::*;
+use thressig::structs::{EncShare, EncSharePairing, Signature};
 use crate::key_store::StoredKeyMaterial;
 use crate::shared_structs;
 
@@ -43,11 +44,13 @@ pub struct MyOpenMls {
     group_commit_tx: mpsc::UnboundedSender<GroupId>,
     instruction_tx: mpsc::UnboundedSender<Instruction>,
     load_files_path: PathBuf,
-    common_group: Mutex<Option<GroupId>>
+    common_group: Mutex<Option<GroupId>>,
+    authority_id: PeerId,
+    opener_pubkeys:  Mutex<Vec<thressig::G2>>,
 }
 
 impl MyOpenMls {
-    pub fn new(key_store: StoredKeyMaterial, group_commit_tx: mpsc::UnboundedSender<GroupId>,instruction_tx: mpsc::UnboundedSender<Instruction>, load_files_path: PathBuf) -> Result<MyOpenMls, MyOpenMLSError>{
+    pub fn new(key_store: StoredKeyMaterial, group_commit_tx: mpsc::UnboundedSender<GroupId>,instruction_tx: mpsc::UnboundedSender<Instruction>, load_files_path: PathBuf, authority_id: PeerId) -> Result<MyOpenMls, MyOpenMLSError>{
         let ciphersuite = Ciphersuite::MLS_128_DHKEMX25519_AES128GCM_SHA256_Ed25519;
         let mut group_path = load_files_path.clone();
         group_path.push("group_saves");
@@ -72,12 +75,48 @@ impl MyOpenMls {
             group_commit_tx,
             instruction_tx,
             load_files_path,
-            common_group
+            common_group,
+            authority_id,
+            opener_pubkeys: Mutex::new(Vec::new()),
         })
     }
 
-    pub fn generate_join_key_material(&self, n: ps16::G1, grpkey: Vec<u8>) -> (ps16::G1,ps16::G2,(ps16::FieldElement,ps16::FieldElement)){
-        self.key_store.lock().unwrap().generate_join_key_material(n, grpkey)
+    pub fn generate_join_key_material(&self, id: usize, n: thressig::G1, grpkey: Vec<u8>) -> Result<(thressig::G1,thressig::G1, (thressig::FieldElement,thressig::FieldElement),(thressig::FieldElement,thressig::FieldElement),Vec<EncShare>,Vec<thressig::G1>), MyOpenMLSError>{
+        let opener_pubkeys= self.opener_pubkeys.lock().unwrap().clone();
+        let res = self.key_store.lock().unwrap().generate_join_key_material(id, n, grpkey, &opener_pubkeys);
+        let mut path = self.load_files_path.clone();
+        path.push("key_material.json");
+        self.key_store.lock().unwrap().to_file(path).map_err(|_| KeyMaterialFileError)?;
+        Ok(res)
+    }
+
+    pub fn generate_enc_shares(&self) -> Result<(Vec<EncShare>,Vec<thressig::G1>),MyOpenMLSError>{
+        let opener_pubkeys = self.opener_pubkeys.lock().unwrap().clone();
+        let mut key_store = self.key_store.lock().unwrap();
+        let grpkey = key_store.get_grpkey().ok_or(GPKUndefinedError)?;
+        let sk = key_store.get_memkey().ok_or(GSKUndefinedError)?.sk;
+        let id = key_store.get_id().ok_or(IDUndefinedError)?;
+        Ok(key_store.generate_enc_shares(grpkey,sk,id,&opener_pubkeys))
+    }
+
+    //Generate Keypair used for encryption of the shares
+    pub fn generate_elgamal_key_pair(&self, ) -> Result<(), MyOpenMLSError>{
+        self.key_store.lock().unwrap().generate_elgamal_key_pair().map_err(|_| GPKUndefinedError)?;
+        let mut path = self.load_files_path.clone();
+        path.push("key_material.json");
+        self.key_store.lock().unwrap().to_file(path).map_err(|_| KeyMaterialFileError)
+    }
+
+    pub fn get_elgamal_pubkey(&self, ) -> Result<thressig::G2, MyOpenMLSError>{
+        Ok(self.key_store.lock().unwrap().get_elgamal_pubkey().ok_or(ElgamalUndefinedError)?.clone())
+    }
+
+    pub fn get_peerid(&self, ) -> PeerId{
+        self.key_store.lock().unwrap().get_peer_id()
+    }
+
+    pub fn get_authorityid(&self, ) -> PeerId{
+        self.authority_id
     }
 
     pub fn set_grpkey(&self, grpkey: Vec<u8>) -> Result<(), MyOpenMLSError> {
@@ -96,9 +135,25 @@ impl MyOpenMls {
         Ok(())
     }
 
+    pub fn set_id(&self, id : usize) -> Result<(), MyOpenMLSError> {
+        self.key_store.lock().unwrap().set_id(id);
+        let mut path = self.load_files_path.clone();
+        path.push("key_material.json");
+        self.key_store.lock().unwrap().to_file(path).map_err(|_| KeyMaterialFileError)?;
+        Ok(())
+    }
+
 
     pub fn add_partial_memkey(&self, partial_memkey: Vec<u8>) -> Result<(), MyOpenMLSError>{
         self.key_store.lock().unwrap().add_partial_memkey(partial_memkey);
+        let mut path = self.load_files_path.clone();
+        path.push("key_material.json");
+        self.key_store.lock().unwrap().to_file(path).map_err(|_| KeyMaterialFileError)?;
+        Ok(())
+    }
+
+    pub fn add_opener_pubkeys(&self, opener_pubkeys: &[thressig::G2]) -> Result<(), MyOpenMLSError> {
+        self.opener_pubkeys.lock().unwrap().extend_from_slice(opener_pubkeys);
         let mut path = self.load_files_path.clone();
         path.push("key_material.json");
         self.key_store.lock().unwrap().to_file(path).map_err(|_| KeyMaterialFileError)?;
@@ -613,20 +668,56 @@ impl MyOpenMls {
     where
         T: shared_structs::Signable + serde::Serialize,
     {
-        let memkey= self.key_store.lock().unwrap().get_memkey().ok_or(GSKUndefinedError)?;
-        let signature = ps16::sign(&memkey, &body)?;
+        let (grpkey,memkey)= {
+            let key_store= self.key_store.lock().unwrap();
+            (key_store.get_grpkey().ok_or(GPKUndefinedError)?,key_store.get_memkey().ok_or(GSKUndefinedError)?)
+        };
+        let signature = thressig::sign(&memkey, &grpkey,&body)?;
         Ok(T::new(body, signature))
     }
 
-    pub fn verify<T>(&self, message: T) -> Result<(T::Body,ps16::structs::Signature), MyOpenMLSError>
+    pub fn verify<T>(&self, message: T) -> Result<(T::Body,Signature), MyOpenMLSError>
     where
         T: shared_structs::Verifiable, <T as shared_structs::Verifiable>::Body: serde::Serialize
     {
         let grpkey= self.key_store.lock().unwrap().get_grpkey().ok_or(GPKUndefinedError)?;
         let (body,signature) = message.into_parts();
         let signature = signature.ok_or(SignatureMissing)?;
-        ps16::verify(&signature,&grpkey, &body).map_err(|_| SignatureInvalid{signature:signature.clone()})?;
+        thressig::verify(&signature,&grpkey, &body).map_err(|_| SignatureInvalid{signature:signature.clone()})?;
         Ok((body, signature))
+    }
+    
+    pub fn verify_enc_share(&self,enc_share: &EncShare,commits: &[thressig::G1], elgamal_pk: Option<thressig::G2>) -> bool {
+        let (group_key, elgamal_pk) = {
+            let keystore = self.key_store.lock().unwrap();
+            let group_key = match keystore.get_grpkey() {
+                Some(v) => v,
+                None => return false,
+            };
+
+            let elgamal_pk = elgamal_pk.or_else(|| keystore.get_elgamal_pubkey().cloned());
+            let elgamal_pk = match elgamal_pk {
+                Some(v) => v,
+                None => return false,
+            };
+
+            (group_key,elgamal_pk)
+        };
+    thressig::verify_enc_share_correctness(enc_share,&group_key,&elgamal_pk,commits)
+    }
+
+    pub fn open<K>(&self, signature: &Signature,gml: HashSet<K>, all_sj: HashMap<usize, Vec<(K, thressig::GT)>>) -> Vec<K>
+        where
+            K: Eq+Clone,
+    {
+
+        let group_key = match {self.key_store.lock().unwrap().get_grpkey()}  {
+            Some(v) => v,
+            None => return Vec::new(),
+        };
+
+        thressig::open(signature, &group_key, &gml, &all_sj)
+
     }
 
 
@@ -763,6 +854,36 @@ impl MyOpenMls {
         }
     }
 
+    pub fn get_enc_share_pairings<K>(
+        &self,
+        enc_shares: Vec<(K, Vec<u8>)>,
+        signature: &Vec<u8>,
+    ) -> Result<Vec<(K, EncSharePairing)>, MyOpenMLSError>
+    where
+        K: Clone,
+    {
+        let keystore = self.key_store.lock().unwrap();
+        let secret_key = match keystore.get_elgamal_secretkey() {
+            Some(v) => v,
+            None => return Err(ElgamalUndefinedError),
+        };
+
+        let signature: Signature = bincode::deserialize(signature)
+            .map_err(|e| SerializationError(e.to_string()))?;
+
+        let enc_shares: Result<Vec<(K, EncSharePairing)>, bincode::Error> = enc_shares
+            .iter()
+            .map(|(id, enc_share)| {
+                let enc_share: EncShare = bincode::deserialize(enc_share)?;
+                let pairing = thressig::create_open_pairing(&signature, enc_share, secret_key);
+                Ok((id.clone(), pairing))
+            })
+            .collect();
+
+        Ok(enc_shares.map_err(|e| SerializationError(e.to_string()))?)
+    }
+
+
     //Notifies the group owner, that there are new proposals
     fn notify_owned_proposal(&self, owned:bool, group_id: GroupId) -> Result<(),MyOpenMLSError>{
         if owned {
@@ -793,6 +914,7 @@ fn generate_openmls_credentials(provider: &impl OpenMlsProvider, skp: SignatureK
 }
 
 
+
 struct GroupStorage {
     group:MlsGroup,
     aes_cipher: Aes256Gcm,
@@ -818,7 +940,7 @@ pub enum MyOpenMLSError {
     #[error("Could not find group in storage")]
     GroupNotAvailable(String),
     #[error("The signature is invalid")]
-    SignatureInvalid{signature:ps16::structs::Signature},
+    SignatureInvalid{signature:thressig::structs::Signature},
     #[error("No signature available")]
     SignatureMissing,
     #[error("Could not add members to group {group_id:?}, because {reason:?}")]
@@ -877,8 +999,12 @@ pub enum MyOpenMLSError {
     GSKUndefinedError,
     #[error("GroupPublicKey not set, can not connect do Dactie Network")]
     GPKUndefinedError,
+    #[error("ID not set, can not go forward")]
+    IDUndefinedError,
+    #[error("Elgamalkeys not set")]
+    ElgamalUndefinedError,
     #[error("Group Signature Operation failed: {0}")]
-    PS16Error(#[from] ps16::PS16Error),
+    PS16Error(#[from] thressig::ThressigError),
     #[error("CommonGroup Not Set")]
     CommonGroupUndefinedError,
     #[error("The path to the keystore is not valid or the file is corrupted")]

@@ -6,6 +6,18 @@ CREATE TABLE broadcast (
     data BYTEA NOT NULL
 );
 
+CREATE TABLE id_shares (
+   id BIGINT PRIMARY KEY, --user_id
+   enc_share BYTEA NOT NULL,
+   commits BYTEA NOT NULL
+);
+
+CREATE TABLE peer_shares (
+    peer_id BYTEA PRIMARY KEY, --peer_id
+    enc_share BYTEA NOT NULL,
+    commits BYTEA NOT NULL
+);
+
 CREATE TABLE group_enc (
     id BYTEA PRIMARY KEY,
     group_id BYTEA NOT NULL,

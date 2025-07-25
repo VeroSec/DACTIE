@@ -21,10 +21,18 @@ Options:
 ## Commands
 The authority takes the following commands:
 ```
-open <signatur>: Opens Signatur
-```
+- req_open <signatur>: Requests open pairings from archives
+- open <signatur>: Opens Signatur   
+- end_init_archive: Ends Init Phase no new archives can join
 
-## Future Work
-This proof of concept is missing the Crypto Implementation of the Threshold Group Signature scheme mentioned in the Thesis.
-Therefore the Authority can add new members and open signatures. In future work that has access of a group signatures implementation, 
-the opening function should be moved to the archives.
+```
+## Initialzation phase
+The authority starts in the initialization mode. In this mode it accepts new archive connects. The archives are necessary for the groupmember-key-creation.
+When all archives are registered it can be switched to the normal mode of operation with `end_init_archive`.
+
+## Signature Opening
+The authority can open a signature if it receives the corresponding pairings from the archives. In this demo, the archives always create the pairings when request.
+In a real world scenario they have the freedom of decision.
+
+1. The authority requests the pairings from the archives with `req_open <signature>`
+2. When the authority has received enough pairings to achieve the necessary threshold (num_archives/2) it can open the signature with `open <signature>`
