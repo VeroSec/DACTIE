@@ -45,10 +45,12 @@ List of available commands. It can be opened in the peer by typing help.
 - peer_id: Prints out PeerId
 - register_identity <authorization_peer_id> <identity>: Registers a new identity at Authorization Authority
 - peer_from_sig <authorization_peer_id> <save_file_path>: Adds a new peer from an existing GroupSignature Savefile
+- get_opener_keys <authorization_peer_id>: Requests Opener Keys from Authority
 ```
 ## Peer Registration
 Each peer needs to be registered to work. This can be done with the `register_identity` command. If a member already has registered his identity,
-he can also reuse the group signature of this member identity by using the `peer_from_sig` command with the group_key_save file.
+he can also reuse the group signature of this member identity by using the `peer_from_sig` command with the group_key_save file. Before running the command `peer_from_sig`, the opener keys
+have to be fetched with `get_opener_keys`
 
 ## Public Groups
 Peers can subscribe and unsubscribe to public topics with the `sub` and `unsub` commands.

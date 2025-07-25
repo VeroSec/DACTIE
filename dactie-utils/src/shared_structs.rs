@@ -1,25 +1,25 @@
 use libp2p::PeerId;
 use openmls::group::GroupId;
 use serde::{Deserialize, Serialize};
-use ps16::structs::Signature;
+use thressig::structs::{EncShare, Signature};
 
 //Trait that defines a message before it has been signed with the group signature
 pub trait Signable {
     type Output;
-    fn new(body: Self, signature: ps16::structs::Signature) -> Self::Output;
+    fn new(body: Self, signature: Signature) -> Self::Output;
 }
 
 //Trait that defines a message combined with a group signature.
 pub trait Verifiable{
     type Body;
-    fn into_parts(self) -> (Self::Body, Option<ps16::structs::Signature>);
+    fn into_parts(self) -> (Self::Body, Option<Signature>);
 }
 
 //A direct request to another peer without using gossipsub
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Request{
     pub body: RequestMessage,
-    pub signature: Option<ps16::structs::Signature>
+    pub signature: Option<Signature>
 }
 
 impl Verifiable for Request {
@@ -33,7 +33,7 @@ impl Verifiable for Request {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Response{
     pub body: ResponseMessage,
-    pub signature: Option<ps16::structs::Signature>
+    pub signature: Option<Signature>
 }
 impl Verifiable for Response {
     type Body = ResponseMessage;
@@ -54,23 +54,44 @@ pub enum RequestMessage{
         group_id: Vec<u8>,
         epoch: u64
     },
+    AddIDShare {
+        id: usize,
+        peer_id: PeerId,
+        enc_share: EncShare,
+        commits: Vec<thressig::G1>
+    },
+    AddPeerShare {
+        peer_id: PeerId,
+        enc_share: EncShare,
+        commits: Vec<thressig::G1>
+    },
     //In a practical setting this could be a manual process with in person meetings etc.
     VerifyIdentity {
         identity: String,
         with_signature: bool
     },
     JoinKeyMaterial {
-        tau: ps16::G1,
-        ttau: ps16::G2,
-        pi: (ps16::FieldElement,ps16::FieldElement),
+        g_sk: thressig::G1,
+        h_sk: thressig::G1,
+        pi1: (thressig::FieldElement,thressig::FieldElement),
+        pi2: (thressig::FieldElement,thressig::FieldElement),
+        enc_shares: Vec<EncShare>,
+        commits: Vec<thressig::G1>,
         keypackage: Vec<u8>
     },
     JoinKeyPackage {
-        keypackage: Vec<u8>
+        keypackage: Vec<u8>,
+        elgamal_pk: thressig::G2,
     },
     AddPeerToSig {
         keypackage: Vec<u8>,
+        enc_shares: Vec<EncShare>,
+        commits: Vec<thressig::G1>,
     },
+    RequestOpen {
+        signature: Vec<u8>
+    },
+    RequestOpenerKeys,
 }
 
 impl Signable for RequestMessage {
@@ -90,23 +111,28 @@ pub enum ResponseMessage{
         messages: Vec<MessageBody>,
     },
     IdentityVerified {
-        n: Option<ps16::G1>,
-        group_key: Vec<u8>
+        id: usize,
+        n: Option<thressig::G1>,
+        group_key: Vec<u8>,
+        opener_pubkeys: Option<Vec<thressig::G2>>//In theory the pubkeys should be fetched over another channel, to take power from the Authority
     },
     MemKey {
         partial_memkey: Option<Vec<u8>>,
-        welcome: Vec<u8>,
-        ratchet_tree: Vec<u8>
     },
-    PeerAdded{
-        welcome: Vec<u8>,
-        ratchet_tree: Vec<u8>
+    PeerAdded,
+    AddPeerShare,
+    EncSharePairings{signature: Vec<u8>,
+        enc_share_id_pairings: Vec<u8>,
+        enc_share_peer_pairings: Vec<u8>,
+    },
+    OpenerKeys{
+        opener_pubkeys: Vec<thressig::G2>
     }
 }
 impl Signable for ResponseMessage {
     type Output = Response;
 
-    fn new(body: Self, signature: ps16::structs::Signature) -> Self::Output {
+    fn new(body: Self, signature: Signature) -> Self::Output {
         Response { body, signature:Some(signature) }
     }
 }
@@ -115,7 +141,7 @@ impl Signable for ResponseMessage {
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct  Message {
     pub body: MessageBody,
-    pub signature: ps16::structs::Signature
+    pub signature: Signature
 }
 
 impl Verifiable for Message {
@@ -139,7 +165,7 @@ pub enum MessageBody {
 impl Signable for MessageBody {
     type Output = Message;
 
-    fn new(body: Self, signature: ps16::structs::Signature) -> Self::Output {
+    fn new(body: Self, signature: Signature) -> Self::Output {
         Message { body, signature }
     }
 }
@@ -188,7 +214,14 @@ pub enum Instruction {
         peer_id: PeerId,
         sig_file_path: String
     },
+    GetOpenerKeys {
+        peer_id: PeerId,
+    },
+    ReqOpen {
+        signature: Vec<u8>
+    },
     Open {
         signature: Vec<u8>
-    }
+    },
+    EndInitArchive,
 }

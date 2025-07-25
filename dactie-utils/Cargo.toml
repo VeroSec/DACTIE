@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 libp2p = { git = "https://github.com/libp2p/rust-libp2p",rev = "32e917f", features = ["serde", "json", "request-response","tokio", "gossipsub", "noise", "macros", "tcp", "yamux", "quic","kad","dns", "identify","rsa","mdns", "ecdsa"] }
-ps16 = { path = "../ps16" }
+thressig = { path = "../thressig" }
 serde = { version = "1.0", features = ["derive"] }
 openmls = { git = "https://github.com/openmls/openmls.git", rev = "9c45bdd" }
 openmls_basic_credential = { git = "https://github.com/openmls/openmls.git", rev = "9c45bdd", features = ["test-utils","clonable"]}

@@ -1,0 +1,2 @@
+## Thressig
+This package implements the [Short Threshold Dynamic Group Signatures](https://eprint.iacr.org/2020/016.pdf) scheme from Camenisch et al. in a modified version. For our use case a single issuing authority is sufficient. Therefore, some steps of the original protocol can be simplified.

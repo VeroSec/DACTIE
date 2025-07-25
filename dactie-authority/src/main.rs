@@ -73,9 +73,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
         key_material.clone(),
         group_commit_tx,
         instruction_tx.clone(),
-        load_file_path)?;
-
-    myopenmls.move_to_common(myopenmls.create_empty_mls_group()?);
+        load_file_path,
+        key_material.get_peer_id())?;
+    
 
     let behaviour = MyBehaviour::new(
         &key_material.get_keypair().into(),

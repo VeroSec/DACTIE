@@ -52,12 +52,19 @@ impl MyClient {
         input: &str,
     ) -> anyhow::Result<()> {
         let split: Vec<&str> = input.split_whitespace().collect();
-        if input.starts_with("open") && split.len() > 1{
+        if input.starts_with("req_open") && split.len() > 1{
+            let signatur = hex::decode(split[1])?;
+            Self::send_req_open(signatur, self.instruction_tx.clone()).await?;
+        } else if input.starts_with("open") && split.len() > 1 {
             let signatur = hex::decode(split[1])?;
             Self::send_open(signatur, self.instruction_tx.clone()).await?;
+        } else if input.starts_with("end") {
+            Self::send_end_init_archive(self.instruction_tx.clone()).await?;
         } else {
         println!("Available Commands:
-        - open <signatur>: Opens Signatur")
+        - req_open <signatur>: Requests open pairings from archives
+        - open <signatur>: Opens Signatur   
+        - end_init_archive: Ends Init Phase no new archives can join")
         }
 
         Ok(())
@@ -78,6 +85,19 @@ impl MyClient {
 
         Ok(())
     }
+    async fn send_req_open(
+        signature: Vec<u8>,
+        instruction_tx: mpsc::UnboundedSender<Instruction>,
+    ) -> anyhow::Result<()> {
+        let instruction = Instruction::ReqOpen {signature};
+
+        instruction_tx.send(instruction)?;
+
+        log::info!("Open sent to Network");
+
+        Ok(())
+    }
+
     async fn send_open(
         signature: Vec<u8>,
         instruction_tx: mpsc::UnboundedSender<Instruction>,
@@ -86,7 +106,19 @@ impl MyClient {
 
         instruction_tx.send(instruction)?;
 
-        log::info!("Subscribe sent to Network");
+        log::info!("Open sent to Network");
+
+        Ok(())
+    }
+
+    async fn send_end_init_archive(
+        instruction_tx: mpsc::UnboundedSender<Instruction>,
+    ) -> anyhow::Result<()> {
+        let instruction = Instruction::EndInitArchive;
+
+        instruction_tx.send(instruction)?;
+
+        log::info!("End Init sent to Network");
 
         Ok(())
     }
