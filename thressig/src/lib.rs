@@ -326,7 +326,7 @@ pub fn join_mgr2(id: usize, gml: &mut HashMap<usize,String>, name: String,mgrkey
 /**
  * Signs a message using the member key and provide a ZKP of Knowledge sk.
  **/
-pub fn sign<T: Serialize>(memkey: &Memkey, msg: &T) -> Result<Signature, ThressigError>{
+pub fn sign<T: Serialize>(memkey: &Memkey, grpkey: &Grpkey, msg: &T) -> Result<Signature, ThressigError>{
 
     let msg = bincode::serialize(msg).map_err(|_| SerializationError)?;
     let sigma1= &memkey.clone().sigma1.ok_or(MemkeySetError{val:"sigma1".to_string()})?;
@@ -342,12 +342,13 @@ pub fn sign<T: Serialize>(memkey: &Memkey, msg: &T) -> Result<Signature, Thressi
     let e = e1.pow(&(&k1 * &t));
 
     let mut msg_to_send: Vec<u8> = Vec::new();
+    msg_to_send.extend(grpkey.to_bytes());
     msg_to_send.extend(sigma1.to_bytes(false));
     msg_to_send.extend(sigma2.to_bytes(false));
     msg_to_send.extend(e.to_bytes());
     msg_to_send.extend(msg);
 
-    /* c = hash(ps16_sig->sigma1,ps16_sig->sigma2,e,m) */ //TODO Add ipk to hash as seen on page 22 in threshold sig paper
+    /* c = hash(ipk,ps16_sig->sigma1,ps16_sig->sigma2,e,m) */ 
     let c = FieldElement::from_msg_hash(&msg_to_send);
     let s = (&c * &memkey.sk) + &k1;
 
@@ -375,6 +376,7 @@ pub fn verify<T: Serialize+ ?Sized>(sig: &Signature, grpkey: &Grpkey, msg: &T) -
     let r_pub = (e1 * e2).pow(&sig.c).inverse()*e3;
 
     let mut msg_to_send: Vec<u8> = Vec::new();
+    msg_to_send.extend(grpkey.to_bytes());
     msg_to_send.extend((&sig.sigma1).to_bytes(false));
     msg_to_send.extend((&sig.sigma2).to_bytes(false));
     msg_to_send.extend(r_pub.to_bytes());

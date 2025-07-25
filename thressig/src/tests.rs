@@ -32,7 +32,7 @@ fn test_flow() {
     let (g_sk,h_sk,pi1,pi2,sk, enc_shares, commits) = join_mem1(id,n.clone(), &grpkey, 3,&opener_pub_keys);
     let partial_memkey = join_mgr2(id,&mut gml, "test".to_string(),&mgrkey, &grpkey, &n, &g_sk, &h_sk, &opener_pub_keys, &commits,pi1,pi2, &enc_shares).unwrap();
     let memkey1= join_mem2(&sk, &partial_memkey);
-    let y = sign(&memkey1, &"Hallo".as_bytes()).unwrap();
+    let y = sign(&memkey1,&grpkey, &"Hallo".as_bytes()).unwrap();
     
     
     //Simuluate 3 Openers who work together 

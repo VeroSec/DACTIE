@@ -32,10 +32,6 @@ In each terminal start:
 5. Start peer2 with `RUST_LOG=info cargo run --package dactie-peer --bin dactie-peer -- -K <folder peer2_key_material> -b <peer_id_aa> -B /ip4/127.0.0.1/tcp/10001`
 
 ### Docker
-> ⚠️ **Not Working**
-> This section is not compatible with the current implementation of thresholdsignatures.
-> Please refer to the PS16 version
-
 This section explains the docker setup. If docker is choosen the part above can be ignored
 1. Clone the GitRepo and move to the folder
 2. Run `build.sh` to create the Docker-Images and create the Key-Material folders

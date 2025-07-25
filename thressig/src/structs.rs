@@ -1,9 +1,12 @@
+use std::fmt;
+use std::str::FromStr;
 use amcl_wrapper::extension_field_gt::GT;
 use amcl_wrapper::field_elem::FieldElement;
 use amcl_wrapper::group_elem_g1::G1;
 use amcl_wrapper::group_elem_g2::G2;
 use serde::{Deserialize, Serialize};
 use bincode;
+use base64::{engine::general_purpose, Engine as _};
 
 
 
@@ -62,6 +65,23 @@ pub struct EncShare {
 pub struct EncSharePairing {
     pub index: usize,
     pub pairing: GT
+}
+
+impl fmt::Display for Signature {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let bytes = self.to_bytes();
+        let encoded = general_purpose::STANDARD.encode(&bytes);
+        write!(f, "{}", encoded)
+    }
+}
+
+impl FromStr for Signature {
+    type Err = Box<dyn std::error::Error + Send + Sync>;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let bytes = general_purpose::STANDARD.decode(s)?;
+        Ok(Signature::from_bytes(&bytes))
+    }
 }
 
 impl Signature {

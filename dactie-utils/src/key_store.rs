@@ -7,7 +7,6 @@ use openmls::prelude::Ciphersuite;
 use openmls_basic_credential::SignatureKeyPair;
 use thressig::structs::{EncShare, Grpkey, Memkey};
 use serde::{Deserialize, Serialize};
-use crate::mls_wrapper::MyOpenMLSError::{GPKUndefinedError, GSKUndefinedError, IDUndefinedError};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 
@@ -73,10 +72,7 @@ impl StoredKeyMaterial {
         (g_sk, h_sk, pi1,pi2,enc_shares,commits) //Return everything except sk
     }
 
-    pub fn generate_enc_shares(&mut self, opener_pubkeys: &[G2]) -> (Vec<EncShare>,Vec<thressig::G1>) {
-        let grpkey = self.get_grpkey().ok_or(GPKUndefinedError).unwrap(); //TODO Handle Error
-        let sk = self.get_memkey().ok_or(GSKUndefinedError).unwrap().sk;     //TODO Handle Error
-        let id = self.get_id().ok_or(IDUndefinedError).unwrap();                    //TODO Handle Error
+    pub fn generate_enc_shares(&mut self, grpkey: Grpkey,sk:FieldElement,id: usize,opener_pubkeys: &[G2]) -> (Vec<EncShare>,Vec<thressig::G1>){
         let threshold = opener_pubkeys.len()/2;
         create_enc_shares(&id,&grpkey,threshold,opener_pubkeys,&sk)
     }

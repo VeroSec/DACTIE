@@ -307,7 +307,7 @@ impl MyBehaviour {
         my_open_mls.set_memkey(new_key_store.get_memkey().ok_or(KeyMaterialFileError)?.to_bytes())?;
         my_open_mls.set_id(new_key_store.get_id().ok_or(KeyMaterialFileError)?)?;
 
-        let (enc_shares, commits) = my_open_mls.generate_enc_shares();
+        let (enc_shares, commits) = my_open_mls.generate_enc_shares()?;
 
         let keypackage = my_open_mls.generate_key_package()?;
         let keypackage = bincode::serialize(&keypackage)
@@ -658,7 +658,7 @@ impl MyBehaviour {
                                     None => return Ok(())
                                 };
                                 my_open_mls.add_opener_pubkeys(&opener_pubkeys)?;
-                                let (g_sk, h_sk, pi1,pi2,enc_shares,commits) = my_open_mls.generate_join_key_material(id, n,group_key);
+                                let (g_sk, h_sk, pi1,pi2,enc_shares,commits) = my_open_mls.generate_join_key_material(id, n,group_key)?;
                                 my_open_mls.set_id(id)?;
                                 let keypackage = my_open_mls.generate_key_package()?;
                                 let keypackage = bincode::serialize(&keypackage)

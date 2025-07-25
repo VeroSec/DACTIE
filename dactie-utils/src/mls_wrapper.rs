@@ -81,19 +81,30 @@ impl MyOpenMls {
         })
     }
 
-    pub fn generate_join_key_material(&self, id: usize, n: thressig::G1, grpkey: Vec<u8>) -> (thressig::G1,thressig::G1, (thressig::FieldElement,thressig::FieldElement),(thressig::FieldElement,thressig::FieldElement),Vec<EncShare>,Vec<thressig::G1>){
+    pub fn generate_join_key_material(&self, id: usize, n: thressig::G1, grpkey: Vec<u8>) -> Result<(thressig::G1,thressig::G1, (thressig::FieldElement,thressig::FieldElement),(thressig::FieldElement,thressig::FieldElement),Vec<EncShare>,Vec<thressig::G1>), MyOpenMLSError>{
         let opener_pubkeys= self.opener_pubkeys.lock().unwrap().clone();
-        self.key_store.lock().unwrap().generate_join_key_material(id, n, grpkey, &opener_pubkeys)
+        let res = self.key_store.lock().unwrap().generate_join_key_material(id, n, grpkey, &opener_pubkeys);
+        let mut path = self.load_files_path.clone();
+        path.push("key_material.json");
+        self.key_store.lock().unwrap().to_file(path).map_err(|_| KeyMaterialFileError)?;
+        Ok(res)
     }
 
-    pub fn generate_enc_shares(&self) -> (Vec<EncShare>,Vec<thressig::G1>){
+    pub fn generate_enc_shares(&self) -> Result<(Vec<EncShare>,Vec<thressig::G1>),MyOpenMLSError>{
         let opener_pubkeys = self.opener_pubkeys.lock().unwrap().clone();
-        self.key_store.lock().unwrap().generate_enc_shares(&opener_pubkeys)
+        let mut key_store = self.key_store.lock().unwrap();
+        let grpkey = key_store.get_grpkey().ok_or(GPKUndefinedError)?;
+        let sk = key_store.get_memkey().ok_or(GSKUndefinedError)?.sk;
+        let id = key_store.get_id().ok_or(IDUndefinedError)?;
+        Ok(key_store.generate_enc_shares(grpkey,sk,id,&opener_pubkeys))
     }
 
     //Generate Keypair used for encryption of the shares
     pub fn generate_elgamal_key_pair(&self, ) -> Result<(), MyOpenMLSError>{
-        self.key_store.lock().unwrap().generate_elgamal_key_pair().map_err(|_| GPKUndefinedError)
+        self.key_store.lock().unwrap().generate_elgamal_key_pair().map_err(|_| GPKUndefinedError)?;
+        let mut path = self.load_files_path.clone();
+        path.push("key_material.json");
+        self.key_store.lock().unwrap().to_file(path).map_err(|_| KeyMaterialFileError)
     }
 
     pub fn get_elgamal_pubkey(&self, ) -> Result<thressig::G2, MyOpenMLSError>{
@@ -657,8 +668,11 @@ impl MyOpenMls {
     where
         T: shared_structs::Signable + serde::Serialize,
     {
-        let memkey= self.key_store.lock().unwrap().get_memkey().ok_or(GSKUndefinedError)?;
-        let signature = thressig::sign(&memkey, &body)?;
+        let (grpkey,memkey)= {
+            let key_store= self.key_store.lock().unwrap();
+            (key_store.get_grpkey().ok_or(GPKUndefinedError)?,key_store.get_memkey().ok_or(GSKUndefinedError)?)
+        };
+        let signature = thressig::sign(&memkey, &grpkey,&body)?;
         Ok(T::new(body, signature))
     }
 

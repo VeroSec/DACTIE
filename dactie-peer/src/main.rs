@@ -23,10 +23,10 @@ mod myclient;
 #[command(version, about, long_about = None)]
 struct Args {
     /// PeerID of a Bootsrap Node, if none is given, the peer starts as Bootstrap Node on Port 10001
-    #[arg(short, long, default_value = None)]
-    bootstrap_peer_id: Option<PeerId>,        //TODO Rename to Authority PeerID
+    #[arg(short='b', long, default_value = None)]
+    authority_peer_id: Option<PeerId>,
 
-    /// PeerID of a Bootsrap Node, if none is given, the peer starts as Bootstrap Node on Port 10001
+    /// IPADDR of a Bootsrap Node, if none is given, the peer starts as Bootstrap Node on Port 10001
     #[arg(short='B', long, default_value_t = Multiaddr::from_str("/ip4/127.0.0.1/tcp/5005").unwrap())]
     bootstrap_addr: Multiaddr,
 
@@ -87,12 +87,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
         group_commit_tx,
         instruction_tx.clone(),
         load_file_path,
-        args.bootstrap_peer_id.unwrap())?;
+        args.authority_peer_id.unwrap())?;
 
 
     let behaviour = MyBehaviour::new(
         &key_material.get_keypair().into(),
-        args.bootstrap_peer_id,
+        args.authority_peer_id,
         args.bootstrap_addr,
     )?;
 
@@ -103,7 +103,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     if let Some(port) = args.port {
         abstswarm_builder =
             abstswarm_builder.listen_address(format!("/ip4/0.0.0.0/tcp/{port}").parse()?);
-    } else if args.bootstrap_peer_id.is_none() {
+    } else if args.authority_peer_id.is_none() {
             abstswarm_builder =
                 abstswarm_builder.listen_address("/ip4/0.0.0.0/tcp/10001".parse()?);
 

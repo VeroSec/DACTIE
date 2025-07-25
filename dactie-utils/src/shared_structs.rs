@@ -1,7 +1,7 @@
 use libp2p::PeerId;
 use openmls::group::GroupId;
 use serde::{Deserialize, Serialize};
-use thressig::structs::{EncShare, EncSharePairing, Signature};
+use thressig::structs::{EncShare, Signature};
 
 //Trait that defines a message before it has been signed with the group signature
 pub trait Signable {

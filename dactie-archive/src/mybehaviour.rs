@@ -268,7 +268,6 @@ impl MyBehaviour {
         }
         Ok(shares)
     }
-    //TODO Make sure that elgamal keys are stored in save file
 
 
     /**
