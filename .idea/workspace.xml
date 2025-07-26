@@ -26,18 +26,19 @@
       <package file="$PROJECT_DIR$/ps16">
         <enabledFeature name="default" />
       </package>
+      <package file="$PROJECT_DIR$/thressig">
+        <enabledFeature name="default" />
+      </package>
     </cargoProject>
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="1952de28-6ea6-40a6-b35a-c317a074a1b7" name="Changes" comment="Fully functioning version of DACTIE in a threshold setting.&#10;TODOs have been fixed.">
-      <change beforePath="$PROJECT_DIR$/Cargo.lock" beforeDir="false" afterPath="$PROJECT_DIR$/Cargo.lock" afterDir="false" />
-    </list>
+    <list default="true" id="1952de28-6ea6-40a6-b35a-c317a074a1b7" name="Changes" comment="Fully functioning version of DACTIE in a threshold setting.&#10;TODOs have been fixed." />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
     <option name="LAST_RESOLUTION" value="IGNORE" />
   </component>
-  <component name="ExecutionTargetManager" SELECTED_TARGET="RsBuildProfile:test" />
+  <component name="ExecutionTargetManager" SELECTED_TARGET="RsBuildProfile:dev" />
   <component name="Git.Settings">
     <option name="RECENT_BRANCH_BY_REPOSITORY">
       <map>
@@ -61,48 +62,48 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent">{
-  &quot;keyToString&quot;: {
-    &quot;Cargo.Run Archive1.executor&quot;: &quot;Run&quot;,
-    &quot;Cargo.Run Archive2.executor&quot;: &quot;Run&quot;,
-    &quot;Cargo.Run Authority.executor&quot;: &quot;Run&quot;,
-    &quot;Cargo.Run Peer1.executor&quot;: &quot;Run&quot;,
-    &quot;Cargo.Run Peer2.executor&quot;: &quot;Run&quot;,
-    &quot;Cargo.Run dactie-experiment-eclipse.executor&quot;: &quot;Run&quot;,
-    &quot;Cargo.Test lib::tests.executor&quot;: &quot;Run&quot;,
-    &quot;Cargo.Test tests::test_correct_ate.executor&quot;: &quot;Run&quot;,
-    &quot;Cargo.Test tests::test_correct_encryption_proof.executor&quot;: &quot;Run&quot;,
-    &quot;Cargo.Test tests::test_elgamal_encrypt_decrypt_share.executor&quot;: &quot;Run&quot;,
-    &quot;Cargo.Test tests::test_elgamal_encryption.executor&quot;: &quot;Run&quot;,
-    &quot;Cargo.Test tests::test_flow.executor&quot;: &quot;Debug&quot;,
-    &quot;Cargo.Test tests::test_shares.executor&quot;: &quot;Run&quot;,
-    &quot;Cargo.Test tests::test_shares_recvoer_secrets.executor&quot;: &quot;Run&quot;,
-    &quot;Cargo.Test tests::test_shares_verifiability.executor&quot;: &quot;Debug&quot;,
-    &quot;Docker.docker-compose.yml.db: Compose Deployment.executor&quot;: &quot;Run&quot;,
-    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.rust.reset.selective.auto.import&quot;: &quot;true&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;MasterThesis(PS16)&quot;,
-    &quot;last_opened_file_path&quot;: &quot;/home/fabijoey/Documents/Repos/dactie/thresig&quot;,
-    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
-    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
-    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
-    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
-    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
-    &quot;org.rust.cargo.project.model.PROJECT_DISCOVERY&quot;: &quot;true&quot;,
-    &quot;org.rust.cargo.project.model.impl.CargoExternalSystemProjectAware.subscribe.first.balloon&quot;: &quot;&quot;,
-    &quot;org.rust.first.attach.projects&quot;: &quot;true&quot;,
-    &quot;settings.editor.selected.configurable&quot;: &quot;language.rust&quot;,
-    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "Cargo.Run Archive1.executor": "Run",
+    "Cargo.Run Archive2.executor": "Run",
+    "Cargo.Run Authority.executor": "Run",
+    "Cargo.Run Peer1.executor": "Run",
+    "Cargo.Run Peer2.executor": "Run",
+    "Cargo.Run dactie-experiment-eclipse.executor": "Run",
+    "Cargo.Test lib::tests.executor": "Run",
+    "Cargo.Test tests::test_correct_ate.executor": "Run",
+    "Cargo.Test tests::test_correct_encryption_proof.executor": "Run",
+    "Cargo.Test tests::test_elgamal_encrypt_decrypt_share.executor": "Run",
+    "Cargo.Test tests::test_elgamal_encryption.executor": "Run",
+    "Cargo.Test tests::test_flow.executor": "Debug",
+    "Cargo.Test tests::test_shares.executor": "Run",
+    "Cargo.Test tests::test_shares_recvoer_secrets.executor": "Run",
+    "Cargo.Test tests::test_shares_verifiability.executor": "Debug",
+    "Docker.docker-compose.yml.db: Compose Deployment.executor": "Run",
+    "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "RunOnceActivity.rust.reset.selective.auto.import": "true",
+    "git-widget-placeholder": "main",
+    "last_opened_file_path": "/home/fabijoey/Documents/Repos/dactie/thresig",
+    "node.js.detected.package.eslint": "true",
+    "node.js.detected.package.tslint": "true",
+    "node.js.selected.package.eslint": "(autodetect)",
+    "node.js.selected.package.tslint": "(autodetect)",
+    "nodejs_package_manager_path": "npm",
+    "org.rust.cargo.project.model.PROJECT_DISCOVERY": "true",
+    "org.rust.cargo.project.model.impl.CargoExternalSystemProjectAware.subscribe.first.balloon": "",
+    "org.rust.first.attach.projects": "true",
+    "settings.editor.selected.configurable": "language.rust",
+    "vue.rearranger.settings.migration": "true"
   }
-}</component>
+}]]></component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
       <recent name="$PROJECT_DIR$/thresig" />
     </key>
   </component>
-  <component name="RunManager" selected="Cargo.Test lib::tests">
+  <component name="RunManager" selected="Cargo.Run Peer2">
     <configuration name="Run dactie-experiment-eclipse" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
       <option name="command" value="run --package dactie-experiment-eclipse --bin dactie-experiment-eclipse" />
       <option name="workingDirectory" value="file://$PROJECT_DIR$" />
@@ -196,6 +197,11 @@
       <method v="2" />
     </configuration>
     <list>
+      <item itemvalue="Cargo.Run Archive1" />
+      <item itemvalue="Cargo.Run Archive2" />
+      <item itemvalue="Cargo.Run Authority" />
+      <item itemvalue="Cargo.Run Peer1" />
+      <item itemvalue="Cargo.Run Peer2" />
       <item itemvalue="Cargo.Test tests::test_elgamal_encryption" />
       <item itemvalue="Cargo.Test tests::test_flow" />
       <item itemvalue="Cargo.Test tests::test_shares_verifiability" />
@@ -298,7 +304,15 @@
       <option name="project" value="LOCAL" />
       <updated>1753452217645</updated>
     </task>
-    <option name="localTasksCounter" value="8" />
+    <task id="LOCAL-00008" summary="Fully functioning version of DACTIE in a threshold setting.&#10;TODOs have been fixed.">
+      <option name="closed" value="true" />
+      <created>1753530610352</created>
+      <option name="number" value="00008" />
+      <option name="presentableId" value="LOCAL-00008" />
+      <option name="project" value="LOCAL" />
+      <updated>1753530610352</updated>
+    </task>
+    <option name="localTasksCounter" value="9" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">

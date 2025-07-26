@@ -403,7 +403,7 @@ impl MyBehaviour {
                             ResponseMessage::EncSharePairings {enc_share_id_pairings,enc_share_peer_pairings,signature} => {
 
                                 let id_pairings: Vec<(usize,EncSharePairing)> = bincode::deserialize(&enc_share_id_pairings).map_err(|x| SerializationError(x.to_string()))?;
-                                //TODO Sicherstellen dass bei allen Peers Offline Speicher funktioniert
+
 
                                 let peer_pairings_bytes: Vec<(Vec<u8>,EncSharePairing)> = bincode::deserialize(&enc_share_peer_pairings).map_err(|x| SerializationError(x.to_string()))?;
                                 let mut peer_pairings = Vec::new();
