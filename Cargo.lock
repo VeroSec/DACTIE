@@ -879,19 +879,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "dactie-experiment-eclipse"
-version = "0.1.0"
-dependencies = [
- "clap",
- "futures",
- "libp2p",
- "log",
- "rand 0.8.5",
- "time",
- "tokio",
-]
-
-[[package]]
 name = "dactie-experiments"
 version = "0.1.0"
 dependencies = [
