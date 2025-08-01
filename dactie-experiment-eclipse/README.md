@@ -17,7 +17,7 @@ Options:
   -S, --n-peers-step-size <N_PEERS_STEP_SIZE>
           Step Size of Series [default: 1]
   -A, --attack-n <ATTACK_N>
-          Step Size of Series [default: 25]
+          Number of attacker peers [default: 25]
   -i, --interval <INTERVAL>
           How often Peers Should publish. Input can be fix=<secs> or random=>start,end> [default: fix=5]
   -s, --stop-time <STOP_TIME>
@@ -40,5 +40,5 @@ Here is an example where only two honest nodes are in the network, and the rest 
 After 30 seconds the attackers start to ignore the victims peers messages. 45 seconds after the experiment a measurement message is send trough the network.
 The recipients of this message report if they got it or not.
 ```
-cargo run --package dactie-experiment-eclipse --bin dactie-experiment-eclipse -- -n 2 -N 2 -A 50 -a 30 -s 45 -r 1 
+cargo run --package dactie-experiment-eclipse --bin dactie-experiment-eclipse -- -n 6 -N 6 -A 60 -a 15 -s 30 -r 20 
 ```

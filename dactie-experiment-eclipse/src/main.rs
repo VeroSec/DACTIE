@@ -78,8 +78,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .create(true)
         .open(avg)?;
 
-    writeln!(&file, "total_peers,correct_receiver,other_peer,no_p_peers")?;
-    writeln!(&file_avg, "total_peers,correct_receiver,other_peer,no_p_peers")?;
+    writeln!(&file, "total_peers,honest_peers,attacker_peers,received_messages")?;
+    writeln!(&file_avg, "total_peers,honest_peers,attacker_peers,received_messages")?;
 
     start_experiment_series(args.n_peers_min, args.n_peers_max, args.n_peers_step_size, args.attack_n, args.repetitions, args.attack_time,args.stop_time, args.interval, file, file_avg).await?;
 
@@ -94,41 +94,28 @@ The output is stored to the specified files
 **/
 async fn start_experiment_series(min_n: usize, max_n: usize, n_step_size:usize, attack_n: usize, repetitions: usize, attack_time: u64, stop_time: u64, interval: PubInterval, file: File,avg_file: File) -> Result<(), Box<dyn Error>> {
     for n_peers in (min_n..=max_n).step_by(n_step_size) {
-        let mut avg_correct_receiver = 0f32;
-        let mut avg_other_peer = 0f32;
-        let mut avg_no_p_peers = 0;
+        let mut avg_receivers = 0f32;
 
 
         for i in 0..repetitions {
-            println!("Starting Run {} from {}, with peer_n={}, attack_time={}secs, pub_interval={:?}", i, repetitions, n_peers, attack_time, interval.clone());
-            let (correct_receiver, other_peer, test) = experiment_prop_peer_id(n_peers, attack_n,Duration::from_secs(attack_time),Duration::from_secs(stop_time), interval.clone()).await?;
+            println!("Starting Run {} from {}, with peer_n={}, attack_time={}secs, pub_interval={:?}", i+1, repetitions, n_peers, attack_time, interval.clone());
+            let receivers = experiment_prop_peer_id(n_peers, attack_n,Duration::from_secs(attack_time),Duration::from_secs(stop_time), interval.clone()).await?;
 
 
-            println!("Received {} messages from {} peers.", correct_receiver + other_peer, n_peers - 1);
-            println!("Direct from Publisher: {}", correct_receiver);
-            println!("Relayed: {}", other_peer);
-            println!("Percentage of direct peers: {} %", correct_receiver / (correct_receiver + other_peer) * 100f32);
-            println!("Number of Propagating Peers: {}", test);
+            println!("{} Peers from {} received victim messages.", receivers, n_peers);
 
-            writeln!(&file, "{},{},{},{}", n_peers, correct_receiver, other_peer, test)?;
+            writeln!(&file, "{},{},{},{}", n_peers+attack_n, n_peers, attack_n, receivers)?;
 
-            avg_correct_receiver += correct_receiver;
-            avg_other_peer += other_peer;
-            avg_no_p_peers += test;
+            avg_receivers += receivers;
 
             sleep(Duration::from_secs(10)).await
         }
-        avg_correct_receiver = avg_correct_receiver / repetitions as f32;
-        avg_other_peer = avg_other_peer / repetitions as f32;
-        avg_no_p_peers = avg_no_p_peers / repetitions;
+        avg_receivers = avg_receivers / repetitions as f32;
 
         println!("All Repetitions done!");
-        println!("Average messages direct from Publisher: {}", avg_correct_receiver);
-        println!("Average messages Relayed: {}", avg_other_peer);
-        println!("Average Percentage of direct peers: {} %", avg_correct_receiver / (avg_correct_receiver + avg_other_peer) * 100f32);
-        println!("Average Number of Propagating Peers: {}", avg_no_p_peers);
+        println!("On Average {} Peers from {} received victim messages.", avg_receivers, n_peers);
 
-        writeln!(&avg_file, "{},{},{},{}", n_peers, avg_correct_receiver, avg_other_peer, avg_no_p_peers)?;
+        writeln!(&avg_file, "{},{},{},{}", n_peers+attack_n, n_peers, attack_n, avg_receivers)?;
     }
 
     Ok(())
