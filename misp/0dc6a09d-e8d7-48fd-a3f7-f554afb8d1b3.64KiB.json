@@ -1,0 +1,1432 @@
+{
+    "Event": {
+        "published": true,
+        "date": "2026-05-12",
+        "threat_level_id": 2,
+        "info": "MalwareBazaar malware samples for 2026-05-12",
+        "timestamp": 1778630582,
+        "analysis": 1,
+        "event_creator_email": "bazaar@abuse.ch",
+        "distribution": 3,
+        "uuid": "0dc6a09d-e8d7-48fd-a3f7-f554afb8d1b3",
+        "Orgc": {
+            "name": "abuse.ch",
+            "uuid": "9b086132-8588-49ed-97fd-8578a777822c"
+        },
+        "Tag": [
+            {
+                "colour": "#004646",
+                "name": "type:OSINT"
+            },
+            {
+                "colour": "#fffff",
+                "name": "tlp:white"
+            }
+        ],
+        "Object": [
+            {
+                "name": "file",
+                "meta-category": "file",
+                "description": "File object describing a file with meta-information",
+                "uuid": "4fd359b3-4e39-11f1-a769-42010a9c0008",
+                "comment": "Malware payload (Gafgyt)",
+                "timestamp": 1778614348,
+                "Attribute": [
+                    {
+                        "type": "md5",
+                        "category": "Payload delivery",
+                        "to_ids": true,
+                        "timestamp": 1778614348,
+                        "uuid": "52f79660-b195-4e27-ae3b-0bff11f29046",
+                        "comment": "Malware payload (Gafgyt)",
+                        "value": "12f09ab1fafa6b7e1101e819f97cee25",
+                        "object_relation": "md5",
+                        "Tag": [
+                            {
+                                "name": "elf",
+                                "colour": "#CD6A22",
+                                "exportable": true,
+                                "hide_tag": false
+                            },
+                            {
+                                "name": "gafgyt",
+                                "colour": "#8C9C05",
+                                "exportable": true,
+                                "hide_tag": false
+                            },
+                            {
+                                "name": "UPX",
+                                "colour": "#67320E",
+                                "exportable": true,
+                                "hide_tag": false
+                            }
+                        ]
+                    },
+                    {
+                        "type": "sha256",
+                        "category": "Payload delivery",
+                        "to_ids": true,
+                        "timestamp": 1778614348,
+                        "uuid": "97005503-1858-4f3c-886e-e4f344d7aaf9",
+                        "comment": "Malware payload (Gafgyt)",
+                        "value": "00288755114d7eb2c1f7f40ad271d28714be5356a9c14e690d9c85cda4e10389",
+                        "object_relation": "sha256",
+                        "Tag": [
+                            {
+                                "name": "elf",
+                                "colour": "#CD6A22",
+                                "exportable": true,
+                                "hide_tag": false
+                            },
+                            {
+                                "name": "gafgyt",
+                                "colour": "#8C9C05",
+                                "exportable": true,
+                                "hide_tag": false
+                            },
+                            {
+                                "name": "UPX",
+                                "colour": "#67320E",
+                                "exportable": true,
+                                "hide_tag": false
+                            }
+                        ]
+                    },
+                    {
+                        "type": "sha1",
+                        "category": "Payload delivery",
+                        "to_ids": true,
+                        "timestamp": 1778614348,
+                        "uuid": "60d863a1-737c-47fd-964f-d45c4d52098e",
+                        "comment": "Malware payload (Gafgyt)",
+                        "value": "adfd45c1d58c35f4e265ccc45c53e776b967b1c5",
+                        "object_relation": "sha1",
+                        "Tag": [
+                            {
+                                "name": "elf",
+                                "colour": "#CD6A22",
+                                "exportable": true,
+                                "hide_tag": false
+                            },
+                            {
+                                "name": "gafgyt",
+                                "colour": "#8C9C05",
+                                "exportable": true,
+                                "hide_tag": false
+                            },
+                            {
+                                "name": "UPX",
+                                "colour": "#67320E",
+                                "exportable": true,
+                                "hide_tag": false
+                            }
+                        ]
+                    },
+                    {
+                        "type": "sha3-384",
+                        "category": "Payload delivery",
+                        "to_ids": true,
+                        "timestamp": 1778614348,
+                        "uuid": "d8f95d1a-242e-4082-9af2-280c42a87b56",
+                        "comment": "Malware payload (Gafgyt)",
+                        "value": "fc71fe5cc34d1c0731adb025937617c943fd8bed5a3669df9dbcb2b1998fa56c455b70906ba12b3d8caafbdc3f181d5e",
+                        "object_relation": "sha3-384",
+                        "Tag": [
+                            {
+                                "name": "elf",
+                                "colour": "#CD6A22",
+                                "exportable": true,
+                                "hide_tag": false
+                            },
+                            {
+                                "name": "gafgyt",
+                                "colour": "#8C9C05",
+                                "exportable": true,
+                                "hide_tag": false
+                            },
+                            {
+                                "name": "UPX",
+                                "colour": "#67320E",
+                                "exportable": true,
+                                "hide_tag": false
+                            }
+                        ]
+                    },
+                    {
+                        "type": "tlsh",
+                        "category": "Payload delivery",
+                        "to_ids": false,
+                        "timestamp": 1778614348,
+                        "uuid": "6b3070bc-c0b7-469e-9d4a-2c7b78b9e27d",
+                        "value": "T15363027DD6DC2A1BDE31B03C061D038669614AB7F94BFA1F3BAAE6725D520D93883047",
+                        "object_relation": "tlsh"
+                    },
+                    {
+                        "type": "ssdeep",
+                        "category": "Payload delivery",
+                        "to_ids": false,
+                        "timestamp": 1778614348,
+                        "uuid": "0b88de65-72b9-4c6c-a75e-0aabdcf1dece",
+                        "value": "1536:yGI2Yiioc3qAfVmd0DGqjrZosbhbRTgheOuXix/m2thWXx1hSVEWr:Igc300DGqjrZviRxukhaQVEc",
+                        "object_relation": "ssdeep"
+                    },
+                    {
+                        "type": "size-in-bytes",
+                        "category": "Other",
+                        "to_ids": false,
+                        "timestamp": 1778614348,
+                        "uuid": "a4002a1d-0fd0-4d41-b4e0-c06879b1f89c",
+                        "value": 68356,
+                        "object_relation": "size-in-bytes",
+                        "disable_correlation": true
+                    },
+                    {
+                        "type": "mime-type",
+                        "category": "Artifacts dropped",
+                        "to_ids": false,
+                        "timestamp": 1778614348,
+                        "uuid": "ed1b67f5-79f1-447f-a31a-56169c550e30",
+                        "value": "application/x-executable",
+                        "object_relation": "mimetype",
+                        "disable_correlation": true
+                    },
+                    {
+                        "type": "filename",
+                        "category": "Payload delivery",
+                        "to_ids": false,
+                        "timestamp": 1778614348,
+                        "uuid": "e22e636c-770a-4243-a104-e8504ad81ba4",
+                        "value": "mips",
+                        "object_relation": "filename"
+                    }
+                ],
+                "template_uuid": "688c46fb-5edb-40a3-8273-1af7923e2215",
+                "template_version": "24",
+                "distribution": "5"
+            },
+            {
+                "name": "file",
+                "meta-category": "file",
+                "description": "File object describing a file with meta-information",
+                "uuid": "b553a7b5-4e36-11f1-a769-42010a9c0008",
+                "comment": "Malware payload (Gafgyt)",
+                "timestamp": 1778613230,
+                "Attribute": [
+                    {
+                        "type": "md5",
+                        "category": "Payload delivery",
+                        "to_ids": true,
+                        "timestamp": 1778613230,
+                        "uuid": "34eaa779-c15f-41c1-ac64-e19b6bd25927",
+                        "comment": "Malware payload (Gafgyt)",
+                        "value": "c44386985f02e060e6da12e9560f4282",
+                        "object_relation": "md5",
+                        "Tag": [
+                            {
+                                "name": "elf",
+                                "colour": "#CD6A22",
+                                "exportable": true,
+                                "hide_tag": false
+                            },
+                            {
+                                "name": "gafgyt",
+                                "colour": "#8C9C05",
+                                "exportable": true,
+                                "hide_tag": false
+                            }
+                        ]
+                    },
+                    {
+                        "type": "sha256",
+                        "category": "Payload delivery",
+                        "to_ids": true,
+                        "timestamp": 1778613230,
+                        "uuid": "2aed092e-a131-4f5f-9cd2-649fda8f0dd2",
+                        "comment": "Malware payload (Gafgyt)",
+                        "value": "00749f5a02f88784dda862f0765b3369e49efd6cc9977f719424e7c39c630497",
+                        "object_relation": "sha256",
+                        "Tag": [
+                            {
+                                "name": "elf",
+                                "colour": "#CD6A22",
+                                "exportable": true,
+                                "hide_tag": false
+                            },
+                            {
+                                "name": "gafgyt",
+                                "colour": "#8C9C05",
+                                "exportable": true,
+                                "hide_tag": false
+                            }
+                        ]
+                    },
+                    {
+                        "type": "sha1",
+                        "category": "Payload delivery",
+                        "to_ids": true,
+                        "timestamp": 1778613230,
+                        "uuid": "86ee04ec-e72a-4ff9-84f1-b5219caea259",
+                        "comment": "Malware payload (Gafgyt)",
+                        "value": "6690ab6f26a169fd1ceb91b5955c4dc8451ee1ad",
+                        "object_relation": "sha1",
+                        "Tag": [
+                            {
+                                "name": "elf",
+                                "colour": "#CD6A22",
+                                "exportable": true,
+                                "hide_tag": false
+                            },
+                            {
+                                "name": "gafgyt",
+                                "colour": "#8C9C05",
+                                "exportable": true,
+                                "hide_tag": false
+                            }
+                        ]
+                    },
+                    {
+                        "type": "sha3-384",
+                        "category": "Payload delivery",
+                        "to_ids": true,
+                        "timestamp": 1778613230,
+                        "uuid": "17aae79c-ec83-4856-816e-99666985f748",
+                        "comment": "Malware payload (Gafgyt)",
+                        "value": "091107377554e7ef68633ab5b25cef3f60e55e6314138ca4da839f513e7b6bd4143ca8ffcace092607c61bfb40eec98d",
+                        "object_relation": "sha3-384",
+                        "Tag": [
+                            {
+                                "name": "elf",
+                                "colour": "#CD6A22",
+                                "exportable": true,
+                                "hide_tag": false
+                            },
+                            {
+                                "name": "gafgyt",
+                                "colour": "#8C9C05",
+                                "exportable": true,
+                                "hide_tag": false
+                            }
+                        ]
+                    },
+                    {
+                        "type": "tlsh",
+                        "category": "Payload delivery",
+                        "to_ids": false,
+                        "timestamp": 1778613230,
+                        "uuid": "97fd6ac6-d357-41c8-80f9-08390fffbbe1",
+                        "value": "T122931A9BFA42CEB3C41310F112AA9F219D71F9FB4823D642E3646DB4DE154C25A16FAC",
+                        "object_relation": "tlsh"
+                    },
+                    {
+                        "type": "ssdeep",
+                        "category": "Payload delivery",
+                        "to_ids": false,
+                        "timestamp": 1778613230,
+                        "uuid": "a99e5b5b-ca65-4f51-953e-52bfe3bcd2ef",
+                        "value": "1536:WA+k82vFIl2qbZckmjWGw57fobEOQryVwCiUH1FVLx8rbrbUkmyukJ33xZTe0gw7:WAldFI2qbhpRfobEOLVBiUH1FVLx8rbn",
+                        "object_relation": "ssdeep"
+                    },
+                    {
+                        "type": "size-in-bytes",
+                        "category": "Other",
+                        "to_ids": false,
+                        "timestamp": 1778613230,
+                        "uuid": "438a92af-535d-469a-bd89-10b3546a4956",
+                        "value": 91212,
+                        "object_relation": "size-in-bytes",
+                        "disable_correlation": true
+                    },
+                    {
+                        "type": "mime-type",
+                        "category": "Artifacts dropped",
+                        "to_ids": false,
+                        "timestamp": 1778613230,
+                        "uuid": "2902117c-2ac7-4040-8da3-c1626e2e57b2",
+                        "value": "application/x-executable",
+                        "object_relation": "mimetype",
+                        "disable_correlation": true
+                    },
+                    {
+                        "type": "filename",
+                        "category": "Payload delivery",
+                        "to_ids": false,
+                        "timestamp": 1778613230,
+                        "uuid": "1b7a91e7-dbd4-48f2-a93f-454b2ccd1ac7",
+                        "value": "FBI.i686",
+                        "object_relation": "filename"
+                    }
+                ],
+                "template_uuid": "688c46fb-5edb-40a3-8273-1af7923e2215",
+                "template_version": "24",
+                "distribution": "5"
+            },
+            {
+                "name": "file",
+                "meta-category": "file",
+                "description": "File object describing a file with meta-information",
+                "uuid": "7511841d-4de6-11f1-a769-42010a9c0008",
+                "comment": "Malware payload",
+                "timestamp": 1778578762,
+                "Attribute": [
+                    {
+                        "type": "md5",
+                        "category": "Payload delivery",
+                        "to_ids": true,
+                        "timestamp": 1778578762,
+                        "uuid": "b6cb71ee-8de5-4461-896c-03221ea08a79",
+                        "comment": "Malware payload",
+                        "value": "502737c2aaeecfd85f8ee313f9a2937a",
+                        "object_relation": "md5",
+                        "Tag": [
+                            {
+                                "name": "eth-fastscan-org",
+                                "colour": "#A7F77E",
+                                "exportable": true,
+                                "hide_tag": false
+                            },
+                            {
+                                "name": "exe",
+                                "colour": "#8F1124",
+                                "exportable": true,
+                                "hide_tag": false
+                            },
+                            {
+                                "name": "welovechinatown-info",
+                                "colour": "#48D2BF",
+                                "exportable": true,
+                                "hide_tag": false
+                            }
+                        ]
+                    },
+                    {
+                        "type": "sha256",
+                        "category": "Payload delivery",
+                        "to_ids": true,
+                        "timestamp": 1778578762,
+                        "uuid": "d3cdd916-abb4-412b-8207-f60e13cb132d",
+                        "comment": "Malware payload",
+                        "value": "00b6b59157aa87f181a6a8e2b21a84aed40f8c8343b39aff660afca6161492b6",
+                        "object_relation": "sha256",
+                        "Tag": [
+                            {
+                                "name": "eth-fastscan-org",
+                                "colour": "#A7F77E",
+                                "exportable": true,
+                                "hide_tag": false
+                            },
+                            {
+                                "name": "exe",
+                                "colour": "#8F1124",
+                                "exportable": true,
+                                "hide_tag": false
+                            },
+                            {
+                                "name": "welovechinatown-info",
+                                "colour": "#48D2BF",
+                                "exportable": true,
+                                "hide_tag": false
+                            }
+                        ]
+                    },
+                    {
+                        "type": "sha1",
+                        "category": "Payload delivery",
+                        "to_ids": true,
+                        "timestamp": 1778578762,
+                        "uuid": "b3d00eb6-ea53-4024-913a-1d3315db58e7",
+                        "comment": "Malware payload",
+                        "value": "2105dbf774b77ef20d3bd9f4101c75ba09457d30",
+                        "object_relation": "sha1",
+                        "Tag": [
+                            {
+                                "name": "eth-fastscan-org",
+                                "colour": "#A7F77E",
+                                "exportable": true,
+                                "hide_tag": false
+                            },
+                            {
+                                "name": "exe",
+                                "colour": "#8F1124",
+                                "exportable": true,
+                                "hide_tag": false
+                            },
+                            {
+                                "name": "welovechinatown-info",
+                                "colour": "#48D2BF",
+                                "exportable": true,
+                                "hide_tag": false
+                            }
+                        ]
+                    },
+                    {
+                        "type": "sha3-384",
+                        "category": "Payload delivery",
+                        "to_ids": true,
+                        "timestamp": 1778578762,
+                        "uuid": "15b52a45-f478-498c-94e6-8b7a0ad9a0cf",
+                        "comment": "Malware payload",
+                        "value": "039cf7d06342a3a1403ca07dcb179e59e886256395cfda124aac10f99656e13758d2bb2a2639d10b37823bbad12b9458",
+                        "object_relation": "sha3-384",
+                        "Tag": [
+                            {
+                                "name": "eth-fastscan-org",
+                                "colour": "#A7F77E",
+                                "exportable": true,
+                                "hide_tag": false
+                            },
+                            {
+                                "name": "exe",
+                                "colour": "#8F1124",
+                                "exportable": true,
+                                "hide_tag": false
+                            },
+                            {
+                                "name": "welovechinatown-info",
+                                "colour": "#48D2BF",
+                                "exportable": true,
+                                "hide_tag": false
+                            }
+                        ]
+                    },
+                    {
+                        "type": "tlsh",
+                        "category": "Payload delivery",
+                        "to_ids": false,
+                        "timestamp": 1778578762,
+                        "uuid": "93352695-2431-4be2-a2ee-de0f31a1364a",
+                        "value": "T114B7AD0773E60195E5B3D2388AAB5203D773B8275730CBDF319D06552FABAD09A7A720",
+                        "object_relation": "tlsh"
+                    },
+                    {
+                        "type": "imphash",
+                        "category": "Payload delivery",
+                        "to_ids": false,
+                        "timestamp": 1778578762,
+                        "uuid": "0b50b1b8-7364-4963-8746-a126f373c713",
+                        "value": "ba34afa88020d21a2d934a3cc5b3f45f",
+                        "object_relation": "imphash"
+                    },
+                    {
+                        "type": "ssdeep",
+                        "category": "Payload delivery",
+                        "to_ids": false,
+                        "timestamp": 1778578762,
+                        "uuid": "db2e9702-8992-4316-b8d6-ab6a058cb5de",
+                        "value": "786432:/6ov53y1oHAPUGAfM0gU/Xj/jC12xOjMtFVJDyW1KE3k1h:/h3y1oHAPUGAfM0gUvLjCYgMfvp9kP",
+                        "object_relation": "ssdeep"
+                    },
+                    {
+                        "type": "size-in-bytes",
+                        "category": "Other",
+                        "to_ids": false,
+                        "timestamp": 1778578762,
+                        "uuid": "c84622aa-c675-41a4-a639-f69bb1a3fb2f",
+                        "value": 51926643,
+                        "object_relation": "size-in-bytes",
+                        "disable_correlation": true
+                    },
+                    {
+                        "type": "mime-type",
+                        "category": "Artifacts dropped",
+                        "to_ids": false,
+                        "timestamp": 1778578762,
+                        "uuid": "5a588ad2-762c-40dd-9794-6bfe0e7b9771",
+                        "value": "application/x-dosexec",
+                        "object_relation": "mimetype",
+                        "disable_correlation": true
+                    },
+                    {
+                        "type": "filename",
+                        "category": "Payload delivery",
+                        "to_ids": false,
+                        "timestamp": 1778578762,
+                        "uuid": "cf8ba993-c641-4346-84cc-b2226aeea6cc",
+                        "value": "00b6b59157aa87f181a6a8e2b21a84aed40f8c8343b39aff660afca6161492b6",
+                        "object_relation": "filename"
+                    }
+                ],
+                "template_uuid": "688c46fb-5edb-40a3-8273-1af7923e2215",
+                "template_version": "24",
+                "distribution": "5"
+            },
+            {
+                "name": "file",
+                "meta-category": "file",
+                "description": "File object describing a file with meta-information",
+                "uuid": "95515f7c-4e17-11f1-a769-42010a9c0008",
+                "comment": "Malware payload (Mirai)",
+                "timestamp": 1778599862,
+                "Attribute": [
+                    {
+                        "type": "md5",
+                        "category": "Payload delivery",
+                        "to_ids": true,
+                        "timestamp": 1778599862,
+                        "uuid": "88e509ab-c66a-4603-b016-1aa88d947828",
+                        "comment": "Malware payload (Mirai)",
+                        "value": "ae85f607c583235da916dddc0cbcb481",
+                        "object_relation": "md5",
+                        "Tag": [
+                            {
+                                "name": "elf",
+                                "colour": "#CD6A22",
+                                "exportable": true,
+                                "hide_tag": false
+                            },
+                            {
+                                "name": "mirai",
+                                "colour": "#19EF39",
+                                "exportable": true,
+                                "hide_tag": false
+                            }
+                        ]
+                    },
+                    {
+                        "type": "sha256",
+                        "category": "Payload delivery",
+                        "to_ids": true,
+                        "timestamp": 1778599862,
+                        "uuid": "d5370fda-2154-489e-a887-a36992a8b139",
+                        "comment": "Malware payload (Mirai)",
+                        "value": "02715ecd80e408570d11c385a2291cee9459f2c1fe02658f3127345da6eb5219",
+                        "object_relation": "sha256",
+                        "Tag": [
+                            {
+                                "name": "elf",
+                                "colour": "#CD6A22",
+                                "exportable": true,
+                                "hide_tag": false
+                            },
+                            {
+                                "name": "mirai",
+                                "colour": "#19EF39",
+                                "exportable": true,
+                                "hide_tag": false
+                            }
+                        ]
+                    },
+                    {
+                        "type": "sha1",
+                        "category": "Payload delivery",
+                        "to_ids": true,
+                        "timestamp": 1778599862,
+                        "uuid": "e12f57c8-fd93-4e7e-99f0-5ff7646968fe",
+                        "comment": "Malware payload (Mirai)",
+                        "value": "118429d69e350c980b960a8301b8f5bddd15a1d8",
+                        "object_relation": "sha1",
+                        "Tag": [
+                            {
+                                "name": "elf",
+                                "colour": "#CD6A22",
+                                "exportable": true,
+                                "hide_tag": false
+                            },
+                            {
+                                "name": "mirai",
+                                "colour": "#19EF39",
+                                "exportable": true,
+                                "hide_tag": false
+                            }
+                        ]
+                    },
+                    {
+                        "type": "sha3-384",
+                        "category": "Payload delivery",
+                        "to_ids": true,
+                        "timestamp": 1778599862,
+                        "uuid": "8d906626-38e4-43c1-9985-5c3681733161",
+                        "comment": "Malware payload (Mirai)",
+                        "value": "47b5b7e6b32b8a2c29e6d300d61690d4e3b319e8ced4972679f6e9fb57225f91147c0e9b1e44d7f99a8b50ed5b992038",
+                        "object_relation": "sha3-384",
+                        "Tag": [
+                            {
+                                "name": "elf",
+                                "colour": "#CD6A22",
+                                "exportable": true,
+                                "hide_tag": false
+                            },
+                            {
+                                "name": "mirai",
+                                "colour": "#19EF39",
+                                "exportable": true,
+                                "hide_tag": false
+                            }
+                        ]
+                    },
+                    {
+                        "type": "tlsh",
+                        "category": "Payload delivery",
+                        "to_ids": false,
+                        "timestamp": 1778599862,
+                        "uuid": "e4af5813-6628-48f2-acaf-c650b4afc8a1",
+                        "value": "T1D925AE11BBF2052AE280933586A2D750B613DB9668D5030BCF618EEBEF571750F85CFA",
+                        "object_relation": "tlsh"
+                    },
+                    {
+                        "type": "ssdeep",
+                        "category": "Payload delivery",
+                        "to_ids": false,
+                        "timestamp": 1778599862,
+                        "uuid": "4107bea0-05c4-4639-9413-4e1016a22d82",
+                        "value": "12288:FAu75hPWGAOxh86/Yu+AAqq8DPy6KNrraYn30wUQAbdhw5nZ95Z6:FFFhOhOj/xpqSdKN53H8Jmt",
+                        "object_relation": "ssdeep"
+                    },
+                    {
+                        "type": "size-in-bytes",
+                        "category": "Other",
+                        "to_ids": false,
+                        "timestamp": 1778599862,
+                        "uuid": "544987dd-3468-4118-8c02-964643f2b8cf",
+                        "value": 1057224,
+                        "object_relation": "size-in-bytes",
+                        "disable_correlation": true
+                    },
+                    {
+                        "type": "mime-type",
+                        "category": "Artifacts dropped",
+                        "to_ids": false,
+                        "timestamp": 1778599862,
+                        "uuid": "43b620bc-4c5a-49bc-bfd0-1043b13b8b41",
+                        "value": "application/x-executable",
+                        "object_relation": "mimetype",
+                        "disable_correlation": true
+                    },
+                    {
+                        "type": "filename",
+                        "category": "Payload delivery",
+                        "to_ids": false,
+                        "timestamp": 1778599862,
+                        "uuid": "50576351-5b45-4195-ba1f-cc57869a7886",
+                        "value": "sparc",
+                        "object_relation": "filename"
+                    }
+                ],
+                "template_uuid": "688c46fb-5edb-40a3-8273-1af7923e2215",
+                "template_version": "24",
+                "distribution": "5"
+            },
+            {
+                "name": "file",
+                "meta-category": "file",
+                "description": "File object describing a file with meta-information",
+                "uuid": "e3400829-4e15-11f1-a769-42010a9c0008",
+                "comment": "Malware payload",
+                "timestamp": 1778599133,
+                "Attribute": [
+                    {
+                        "type": "md5",
+                        "category": "Payload delivery",
+                        "to_ids": true,
+                        "timestamp": 1778599133,
+                        "uuid": "01dd11df-3b98-4d11-baf8-233d308b9a90",
+                        "comment": "Malware payload",
+                        "value": "d857405b7d0548e016d851e62e20855a",
+                        "object_relation": "md5",
+                        "Tag": [
+                            {
+                                "name": "dropped-by-phorpiex",
+                                "colour": "#6B8B5F",
+                                "exportable": true,
+                                "hide_tag": false
+                            },
+                            {
+                                "name": "exe",
+                                "colour": "#8F1124",
+                                "exportable": true,
+                                "hide_tag": false
+                            }
+                        ]
+                    },
+                    {
+                        "type": "sha256",
+                        "category": "Payload delivery",
+                        "to_ids": true,
+                        "timestamp": 1778599133,
+                        "uuid": "e0258638-d7bd-4c2c-90c1-5d3d54e10d5d",
+                        "comment": "Malware payload",
+                        "value": "03924c350970b509b7b239fba8d53d730b15b10ffbd028e6f931ebee7b16b036",
+                        "object_relation": "sha256",
+                        "Tag": [
+                            {
+                                "name": "dropped-by-phorpiex",
+                                "colour": "#6B8B5F",
+                                "exportable": true,
+                                "hide_tag": false
+                            },
+                            {
+                                "name": "exe",
+                                "colour": "#8F1124",
+                                "exportable": true,
+                                "hide_tag": false
+                            }
+                        ]
+                    },
+                    {
+                        "type": "sha1",
+                        "category": "Payload delivery",
+                        "to_ids": true,
+                        "timestamp": 1778599133,
+                        "uuid": "2f452845-fdd7-4dda-b092-e14b11d0c513",
+                        "comment": "Malware payload",
+                        "value": "86a437959b7933773bf7c958b0aa5bb93a9d74b4",
+                        "object_relation": "sha1",
+                        "Tag": [
+                            {
+                                "name": "dropped-by-phorpiex",
+                                "colour": "#6B8B5F",
+                                "exportable": true,
+                                "hide_tag": false
+                            },
+                            {
+                                "name": "exe",
+                                "colour": "#8F1124",
+                                "exportable": true,
+                                "hide_tag": false
+                            }
+                        ]
+                    },
+                    {
+                        "type": "sha3-384",
+                        "category": "Payload delivery",
+                        "to_ids": true,
+                        "timestamp": 1778599133,
+                        "uuid": "296cf11c-ee10-49cf-a54c-40123d2f1c3d",
+                        "comment": "Malware payload",
+                        "value": "f58be74f0c466c40c2f9edde7a346a81d9fef2546024a8b5871eef8cfbfe667a3503537945671fb6719e2c1e0058f809",
+                        "object_relation": "sha3-384",
+                        "Tag": [
+                            {
+                                "name": "dropped-by-phorpiex",
+                                "colour": "#6B8B5F",
+                                "exportable": true,
+                                "hide_tag": false
+                            },
+                            {
+                                "name": "exe",
+                                "colour": "#8F1124",
+                                "exportable": true,
+                                "hide_tag": false
+                            }
+                        ]
+                    },
+                    {
+                        "type": "tlsh",
+                        "category": "Payload delivery",
+                        "to_ids": false,
+                        "timestamp": 1778599133,
+                        "uuid": "1d81535e-b2bf-41b7-8f1b-903b4fb64e2f",
+                        "value": "T1F1926C0FB9554319D4C00434A1B2877BD6BA9876338454EFFBD88ACA1B782DAF83215F",
+                        "object_relation": "tlsh"
+                    },
+                    {
+                        "type": "imphash",
+                        "category": "Payload delivery",
+                        "to_ids": false,
+                        "timestamp": 1778599133,
+                        "uuid": "39520b6f-63ec-4b64-a3cd-0a9c879419b5",
+                        "value": "b8b034a37970476c0e8791d5941c31e3",
+                        "object_relation": "imphash"
+                    },
+                    {
+                        "type": "ssdeep",
+                        "category": "Payload delivery",
+                        "to_ids": false,
+                        "timestamp": 1778599133,
+                        "uuid": "a6e05034-83dd-4fa8-8f59-3954378d95bf",
+                        "value": "384:iIkj7VlvadxaizO5wxDSZvu98t2rFJ/Bwav8U9cpG:Cax3qAUG9o5a0UYG",
+                        "object_relation": "ssdeep"
+                    },
+                    {
+                        "type": "size-in-bytes",
+                        "category": "Other",
+                        "to_ids": false,
+                        "timestamp": 1778599133,
+                        "uuid": "b3d06dc0-5c5f-4945-9b55-b8c172441ae8",
+                        "value": 19968,
+                        "object_relation": "size-in-bytes",
+                        "disable_correlation": true
+                    },
+                    {
+                        "type": "mime-type",
+                        "category": "Artifacts dropped",
+                        "to_ids": false,
+                        "timestamp": 1778599133,
+                        "uuid": "4490f62d-423a-4ea9-b404-1a3ceb135224",
+                        "value": "application/x-dosexec",
+                        "object_relation": "mimetype",
+                        "disable_correlation": true
+                    },
+                    {
+                        "type": "filename",
+                        "category": "Payload delivery",
+                        "to_ids": false,
+                        "timestamp": 1778599133,
+                        "uuid": "2db8fb4f-2bf6-4860-8684-183a54976505",
+                        "value": "file",
+                        "object_relation": "filename"
+                    }
+                ],
+                "template_uuid": "688c46fb-5edb-40a3-8273-1af7923e2215",
+                "template_version": "24",
+                "distribution": "5"
+            },
+            {
+                "name": "file",
+                "meta-category": "file",
+                "description": "File object describing a file with meta-information",
+                "uuid": "ee8ac241-4ddd-11f1-a769-42010a9c0008",
+                "comment": "Malware payload",
+                "timestamp": 1778575101,
+                "Attribute": [
+                    {
+                        "type": "md5",
+                        "category": "Payload delivery",
+                        "to_ids": true,
+                        "timestamp": 1778575101,
+                        "uuid": "27367938-549e-4137-bb82-7bf7d61a4fcc",
+                        "comment": "Malware payload",
+                        "value": "26a2abcd92a1fe2be7832c437103b170",
+                        "object_relation": "md5",
+                        "Tag": [
+                            {
+                                "name": "17-0-18",
+                                "colour": "#2859F9",
+                                "exportable": true,
+                                "hide_tag": false
+                            },
+                            {
+                                "name": "exe",
+                                "colour": "#8F1124",
+                                "exportable": true,
+                                "hide_tag": false
+                            },
+                            {
+                                "name": "JDownloader2Setup",
+                                "colour": "#133AE8",
+                                "exportable": true,
+                                "hide_tag": false
+                            }
+                        ]
+                    },
+                    {
+                        "type": "sha256",
+                        "category": "Payload delivery",
+                        "to_ids": true,
+                        "timestamp": 1778575101,
+                        "uuid": "e5a6f5c6-1743-4b8a-a51b-50ee50391b89",
+                        "comment": "Malware payload",
+                        "value": "04cb9f0bca6e0e4ed30bc92726590724bf60938440b3825252657d1b3af45495",
+                        "object_relation": "sha256",
+                        "Tag": [
+                            {
+                                "name": "17-0-18",
+                                "colour": "#2859F9",
+                                "exportable": true,
+                                "hide_tag": false
+                            },
+                            {
+                                "name": "exe",
+                                "colour": "#8F1124",
+                                "exportable": true,
+                                "hide_tag": false
+                            },
+                            {
+                                "name": "JDownloader2Setup",
+                                "colour": "#133AE8",
+                                "exportable": true,
+                                "hide_tag": false
+                            }
+                        ]
+                    },
+                    {
+                        "type": "sha1",
+                        "category": "Payload delivery",
+                        "to_ids": true,
+                        "timestamp": 1778575101,
+                        "uuid": "40f7139a-8abb-4749-9d33-3cff5d5cab01",
+                        "comment": "Malware payload",
+                        "value": "fd196b51871e6eb3e111e6ebbb0f8d34c575f5f0",
+                        "object_relation": "sha1",
+                        "Tag": [
+                            {
+                                "name": "17-0-18",
+                                "colour": "#2859F9",
+                                "exportable": true,
+                                "hide_tag": false
+                            },
+                            {
+                                "name": "exe",
+                                "colour": "#8F1124",
+                                "exportable": true,
+                                "hide_tag": false
+                            },
+                            {
+                                "name": "JDownloader2Setup",
+                                "colour": "#133AE8",
+                                "exportable": true,
+                                "hide_tag": false
+                            }
+                        ]
+                    },
+                    {
+                        "type": "sha3-384",
+                        "category": "Payload delivery",
+                        "to_ids": true,
+                        "timestamp": 1778575101,
+                        "uuid": "e0355e5b-78ec-44cd-a075-f8ccfc939ff8",
+                        "comment": "Malware payload",
+                        "value": "c633aa3ea39f3f59648498d99f005873fad90240f825c99165b2d63ea403cdedafc1c7f3c3d302f5990f5e2489ed6841",
+                        "object_relation": "sha3-384",
+                        "Tag": [
+                            {
+                                "name": "17-0-18",
+                                "colour": "#2859F9",
+                                "exportable": true,
+                                "hide_tag": false
+                            },
+                            {
+                                "name": "exe",
+                                "colour": "#8F1124",
+                                "exportable": true,
+                                "hide_tag": false
+                            },
+                            {
+                                "name": "JDownloader2Setup",
+                                "colour": "#133AE8",
+                                "exportable": true,
+                                "hide_tag": false
+                            }
+                        ]
+                    },
+                    {
+                        "type": "tlsh",
+                        "category": "Payload delivery",
+                        "to_ids": false,
+                        "timestamp": 1778575101,
+                        "uuid": "6070e5f0-8288-4207-84bb-5e32317833cd",
+                        "value": "T1AF28331C3F3EB3FDC9AC81395B77A58A49A92F2D078400BB1DB1078D6B915A09CF855B",
+                        "object_relation": "tlsh"
+                    },
+                    {
+                        "type": "imphash",
+                        "category": "Payload delivery",
+                        "to_ids": false,
+                        "timestamp": 1778575101,
+                        "uuid": "bf3bf172-9d34-42b2-9e45-6fe2782fbafe",
+                        "value": "cebbab50025aad300d9290d50864f4ef",
+                        "object_relation": "imphash"
+                    },
+                    {
+                        "type": "ssdeep",
+                        "category": "Payload delivery",
+                        "to_ids": false,
+                        "timestamp": 1778575101,
+                        "uuid": "55dd4d1e-a839-4ff3-b165-ddae03631a6f",
+                        "value": "1572864:Vr2GnbVpRULAACaIPt8IrkUT2lfavGxKKAeqpqON88tcPmtZz8S9qFTJ1HloBWw5:YqbTdV7eIp2F6GohRtcuz9WTXFoVwq",
+                        "object_relation": "ssdeep"
+                    },
+                    {
+                        "type": "size-in-bytes",
+                        "category": "Other",
+                        "to_ids": false,
+                        "timestamp": 1778575101,
+                        "uuid": "bb570bcb-7467-4ed8-847a-a1ef4722d2c8",
+                        "value": 101420032,
+                        "object_relation": "size-in-bytes",
+                        "disable_correlation": true
+                    },
+                    {
+                        "type": "mime-type",
+                        "category": "Artifacts dropped",
+                        "to_ids": false,
+                        "timestamp": 1778575101,
+                        "uuid": "120c8941-e5a5-4e04-93b4-08e21573f24c",
+                        "value": "application/x-dosexec",
+                        "object_relation": "mimetype",
+                        "disable_correlation": true
+                    },
+                    {
+                        "type": "filename",
+                        "category": "Payload delivery",
+                        "to_ids": false,
+                        "timestamp": 1778575101,
+                        "uuid": "78f0b72f-7849-4b48-b661-64af806e22bc",
+                        "value": "JDownloader2Setup_windows-amd64_v17_0_18.exe",
+                        "object_relation": "filename"
+                    }
+                ],
+                "template_uuid": "688c46fb-5edb-40a3-8273-1af7923e2215",
+                "template_version": "24",
+                "distribution": "5"
+            },
+            {
+                "name": "file",
+                "meta-category": "file",
+                "description": "File object describing a file with meta-information",
+                "uuid": "6bdb2f68-4dff-11f1-a769-42010a9c0008",
+                "comment": "Malware payload (SalatStealer)",
+                "timestamp": 1778589484,
+                "Attribute": [
+                    {
+                        "type": "md5",
+                        "category": "Payload delivery",
+                        "to_ids": true,
+                        "timestamp": 1778589484,
+                        "uuid": "85cab8fd-53ae-46ae-9ca5-79320e734bcd",
+                        "comment": "Malware payload (SalatStealer)",
+                        "value": "1567c14983101053db61743775ca7753",
+                        "object_relation": "md5",
+                        "Tag": [
+                            {
+                                "name": "dropped-by-gcleaner",
+                                "colour": "#0F0C07",
+                                "exportable": true,
+                                "hide_tag": false
+                            },
+                            {
+                                "name": "exe",
+                                "colour": "#8F1124",
+                                "exportable": true,
+                                "hide_tag": false
+                            },
+                            {
+                                "name": "f",
+                                "colour": "#3E9B70",
+                                "exportable": true,
+                                "hide_tag": false
+                            },
+                            {
+                                "name": "MIX3.file",
+                                "colour": "#8DAAA4",
+                                "exportable": true,
+                                "hide_tag": false
+                            },
+                            {
+                                "name": "SalatStealer",
+                                "colour": "#7097A1",
+                                "exportable": true,
+                                "hide_tag": false
+                            }
+                        ]
+                    },
+                    {
+                        "type": "sha256",
+                        "category": "Payload delivery",
+                        "to_ids": true,
+                        "timestamp": 1778589484,
+                        "uuid": "3c8cbda4-2afa-4d98-b2ac-d9f0275d1d75",
+                        "comment": "Malware payload (SalatStealer)",
+                        "value": "04cd5102f8dc1dcd747c46723dec6006ed247242d7d83d30e987874b03cb31d8",
+                        "object_relation": "sha256",
+                        "Tag": [
+                            {
+                                "name": "dropped-by-gcleaner",
+                                "colour": "#0F0C07",
+                                "exportable": true,
+                                "hide_tag": false
+                            },
+                            {
+                                "name": "exe",
+                                "colour": "#8F1124",
+                                "exportable": true,
+                                "hide_tag": false
+                            },
+                            {
+                                "name": "f",
+                                "colour": "#3E9B70",
+                                "exportable": true,
+                                "hide_tag": false
+                            },
+                            {
+                                "name": "MIX3.file",
+                                "colour": "#8DAAA4",
+                                "exportable": true,
+                                "hide_tag": false
+                            },
+                            {
+                                "name": "SalatStealer",
+                                "colour": "#7097A1",
+                                "exportable": true,
+                                "hide_tag": false
+                            }
+                        ]
+                    },
+                    {
+                        "type": "sha1",
+                        "category": "Payload delivery",
+                        "to_ids": true,
+                        "timestamp": 1778589484,
+                        "uuid": "c6b761eb-cdab-4b39-a3ba-5a3790651b27",
+                        "comment": "Malware payload (SalatStealer)",
+                        "value": "2b1dca9262ec898cfefbdc9cdfacfaf81e8bfefd",
+                        "object_relation": "sha1",
+                        "Tag": [
+                            {
+                                "name": "dropped-by-gcleaner",
+                                "colour": "#0F0C07",
+                                "exportable": true,
+                                "hide_tag": false
+                            },
+                            {
+                                "name": "exe",
+                                "colour": "#8F1124",
+                                "exportable": true,
+                                "hide_tag": false
+                            },
+                            {
+                                "name": "f",
+                                "colour": "#3E9B70",
+                                "exportable": true,
+                                "hide_tag": false
+                            },
+                            {
+                                "name": "MIX3.file",
+                                "colour": "#8DAAA4",
+                                "exportable": true,
+                                "hide_tag": false
+                            },
+                            {
+                                "name": "SalatStealer",
+                                "colour": "#7097A1",
+                                "exportable": true,
+                                "hide_tag": false
+                            }
+                        ]
+                    },
+                    {
+                        "type": "sha3-384",
+                        "category": "Payload delivery",
+                        "to_ids": true,
+                        "timestamp": 1778589484,
+                        "uuid": "4c9d7877-fbb2-4b3d-975a-0f30f58393c4",
+                        "comment": "Malware payload (SalatStealer)",
+                        "value": "302a2fe9dc381ece50c5739e5acaaceb20dec140410ac250538098f57a8187429075ea23aca0d900dd7f4b4eb3fb3084",
+                        "object_relation": "sha3-384",
+                        "Tag": [
+                            {
+                                "name": "dropped-by-gcleaner",
+                                "colour": "#0F0C07",
+                                "exportable": true,
+                                "hide_tag": false
+                            },
+                            {
+                                "name": "exe",
+                                "colour": "#8F1124",
+                                "exportable": true,
+                                "hide_tag": false
+                            },
+                            {
+                                "name": "f",
+                                "colour": "#3E9B70",
+                                "exportable": true,
+                                "hide_tag": false
+                            },
+                            {
+                                "name": "MIX3.file",
+                                "colour": "#8DAAA4",
+                                "exportable": true,
+                                "hide_tag": false
+                            },
+                            {
+                                "name": "SalatStealer",
+                                "colour": "#7097A1",
+                                "exportable": true,
+                                "hide_tag": false
+                            }
+                        ]
+                    },
+                    {
+                        "type": "tlsh",
+                        "category": "Payload delivery",
+                        "to_ids": false,
+                        "timestamp": 1778589484,
+                        "uuid": "a7f3dd6d-2eae-4d30-bd70-abec46abfcfb",
+                        "value": "T13F568E033BFEB45EEAAB97B4957462418625FC374D91808931CD548B4F9B9007EBC3BA",
+                        "object_relation": "tlsh"
+                    },
+                    {
+                        "type": "imphash",
+                        "category": "Payload delivery",
+                        "to_ids": false,
+                        "timestamp": 1778589484,
+                        "uuid": "bd9fd0fc-a288-4d35-92cd-6b385e93e4dd",
+                        "value": "ccf1fd66015dc21ddcca35136ea0b0f7",
+                        "object_relation": "imphash"
+                    },
+                    {
+                        "type": "ssdeep",
+                        "category": "Payload delivery",
+                        "to_ids": false,
+                        "timestamp": 1778589484,
+                        "uuid": "c06895f0-38e9-4bda-aaef-cf55c38d982e",
+                        "value": "98304:IbUB/V+bwrPFfcZIbmQEbWj4CXh+0MupcTbl0G1+mP5:yq/V3Ea6Qxj46OOU+Q5",
+                        "object_relation": "ssdeep"
+                    },
+                    {
+                        "type": "size-in-bytes",
+                        "category": "Other",
+                        "to_ids": false,
+                        "timestamp": 1778589484,
+                        "uuid": "eaae271d-d822-4cb7-b4c8-a0a046fc7855",
+                        "value": 5924352,
+                        "object_relation": "size-in-bytes",
+                        "disable_correlation": true
+                    },
+                    {
+                        "type": "mime-type",
+                        "category": "Artifacts dropped",
+                        "to_ids": false,
+                        "timestamp": 1778589484,
+                        "uuid": "ccbbdb07-0364-40e3-9cd5-ebe9838c9f08",
+                        "value": "application/x-dosexec",
+                        "object_relation": "mimetype",
+                        "disable_correlation": true
+                    },
+                    {
+                        "type": "filename",
+                        "category": "Payload delivery",
+                        "to_ids": false,
+                        "timestamp": 1778589484,
+                        "uuid": "5e4fbcd4-5860-4bfb-b6ee-a1ea633d5499",
+                        "value": "file",
+                        "object_relation": "filename"
+                    }
+                ],
+                "template_uuid": "688c46fb-5edb-40a3-8273-1af7923e2215",
+                "template_version": "24",
+                "distribution": "5"
+            },
+            {
+                "name": "file",
+                "meta-category": "file",
+                "description": "File object describing a file with meta-information",
+                "uuid": "a39340ad-4e32-11f1-a769-42010a9c0008",
+                "comment": "Malware payload",
+                "timestamp": 1778611482,
+                "Attribute": [
+                    {
+                        "type": "md5",
+                        "category": "Payload delivery",
+                        "to_ids": true,
+                        "timestamp": 1778611482,
+                        "uuid": "8aa8be36-8add-4d63-9654-8c913a34a4e9",
+                        "comment": "Malware payload",
+                        "value": "290d859a4d81ecbf3ee3bd35d9e850a8",
+                        "object_relation": "md5",
+                        "Tag": [
+                            {
+                                "name": "d52f85",
+                                "colour": "#BE19E1",
+                                "exportable": true,
+                                "hide_tag": false
+                            },
+                            {
+                                "name": "dropped-by-amadey",
+                                "colour": "#F2C079",
+                                "exportable": true,
+                                "hide_tag": false
+                            },
+                            {
+                                "name": "exe",
+                                "colour": "#8F1124",
+                                "exportable": true,
+                                "hide_tag": false
+                            }
+                        ]
+                    },
+                    {
+                        "type": "sha256",
+                        "category": "Payload delivery",
+                        "to_ids": true,
+                        "timestamp": 1778611482,
+                        "uuid": "4504a367-29af-4147-a72a-10762f175528",
+                        "comment": "Malware payload",
+                        "value": "0638103d6b66528d7a28095d1bff546b52459c1a86049b417c94d8a93e6446c7",
+                        "object_relation": "sha256",
+                        "Tag": [
+                            {
+                                "name": "d52f85",
+                                "colour": "#BE19E1",
+                                "exportable": true,
+                                "hide_tag": false
+                            },
+                            {
+                                "name": "dropped-by-amadey",
+                                "colour": "#F2C079",
+                                "exportable": true,
+                                "hide_tag": false
+                            },
+                            {
+                                "name": "exe",
+                                "colour": "#8F1124",
+                                "exportable": true,
+                                "hide_tag": false
+                            }
+                        ]
+                    },
+                    {
+                        "type": "sha1",
+                        "category": "Payload delivery",
+                        "to_ids": true,
+                        "timestamp": 1778611482,
+                        "uuid": "ed011244-a39c-4348-ae51-00215277e129",
+                        "comment": "Malware payload",
+                        "value": "6bd7e474a42447380ebb97ca7eaccb8ee66b4c5f",
+                        "object_relation": "sha1",
+                        "Tag": [
+                            {
+                                "name": "d52f85",
+                                "colour": "#BE19E1",
+                                "exportable": true,
+                                "hide_tag": false
+                            },
+                            {
+                                "name": "dropped-by-amadey",
+                                "colour": "#F2C079",
+                                "exportable": true,
+                                "hide_tag": false
+                            },
+                            {
+                                "name": "exe",
+                                "colour": "#8F1124",
+                                "exportable": true,
+                                "hide_tag": false
+                            }
+                        ]
+                    },
+                    {
+                        "type": "sha3-384",
+                        "category": "Payload delivery",
+                        "to_ids": true,
+                        "timestamp": 1778611482,
+                        "uuid": "bbf26dcd-6bfd-452b-8d09-13c5267160c4",
+                        "comment": "Malware payload",
+                        "value": "bddbcaf42447746712895077a8765094ea85b207151b574043a258dd88b8908d2427a0cc8862dde22f490d59c1618e90",
+                        "object_relation": "sha3-384",
+                        "Tag": [
+                            {
+                                "name": "d52f85",
+                                "colour": "#BE19E1",
+                                "exportable": true,
+                                "hide_tag": false
+                            },
+                            {
+                                "name": "dropped-by-amadey",
+                                "colour": "#F2C079",
+                                "exportable": true,
+                                "hide_tag": false
+                            },
+                            {
+                                "name": "exe",
+                                "colour": "#8F1124",
+                                "exportable": true,
+                                "hide_tag": false
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+}
+

@@ -1,0 +1,13 @@
+[package]
+name = "dactie-experiment-eclipse"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tokio = { version = "1.38", default-features = false , features = ["full"]}
+futures = "0.3.30"
+libp2p = { git = "https://github.com/libp2p/rust-libp2p",rev = "32e917f", features = ["serde", "json", "request-response","tokio", "gossipsub", "noise", "macros", "tcp", "yamux", "quic","kad","dns", "identify","rsa","mdns", "ecdsa"] }
+log = "0.4.21"
+clap = { version = "4.5.6", features = ["derive"] }
+time = "0.3.36"
+rand = "0.8.5"

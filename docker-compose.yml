@@ -1,0 +1,131 @@
+services:
+  db:
+    image: postgres:latest
+    container_name: postgres_db
+    environment:
+      POSTGRES_USER: archive
+      POSTGRES_PASSWORD: archivepw
+      POSTGRES_DB: archivedb
+    volumes:
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      my_network:
+        ipv4_address: 172.16.238.100
+    ports:
+      - "5432:5432"
+
+  db2:
+    image: postgres:latest
+    container_name: postgres_db2
+    environment:
+      POSTGRES_USER: archive
+      POSTGRES_PASSWORD: archivepw
+      POSTGRES_DB: archivedb
+    volumes:
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      my_network:
+        ipv4_address: 172.16.238.102
+    ports:
+      - "5433:5432"
+
+  adminer:
+    image: adminer:latest
+    container_name: adminer
+    restart: always
+    networks:
+      my_network:
+        ipv4_address: 172.16.238.101
+    ports:
+      - 8080:8080
+
+  authority_node:
+    image: dactie-authority
+    networks:
+      my_network:
+        ipv4_address: 172.16.238.10
+    tty: true
+    stdin_open: true
+    volumes:
+      - ./key_material/key_material_0:/usr/src/dactie/key_material/
+    command: sh -c '/usr/src/dactie/target/release/dactie-authority -K /usr/src/dactie/key_material'
+    environment:
+      - RUST_LOG=info
+
+  archive_node1:
+    image: dactie-archive
+    networks:
+      my_network:
+        ipv4_address: 172.16.238.11
+    tty: true
+    stdin_open: true
+    volumes:
+      - ./key_material/key_material_1:/usr/src/dactie/key_material/
+    command: sh -c '/usr/src/dactie/target/release/dactie-archive -K /usr/src/dactie/key_material/ -u "postgres://archive:archivepw@172.16.238.100/archivedb" -i archive1 -a "$${BOOT_PEER_ID}" -B /ip4/172.16.238.10/tcp/10001'
+    env_file:
+      - key_material/boot_id.env
+    environment:
+      - RUST_LOG=debug
+    depends_on:
+      - db
+      - authority_node
+
+  archive_node2:
+    image: dactie-archive
+    networks:
+      my_network:
+        ipv4_address: 172.16.238.12
+    tty: true
+    stdin_open: true
+    volumes:
+      - ./key_material/key_material_2:/usr/src/dactie/key_material/
+    command: sh -c '/usr/src/dactie/target/release/dactie-archive -K /usr/src/dactie/key_material/ -u "postgres://archive:archivepw@172.16.238.102/archivedb" -i archive2 -a "$${BOOT_PEER_ID}" -B /ip4/172.16.238.10/tcp/10001'
+    env_file:
+      - key_material/boot_id.env
+    environment:
+      - RUST_LOG=debug
+    depends_on:
+      - db2
+      - authority_node
+
+  peer_1:
+    image: dactie-peer
+    networks:
+      my_network:
+        ipv4_address: 172.16.238.13
+    tty: true
+    stdin_open: true
+    volumes:
+      - ./key_material/key_material_3:/usr/src/dactie/key_material/
+    command: sh -c '/usr/src/dactie/target/release/dactie-peer -K /usr/src/dactie/key_material -b "$${BOOT_PEER_ID}" -B "/ip4/172.16.238.10/tcp/10001"'
+    environment:
+      - RUST_LOG=info
+    env_file:
+      - key_material/boot_id.env
+    depends_on:
+      - authority_node
+
+  peer_2:
+    image: dactie-peer
+    networks:
+      my_network:
+        ipv4_address: 172.16.238.14
+    tty: true
+    stdin_open: true
+    volumes:
+      - ./key_material/key_material_4:/usr/src/dactie/key_material/
+    command: sh -c '/usr/src/dactie/target/release/dactie-peer -K /usr/src/dactie/key_material -b "$${BOOT_PEER_ID}" -B "/ip4/172.16.238.10/tcp/10001"'
+    environment:
+      - RUST_LOG=info
+    env_file:
+      - key_material/boot_id.env
+    depends_on:
+      - authority_node
+
+networks:
+  my_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.16.238.0/24
+

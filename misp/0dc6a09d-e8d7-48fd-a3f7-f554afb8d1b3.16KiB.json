@@ -1,0 +1,369 @@
+{
+    "Event": {
+        "published": true,
+        "date": "2026-05-12",
+        "threat_level_id": 2,
+        "info": "MalwareBazaar malware samples for 2026-05-12",
+        "timestamp": 1778630582,
+        "analysis": 1,
+        "event_creator_email": "bazaar@abuse.ch",
+        "distribution": 3,
+        "uuid": "0dc6a09d-e8d7-48fd-a3f7-f554afb8d1b3",
+        "Orgc": {
+            "name": "abuse.ch",
+            "uuid": "9b086132-8588-49ed-97fd-8578a777822c"
+        },
+        "Tag": [
+            {
+                "colour": "#004646",
+                "name": "type:OSINT"
+            },
+            {
+                "colour": "#fffff",
+                "name": "tlp:white"
+            }
+        ],
+        "Object": [
+            {
+                "name": "file",
+                "meta-category": "file",
+                "description": "File object describing a file with meta-information",
+                "uuid": "4fd359b3-4e39-11f1-a769-42010a9c0008",
+                "comment": "Malware payload (Gafgyt)",
+                "timestamp": 1778614348,
+                "Attribute": [
+                    {
+                        "type": "md5",
+                        "category": "Payload delivery",
+                        "to_ids": true,
+                        "timestamp": 1778614348,
+                        "uuid": "52f79660-b195-4e27-ae3b-0bff11f29046",
+                        "comment": "Malware payload (Gafgyt)",
+                        "value": "12f09ab1fafa6b7e1101e819f97cee25",
+                        "object_relation": "md5",
+                        "Tag": [
+                            {
+                                "name": "elf",
+                                "colour": "#CD6A22",
+                                "exportable": true,
+                                "hide_tag": false
+                            },
+                            {
+                                "name": "gafgyt",
+                                "colour": "#8C9C05",
+                                "exportable": true,
+                                "hide_tag": false
+                            },
+                            {
+                                "name": "UPX",
+                                "colour": "#67320E",
+                                "exportable": true,
+                                "hide_tag": false
+                            }
+                        ]
+                    },
+                    {
+                        "type": "sha256",
+                        "category": "Payload delivery",
+                        "to_ids": true,
+                        "timestamp": 1778614348,
+                        "uuid": "97005503-1858-4f3c-886e-e4f344d7aaf9",
+                        "comment": "Malware payload (Gafgyt)",
+                        "value": "00288755114d7eb2c1f7f40ad271d28714be5356a9c14e690d9c85cda4e10389",
+                        "object_relation": "sha256",
+                        "Tag": [
+                            {
+                                "name": "elf",
+                                "colour": "#CD6A22",
+                                "exportable": true,
+                                "hide_tag": false
+                            },
+                            {
+                                "name": "gafgyt",
+                                "colour": "#8C9C05",
+                                "exportable": true,
+                                "hide_tag": false
+                            },
+                            {
+                                "name": "UPX",
+                                "colour": "#67320E",
+                                "exportable": true,
+                                "hide_tag": false
+                            }
+                        ]
+                    },
+                    {
+                        "type": "sha1",
+                        "category": "Payload delivery",
+                        "to_ids": true,
+                        "timestamp": 1778614348,
+                        "uuid": "60d863a1-737c-47fd-964f-d45c4d52098e",
+                        "comment": "Malware payload (Gafgyt)",
+                        "value": "adfd45c1d58c35f4e265ccc45c53e776b967b1c5",
+                        "object_relation": "sha1",
+                        "Tag": [
+                            {
+                                "name": "elf",
+                                "colour": "#CD6A22",
+                                "exportable": true,
+                                "hide_tag": false
+                            },
+                            {
+                                "name": "gafgyt",
+                                "colour": "#8C9C05",
+                                "exportable": true,
+                                "hide_tag": false
+                            },
+                            {
+                                "name": "UPX",
+                                "colour": "#67320E",
+                                "exportable": true,
+                                "hide_tag": false
+                            }
+                        ]
+                    },
+                    {
+                        "type": "sha3-384",
+                        "category": "Payload delivery",
+                        "to_ids": true,
+                        "timestamp": 1778614348,
+                        "uuid": "d8f95d1a-242e-4082-9af2-280c42a87b56",
+                        "comment": "Malware payload (Gafgyt)",
+                        "value": "fc71fe5cc34d1c0731adb025937617c943fd8bed5a3669df9dbcb2b1998fa56c455b70906ba12b3d8caafbdc3f181d5e",
+                        "object_relation": "sha3-384",
+                        "Tag": [
+                            {
+                                "name": "elf",
+                                "colour": "#CD6A22",
+                                "exportable": true,
+                                "hide_tag": false
+                            },
+                            {
+                                "name": "gafgyt",
+                                "colour": "#8C9C05",
+                                "exportable": true,
+                                "hide_tag": false
+                            },
+                            {
+                                "name": "UPX",
+                                "colour": "#67320E",
+                                "exportable": true,
+                                "hide_tag": false
+                            }
+                        ]
+                    },
+                    {
+                        "type": "tlsh",
+                        "category": "Payload delivery",
+                        "to_ids": false,
+                        "timestamp": 1778614348,
+                        "uuid": "6b3070bc-c0b7-469e-9d4a-2c7b78b9e27d",
+                        "value": "T15363027DD6DC2A1BDE31B03C061D038669614AB7F94BFA1F3BAAE6725D520D93883047",
+                        "object_relation": "tlsh"
+                    },
+                    {
+                        "type": "ssdeep",
+                        "category": "Payload delivery",
+                        "to_ids": false,
+                        "timestamp": 1778614348,
+                        "uuid": "0b88de65-72b9-4c6c-a75e-0aabdcf1dece",
+                        "value": "1536:yGI2Yiioc3qAfVmd0DGqjrZosbhbRTgheOuXix/m2thWXx1hSVEWr:Igc300DGqjrZviRxukhaQVEc",
+                        "object_relation": "ssdeep"
+                    },
+                    {
+                        "type": "size-in-bytes",
+                        "category": "Other",
+                        "to_ids": false,
+                        "timestamp": 1778614348,
+                        "uuid": "a4002a1d-0fd0-4d41-b4e0-c06879b1f89c",
+                        "value": 68356,
+                        "object_relation": "size-in-bytes",
+                        "disable_correlation": true
+                    },
+                    {
+                        "type": "mime-type",
+                        "category": "Artifacts dropped",
+                        "to_ids": false,
+                        "timestamp": 1778614348,
+                        "uuid": "ed1b67f5-79f1-447f-a31a-56169c550e30",
+                        "value": "application/x-executable",
+                        "object_relation": "mimetype",
+                        "disable_correlation": true
+                    },
+                    {
+                        "type": "filename",
+                        "category": "Payload delivery",
+                        "to_ids": false,
+                        "timestamp": 1778614348,
+                        "uuid": "e22e636c-770a-4243-a104-e8504ad81ba4",
+                        "value": "mips",
+                        "object_relation": "filename"
+                    }
+                ],
+                "template_uuid": "688c46fb-5edb-40a3-8273-1af7923e2215",
+                "template_version": "24",
+                "distribution": "5"
+            },
+            {
+                "name": "file",
+                "meta-category": "file",
+                "description": "File object describing a file with meta-information",
+                "uuid": "b553a7b5-4e36-11f1-a769-42010a9c0008",
+                "comment": "Malware payload (Gafgyt)",
+                "timestamp": 1778613230,
+                "Attribute": [
+                    {
+                        "type": "md5",
+                        "category": "Payload delivery",
+                        "to_ids": true,
+                        "timestamp": 1778613230,
+                        "uuid": "34eaa779-c15f-41c1-ac64-e19b6bd25927",
+                        "comment": "Malware payload (Gafgyt)",
+                        "value": "c44386985f02e060e6da12e9560f4282",
+                        "object_relation": "md5",
+                        "Tag": [
+                            {
+                                "name": "elf",
+                                "colour": "#CD6A22",
+                                "exportable": true,
+                                "hide_tag": false
+                            },
+                            {
+                                "name": "gafgyt",
+                                "colour": "#8C9C05",
+                                "exportable": true,
+                                "hide_tag": false
+                            }
+                        ]
+                    },
+                    {
+                        "type": "sha256",
+                        "category": "Payload delivery",
+                        "to_ids": true,
+                        "timestamp": 1778613230,
+                        "uuid": "2aed092e-a131-4f5f-9cd2-649fda8f0dd2",
+                        "comment": "Malware payload (Gafgyt)",
+                        "value": "00749f5a02f88784dda862f0765b3369e49efd6cc9977f719424e7c39c630497",
+                        "object_relation": "sha256",
+                        "Tag": [
+                            {
+                                "name": "elf",
+                                "colour": "#CD6A22",
+                                "exportable": true,
+                                "hide_tag": false
+                            },
+                            {
+                                "name": "gafgyt",
+                                "colour": "#8C9C05",
+                                "exportable": true,
+                                "hide_tag": false
+                            }
+                        ]
+                    },
+                    {
+                        "type": "sha1",
+                        "category": "Payload delivery",
+                        "to_ids": true,
+                        "timestamp": 1778613230,
+                        "uuid": "86ee04ec-e72a-4ff9-84f1-b5219caea259",
+                        "comment": "Malware payload (Gafgyt)",
+                        "value": "6690ab6f26a169fd1ceb91b5955c4dc8451ee1ad",
+                        "object_relation": "sha1",
+                        "Tag": [
+                            {
+                                "name": "elf",
+                                "colour": "#CD6A22",
+                                "exportable": true,
+                                "hide_tag": false
+                            },
+                            {
+                                "name": "gafgyt",
+                                "colour": "#8C9C05",
+                                "exportable": true,
+                                "hide_tag": false
+                            }
+                        ]
+                    },
+                    {
+                        "type": "sha3-384",
+                        "category": "Payload delivery",
+                        "to_ids": true,
+                        "timestamp": 1778613230,
+                        "uuid": "17aae79c-ec83-4856-816e-99666985f748",
+                        "comment": "Malware payload (Gafgyt)",
+                        "value": "091107377554e7ef68633ab5b25cef3f60e55e6314138ca4da839f513e7b6bd4143ca8ffcace092607c61bfb40eec98d",
+                        "object_relation": "sha3-384",
+                        "Tag": [
+                            {
+                                "name": "elf",
+                                "colour": "#CD6A22",
+                                "exportable": true,
+                                "hide_tag": false
+                            },
+                            {
+                                "name": "gafgyt",
+                                "colour": "#8C9C05",
+                                "exportable": true,
+                                "hide_tag": false
+                            }
+                        ]
+                    },
+                    {
+                        "type": "tlsh",
+                        "category": "Payload delivery",
+                        "to_ids": false,
+                        "timestamp": 1778613230,
+                        "uuid": "97fd6ac6-d357-41c8-80f9-08390fffbbe1",
+                        "value": "T122931A9BFA42CEB3C41310F112AA9F219D71F9FB4823D642E3646DB4DE154C25A16FAC",
+                        "object_relation": "tlsh"
+                    },
+                    {
+                        "type": "ssdeep",
+                        "category": "Payload delivery",
+                        "to_ids": false,
+                        "timestamp": 1778613230,
+                        "uuid": "a99e5b5b-ca65-4f51-953e-52bfe3bcd2ef",
+                        "value": "1536:WA+k82vFIl2qbZckmjWGw57fobEOQryVwCiUH1FVLx8rbrbUkmyukJ33xZTe0gw7:WAldFI2qbhpRfobEOLVBiUH1FVLx8rbn",
+                        "object_relation": "ssdeep"
+                    },
+                    {
+                        "type": "size-in-bytes",
+                        "category": "Other",
+                        "to_ids": false,
+                        "timestamp": 1778613230,
+                        "uuid": "438a92af-535d-469a-bd89-10b3546a4956",
+                        "value": 91212,
+                        "object_relation": "size-in-bytes",
+                        "disable_correlation": true
+                    },
+                    {
+                        "type": "mime-type",
+                        "category": "Artifacts dropped",
+                        "to_ids": false,
+                        "timestamp": 1778613230,
+                        "uuid": "2902117c-2ac7-4040-8da3-c1626e2e57b2",
+                        "value": "application/x-executable",
+                        "object_relation": "mimetype",
+                        "disable_correlation": true
+                    },
+                    {
+                        "type": "filename",
+                        "category": "Payload delivery",
+                        "to_ids": false,
+                        "timestamp": 1778613230,
+                        "uuid": "1b7a91e7-dbd4-48f2-a93f-454b2ccd1ac7",
+                        "value": "FBI.i686",
+                        "object_relation": "filename"
+                    }
+                ],
+                "template_uuid": "688c46fb-5edb-40a3-8273-1af7923e2215",
+                "template_version": "24",
+                "distribution": "5"
+            }
+        ]
+    },
+    "response": {
+        "message": "Event added successfully",
+        "id": 0
+    }
+}
