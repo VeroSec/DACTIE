@@ -24,6 +24,8 @@ pub(crate) struct AbstSwarmBuilder<TBehaviour> {
     my_open_mls: MyOpenMls,
     group_commit_rx: mpsc::UnboundedReceiver<GroupId>,
     metrics: Option<lp2p_metrics::Metrics>,
+    // Addresses to advertise to remote peers as dialable
+    external_addresses: Vec<Multiaddr>,
 
 }
 
@@ -48,6 +50,7 @@ where
             my_open_mls,
             group_commit_rx,
             metrics: None,
+            external_addresses: Vec::new(),
         })
     }
 
@@ -67,6 +70,12 @@ where
         self
     }
 
+    /// Add a host-reachable address to advertise via Identify/Kademlia.
+    pub(crate) fn add_external_address(mut self, address: Multiaddr) -> Self {
+        self.external_addresses.push(address);
+        self
+    }
+
     pub(crate) fn build(self) -> Result<AbstSwarm<TBehaviour>, AbstSwarmBuilderError> {
         // Build swarm as before
         let mut swarm = {
@@ -82,6 +91,11 @@ where
                 .build()
         };
         swarm.listen_on(self.listen_address)?;
+        // Advertise explicit external addresses so other peers dial the correct host:port
+        for addr in &self.external_addresses {
+            log::info!("Advertising external address: {}", addr);
+            libp2p::Swarm::add_external_address(&mut swarm, addr.clone());
+        }
 
         log::info!("Local PeerId: {}", swarm.local_peer_id());
 

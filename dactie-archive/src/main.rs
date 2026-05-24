@@ -31,6 +31,10 @@ struct Args {
     #[arg(short, long)]
     url: String,
 
+    /// Explicit external address to advertise (e.g. /ip4/10.244.192.117/tcp/20011)
+    #[arg(long)]
+    advertise_addr: Option<Multiaddr>,
+
     /// Authorization Authority ID
     #[arg(short, long)]
     aa_id: PeerId,
@@ -106,6 +110,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
     if let Some(port) = args.port {
         abstswarm_builder =
             abstswarm_builder.listen_address(format!("/ip4/0.0.0.0/tcp/{port}").parse()?);
+    }
+
+    if let Some(addr) = args.advertise_addr.clone() {
+        if !addr.to_string().starts_with("/ip4/127.0.0.1/") {
+            abstswarm_builder = abstswarm_builder.add_external_address(addr);
+        }
     }
 
     let abstswarm = abstswarm_builder.build()?;

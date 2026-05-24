@@ -11,6 +11,7 @@ use crate::mybehaviour::MyBehaviour;
 use dactie_utils::mls_wrapper::MyOpenMls;
 use crate::myclient::MyClient;
 use crate::storage::Storage;
+use libp2p::Multiaddr;
 
 mod abstswarm;
 mod mybehaviour;
@@ -31,6 +32,10 @@ struct Args {
     /// Load_file, for stored groups and subscribed topics
     #[arg(short, long)]
     load_file: Option<String>,
+
+    /// Explicit external address to advertise (e.g. /ip4/10.244.192.116/tcp/10001)
+    #[arg(long)]
+    advertise_addr: Option<Multiaddr>,
 }
 
 #[tokio::main]
@@ -92,6 +97,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
             abstswarm_builder =
                 abstswarm_builder.listen_address("/ip4/0.0.0.0/tcp/10001".parse()?);
 
+    }
+
+    if let Some(addr) = args.advertise_addr.clone() {
+        if !addr.to_string().starts_with("/ip4/127.0.0.1/") {
+            abstswarm_builder = abstswarm_builder.add_external_address(addr);
+        }
     }
 
     let abstswarm = abstswarm_builder.build()?;

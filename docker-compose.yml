@@ -54,7 +54,8 @@ services:
     command: >-
       sh -c '/usr/src/dactie/target/release/dactie-authority
       -K /usr/src/dactie/key_material/
-      -p 10001'
+      -p 10001
+      --advertise-addr /ip4/10.244.192.116/tcp/10001'
     environment:
       - RUST_LOG=info
     profiles: ["node116"]
@@ -78,7 +79,8 @@ services:
       -i archive1
       -a "$${BOOT_PEER_ID}"
       -B /ip4/10.244.192.116/tcp/10001
-      -p 20011'
+      -p 20011
+      --advertise-addr /ip4/10.244.192.117/tcp/20011'
     env_file:
       - key_material/boot_id.env
     environment:
@@ -106,7 +108,8 @@ services:
       -i archive2
       -a "$${BOOT_PEER_ID}"
       -B /ip4/10.244.192.116/tcp/10001
-      -p 20012'
+      -p 20012
+      --advertise-addr /ip4/10.244.192.118/tcp/20012'
     env_file:
       - key_material/boot_id.env
     environment:
@@ -132,7 +135,8 @@ services:
       -K /usr/src/dactie/key_material/
       -b "$${BOOT_PEER_ID}"
       -B "/ip4/10.244.192.116/tcp/10001"
-      -p 21011'
+      -p 21011
+      --advertise-addr /ip4/10.244.192.117/tcp/21011'
     environment:
       - RUST_LOG=info
     env_file:
@@ -156,7 +160,8 @@ services:
       -K /usr/src/dactie/key_material/
       -b "$${BOOT_PEER_ID}"
       -B "/ip4/10.244.192.116/tcp/10001"
-      -p 21012'
+      -p 21012
+      --advertise-addr /ip4/10.244.192.118/tcp/21012'
     environment:
       - RUST_LOG=info
     env_file:
@@ -180,7 +185,8 @@ services:
       -K /usr/src/dactie/key_material/
       -b "$${BOOT_PEER_ID}"
       -B "/ip4/10.244.192.116/tcp/10001"
-      -p 21013'
+      -p 21013
+      --advertise-addr /ip4/10.244.192.119/tcp/21013'
     environment:
       - RUST_LOG=info
     env_file:
@@ -203,7 +209,8 @@ services:
       -K /usr/src/dactie/key_material/
       -b "$${BOOT_PEER_ID}"
       -B "/ip4/10.244.192.116/tcp/10001"
-      -p 21014'
+      -p 21014
+      --advertise-addr /ip4/10.244.192.119/tcp/21014'
     environment:
       - RUST_LOG=info
       - BENCH_PUBLISH=true

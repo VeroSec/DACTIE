@@ -246,7 +246,13 @@ impl MyBehaviour {
                 .any(|p| *p == PROTOCOL_NAME)
             {
                 for addr in listen_addrs {
-                    log::debug!("Adding received IdentifyInfo matching protocol  to the DHT. Peer: {}, addr: {}", peer_id, addr);
+                    // Filter out loopback addresses to avoid poisoning the DHT with unroutable addrs
+                    let addr_str = addr.to_string();
+                    if addr_str.starts_with("/ip4/127.0.0.1/") {
+                        log::debug!("Ignoring loopback addr from identify for {}: {}", peer_id, addr);
+                        continue;
+                    }
+                    log::debug!("Adding received IdentifyInfo matching protocol to the DHT. Peer: {}, addr: {}", peer_id, addr);
                     self.kademlia.add_address(&peer_id, addr);
                 }
             }
@@ -439,20 +445,26 @@ impl MyBehaviour {
             SwarmEvent::NewListenAddr { address, .. } => {
                 log::info!("Listening on {address:?}")
             }
-            SwarmEvent::OutgoingConnectionError { connection_id: _connection_id, peer_id, error } => match peer_id {
-                None => log::error!("Could not connect: {}", error),
-                Some(peer_id) => log::error!("Could not connect to peer '{}': {}", peer_id, error),
+            SwarmEvent::OutgoingConnectionError { connection_id: _connection_id, peer_id, error } => {
+                match peer_id {
+                    None => log::warn!("Outgoing connection error (no peer id): {}", error),
+                    Some(peer_id) => log::error!("Could not connect to peer '{}': {}", peer_id, error),
+                }
             },
             SwarmEvent::ConnectionClosed {
                 peer_id,
-                cause: Some(connerror)  ,
+                cause,
                 ..
             } => {
-                log::error!(
-                    "Connection to peer {} closed because of an error: {}",
-                    peer_id,
-                    connerror
-                );
+                if let Some(connerror) = cause {
+                    log::error!(
+                        "Connection to peer {} closed because of an error: {}",
+                        peer_id,
+                        connerror
+                    );
+                } else {
+                    log::debug!("Connection to peer {} closed normally", peer_id);
+                }
             }
             _ => log::trace!("Unhandled Swarm event: {event:?}"),
         }
@@ -569,4 +581,3 @@ pub(crate) enum MyBehaviourError {
     #[error("The address for the bootstrap peer is invalid: {0}")]
     InvalidPeerId(#[from] ParseError),
 }
-
