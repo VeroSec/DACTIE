@@ -10,8 +10,8 @@ use axum::{routing::get, Router};
 use libp2p_metrics::Metrics as Lp2pMetrics;
 use prometheus_client::registry::Registry;
 use std::net::SocketAddr;
-use once_cell::sync::Lazy;
-use sysinfo::{System, SystemExt, CpuRefreshKind, RefreshKind};
+use sysinfo::{System, CpuRefreshKind};
+use std::sync::atomic::AtomicU64;
 
 use myclient::MyClient;
 
@@ -132,38 +132,31 @@ async fn main() -> Result<(), Box<dyn Error>> {
         // We export it at libp2p_cpu_process_percent
         {
             use prometheus_client::metrics::gauge::Gauge;
-            use prometheus_client::registry::Unit;
             let mut reg = registry.lock().unwrap();
-            let cpu_gauge: Gauge = Gauge::default();
-            reg.sub_registry_with_prefix("libp2p").register_with_unit(
-                "cpu_process_percent",
-                "Approximate CPU utilization of this process (percent)",
-                Unit::Percent,
-                cpu_gauge.clone(),
-            );
+            // Use an f64 gauge to capture fractional CPU percentages
+            let cpu_gauge: Gauge<f64, AtomicU64> = Gauge::default();
+            let cpu_gauge_handle = cpu_gauge.clone();
+            // Register without a unit (Unit::Percent does not exist in 0.22.2)
+            reg
+                .sub_registry_with_prefix("libp2p")
+                .register(
+                    "cpu_process_percent",
+                    "Approximate CPU utilization of this process (percent)",
+                    cpu_gauge,
+                );
             drop(reg);
 
             tokio::spawn({
-                let registry = registry.clone();
+                let mut sys = System::new();
+                let cpu_gauge_handle = cpu_gauge_handle.clone();
                 async move {
-                    let mut sys = System::new();
                     loop {
                         sys.refresh_cpu_specifics(CpuRefreshKind::everything());
                         let global = sys.global_cpu_info();
                         let val = global.cpu_usage() as f64; // percent
-                        // update gauge
-                        let mut reg = registry.lock().unwrap();
-                        if let Some(metric) = reg
-                            .sub_registry_with_prefix("libp2p")
-                            .get_metric_by_name_mut("cpu_process_percent")
-                        {
-                            // downcast via encoding is not exposed; rely on re-register clone above.
-                        }
-                        drop(reg);
+                        cpu_gauge_handle.set(val);
                         // Sleep ~1s between samples
                         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-                        // Note: prometheus-client Gauge lacks a set via registry lookup; proper wiring requires struct storage.
-                        // Keeping placeholder; CPU metric can be added more robustly later or via external collector.
                     }
                 }
             });
