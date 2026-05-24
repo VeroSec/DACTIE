@@ -53,6 +53,10 @@ struct Args {
     #[arg(short, long)]
     load_file: Option<String>,
 
+    /// Explicit external address to advertise (e.g. /ip4/10.244.192.119/tcp/21014)
+    #[arg(long)]
+    advertise_addr: Option<Multiaddr>,
+
 }
 
 #[tokio::main]
@@ -116,6 +120,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
             abstswarm_builder =
                 abstswarm_builder.listen_address("/ip4/0.0.0.0/tcp/10001".parse()?);
 
+    }
+
+    // Optionally advertise a host-reachable address so other peers dial the correct host:port
+    if let Some(addr) = args.advertise_addr.clone() {
+        if !addr.to_string().starts_with("/ip4/127.0.0.1/") {
+            abstswarm_builder = abstswarm_builder.add_external_address(addr);
+        }
     }
 
     // Initialize Prometheus metrics registry and libp2p metrics recorder.
