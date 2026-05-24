@@ -42,7 +42,9 @@ services:
   # Authority lives on host .116 and listens on 10001
   authority_node:
     image: dactie-authority
-    build: ./dactie-authority
+    build:
+      context: .
+      dockerfile: ./dactie-authority/Dockerfile
     network_mode: "host"
     tty: true
     stdin_open: true
@@ -60,7 +62,9 @@ services:
   # Archive on 10.244.192.117 with DSN to local db
   archive_node1:
     image: dactie-archive
-    build: ./dactie-archive
+    build:
+      context: .
+      dockerfile: ./dactie-archive/Dockerfile
     network_mode: "host"
     tty: true
     stdin_open: true
@@ -86,7 +90,9 @@ services:
   # Archive on 10.244.192.118 with DSN to its local db2
   archive_node2:
     image: dactie-archive
-    build: ./dactie-archive
+    build:
+      context: .
+      dockerfile: ./dactie-archive/Dockerfile
     network_mode: "host"
     tty: true
     stdin_open: true
@@ -112,7 +118,9 @@ services:
   # Peer on 10.244.192.117
   peer_1:
     image: dactie-peer
-    build: ./dactie-peer
+    build:
+      context: .
+      dockerfile: ./dactie-peer/Dockerfile
     network_mode: "host"
     tty: true
     stdin_open: true
@@ -134,7 +142,9 @@ services:
   # Peer on 10.244.192.118
   peer_2:
     image: dactie-peer
-    build: ./dactie-peer
+    build:
+      context: .
+      dockerfile: ./dactie-peer/Dockerfile
     network_mode: "host"
     tty: true
     stdin_open: true
@@ -156,7 +166,9 @@ services:
   # Peers on 10.244.192.119
   peer_3:
     image: dactie-peer
-    build: ./dactie-peer
+    build:
+      context: .
+      dockerfile: ./dactie-peer/Dockerfile
     network_mode: "host"
     tty: true
     stdin_open: true
@@ -177,7 +189,9 @@ services:
 
   peer_4:
     image: dactie-peer
-    build: ./dactie-peer
+    build:
+      context: .
+      dockerfile: ./dactie-peer/Dockerfile
     network_mode: "host"
     tty: true
     stdin_open: true
