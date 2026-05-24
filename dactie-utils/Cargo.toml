@@ -26,3 +26,5 @@ version = "*"
 rev = "9c45bdd"
 features = ["persistence"]
 
+[features]
+test-utils = []
