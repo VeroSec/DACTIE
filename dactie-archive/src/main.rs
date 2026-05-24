@@ -36,7 +36,7 @@ struct Args {
     aa_id: PeerId,
 
     /// Address of a Authorization Node
-    #[arg(short='B', long, default_value_t = Multiaddr::from_str("/ip4/127.0.0.1/tcp/5005").unwrap())]
+    #[arg(short='B', long, default_value_t = Multiaddr::from_str("/ip4/127.0.0.1/tcp/20011").unwrap())]
     aa_addr: Multiaddr,
 
     /// Identity of Archive
