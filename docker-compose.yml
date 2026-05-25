@@ -137,6 +137,7 @@ services:
       -B "/ip4/10.244.192.116/tcp/10001"
       -p 21011
       --advertise-addr /ip4/10.244.192.117/tcp/21011'
+      -i peer1
     environment:
       - RUST_LOG=info
     env_file:
@@ -162,6 +163,7 @@ services:
       -B "/ip4/10.244.192.116/tcp/10001"
       -p 21012
       --advertise-addr /ip4/10.244.192.118/tcp/21012'
+      -i peer2
     environment:
       - RUST_LOG=info
     env_file:
@@ -187,6 +189,7 @@ services:
       -B "/ip4/10.244.192.116/tcp/10001"
       -p 21013
       --advertise-addr /ip4/10.244.192.119/tcp/21013'
+      -i peer3
     environment:
       - RUST_LOG=info
     env_file:
@@ -211,6 +214,7 @@ services:
       -B "/ip4/10.244.192.116/tcp/10001"
       -p 21014
       --advertise-addr /ip4/10.244.192.119/tcp/21014'
+      -i peer4
     environment:
       - RUST_LOG=info
       - BENCH_PUBLISH=true
