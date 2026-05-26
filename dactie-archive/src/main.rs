@@ -2,6 +2,7 @@ use std::error::Error;
 use std::path::PathBuf;
 use std::process::exit;
 use std::str::FromStr;
+use std::time::Duration;
 use clap::{arg, Parser};
 use libp2p::{Multiaddr, PeerId};
 use sqlx::postgres::PgPoolOptions;
@@ -81,10 +82,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
     };
 
     // Connect to the database
+    log::info!("Connecting to Postgres at {}", args.url);
     let pool = PgPoolOptions::new()
         .max_connections(5)
+        .acquire_timeout(Duration::from_secs(5))
         .connect(&args.url)
         .await?;
+    log::info!("Postgres connection established");
 
 
 

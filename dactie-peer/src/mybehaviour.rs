@@ -509,6 +509,8 @@ impl MyBehaviour {
                             let data= my_open_mls.decrypt_broadcast(data,nonce)?;
                             let message_body = MessageBody::Broadcast {topic, data};
                             Self::notify(notification_tx, Notification::Data{propagation_source:peer_id, message_body:message_body.clone(),signature:signature.to_bytes()})
+                        } else {
+                            log::info!("Dropping BroadcastEnc on topic '{}' from {}: not subscribed at MLS layer (run `sub {}` to receive)", topic, peer_id, topic);
                         }
                     }
                     MessageBody::Group { .. } => { } // Peers should only receive encrypted messages // Handle private message
