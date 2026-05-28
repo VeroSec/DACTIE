@@ -1,0 +1,3045 @@
+40
+Starting Experiment
+Starting Run 0 from 3, with peer_n=40, time=120secs, pub_interval=Fix(3)
+40
+Starting Experiment
+100
+Starting Experiment
+200
+Starting Experiment
+300
+Starting Experiment
+400
+Starting Experiment
+500
+Starting Experiment
+500
+Starting Experiment
+400
+Starting Experiment
+300
+Starting Experiment
+200
+Starting Experiment
+100
+Starting Experiment
+500
+Starting Experiment
+Starting Run 0 from 3, with peer_n=500, time=120secs, pub_interval=Fix(3)
+400
+Starting Experiment
+Starting Run 0 from 3, with peer_n=400, time=120secs, pub_interval=Fix(3)
+300
+Starting Experiment
+Starting Run 0 from 3, with peer_n=300, time=120secs, pub_interval=Fix(3)
+Stopping
+peers stopped
+Received 0 messages from 299 peers.
+Direct from Publisher: 0
+Relayed: 0
+Percentage of direct peers: NaN %
+Number of Propagating Peers: 0
+Starting Run 1 from 3, with peer_n=300, time=120secs, pub_interval=Fix(3)
+Stopping
+peers stopped
+Received 0 messages from 299 peers.
+Direct from Publisher: 0
+Relayed: 0
+Percentage of direct peers: NaN %
+Number of Propagating Peers: 0
+Starting Run 2 from 3, with peer_n=300, time=120secs, pub_interval=Fix(3)
+Stopping
+peers stopped
+Received 0 messages from 299 peers.
+Direct from Publisher: 0
+Relayed: 0
+Percentage of direct peers: NaN %
+Number of Propagating Peers: 0
+All Repetitions done!
+Average messages direct from Publisher: 0
+Average messages Relayed: 0
+Average Percentage of direct peers: NaN %
+Average Number of Propagating Peers: 0
+Starting Run 0 from 3, with peer_n=305, time=120secs, pub_interval=Fix(3)
+Stopping
+peers stopped
+Received 0 messages from 304 peers.
+Direct from Publisher: 0
+Relayed: 0
+Percentage of direct peers: NaN %
+Number of Propagating Peers: 0
+Starting Run 1 from 3, with peer_n=305, time=120secs, pub_interval=Fix(3)
+Stopping
+peers stopped
+Received 0 messages from 304 peers.
+Direct from Publisher: 0
+Relayed: 0
+Percentage of direct peers: NaN %
+Number of Propagating Peers: 0
+Starting Run 2 from 3, with peer_n=305, time=120secs, pub_interval=Fix(3)
+Stopping
+500
+Starting Experiment
+Starting Run 0 from 3, with peer_n=500, time=240secs, pub_interval=Fix(3)
+400
+Starting Experiment
+Starting Run 0 from 3, with peer_n=400, time=240secs, pub_interval=Fix(3)
+300
+Starting Experiment
+Starting Run 0 from 3, with peer_n=300, time=240secs, pub_interval=Fix(3)
+Stopping
+peers stopped
+Received 0 messages from 299 peers.
+Direct from Publisher: 0
+Relayed: 0
+Percentage of direct peers: NaN %
+Number of Propagating Peers: 0
+Starting Run 1 from 3, with peer_n=300, time=240secs, pub_interval=Fix(3)
+Stopping
+peers stopped
+Received 0 messages from 299 peers.
+Direct from Publisher: 0
+Relayed: 0
+Percentage of direct peers: NaN %
+Number of Propagating Peers: 0
+Starting Run 2 from 3, with peer_n=300, time=240secs, pub_interval=Fix(3)
+Stopping
+peers stopped
+Received 0 messages from 299 peers.
+Direct from Publisher: 0
+Relayed: 0
+Percentage of direct peers: NaN %
+Number of Propagating Peers: 0
+All Repetitions done!
+Average messages direct from Publisher: 0
+Average messages Relayed: 0
+Average Percentage of direct peers: NaN %
+Average Number of Propagating Peers: 0
+Starting Run 0 from 3, with peer_n=305, time=240secs, pub_interval=Fix(3)
+Stopping
+peers stopped
+Received 0 messages from 304 peers.
+Direct from Publisher: 0
+Relayed: 0
+Percentage of direct peers: NaN %
+Number of Propagating Peers: 0
+Starting Run 1 from 3, with peer_n=305, time=240secs, pub_interval=Fix(3)
+Stopping
+peers stopped
+Received 0 messages from 304 peers.
+Direct from Publisher: 0
+Relayed: 0
+Percentage of direct peers: NaN %
+Number of Propagating Peers: 0
+Starting Run 2 from 3, with peer_n=305, time=240secs, pub_interval=Fix(3)
+Stopping
+peers stopped
+Received 0 messages from 304 peers.
+Direct from Publisher: 0
+Relayed: 0
+Percentage of direct peers: NaN %
+Number of Propagating Peers: 0
+All Repetitions done!
+Average messages direct from Publisher: 0
+Average messages Relayed: 0
+Average Percentage of direct peers: NaN %
+Average Number of Propagating Peers: 0
+Starting Run 0 from 3, with peer_n=310, time=240secs, pub_interval=Fix(3)
+Stopping
+peers stopped
+Received 0 messages from 309 peers.
+Direct from Publisher: 0
+Relayed: 0
+Percentage of direct peers: NaN %
+Number of Propagating Peers: 0
+Starting Run 1 from 3, with peer_n=310, time=240secs, pub_interval=Fix(3)
+Stopping
+peers stopped
+Received 0 messages from 309 peers.
+Direct from Publisher: 0
+Relayed: 0
+Percentage of direct peers: NaN %
+Number of Propagating Peers: 0
+Starting Run 2 from 3, with peer_n=310, time=240secs, pub_interval=Fix(3)
+Stopping
+peers stopped
+Received 0 messages from 309 peers.
+Direct from Publisher: 0
+Relayed: 0
+Percentage of direct peers: NaN %
+Number of Propagating Peers: 0
+All Repetitions done!
+Average messages direct from Publisher: 0
+Average messages Relayed: 0
+Average Percentage of direct peers: NaN %
+Average Number of Propagating Peers: 0
+Starting Run 0 from 3, with peer_n=315, time=240secs, pub_interval=Fix(3)
+Stopping
+peers stopped
+Received 0 messages from 314 peers.
+Direct from Publisher: 0
+Relayed: 0
+Percentage of direct peers: NaN %
+Number of Propagating Peers: 0
+Starting Run 1 from 3, with peer_n=315, time=240secs, pub_interval=Fix(3)
+Stopping
+peers stopped
+Received 0 messages from 314 peers.
+Direct from Publisher: 0
+Relayed: 0
+Percentage of direct peers: NaN %
+Number of Propagating Peers: 0
+Starting Run 2 from 3, with peer_n=315, time=240secs, pub_interval=Fix(3)
+Stopping
+500
+Starting Experiment
+400
+Starting Experiment
+300
+Starting Experiment
+200
+Starting Experiment
+100
+Starting Experiment
+500
+Starting Experiment
+Starting Run 0 from 3, with peer_n=500, time=240secs, pub_interval=Fix(60)
+400
+Starting Experiment
+Starting Run 0 from 3, with peer_n=400, time=240secs, pub_interval=Fix(60)
+300
+Starting Experiment
+Starting Run 0 from 3, with peer_n=300, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 0 messages from 299 peers.
+Direct from Publisher: 0
+Relayed: 0
+Percentage of direct peers: NaN %
+Number of Propagating Peers: 0
+Starting Run 1 from 3, with peer_n=300, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 0 messages from 299 peers.
+Direct from Publisher: 0
+Relayed: 0
+Percentage of direct peers: NaN %
+Number of Propagating Peers: 0
+Starting Run 2 from 3, with peer_n=300, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 0 messages from 299 peers.
+Direct from Publisher: 0
+Relayed: 0
+Percentage of direct peers: NaN %
+Number of Propagating Peers: 0
+All Repetitions done!
+Average messages direct from Publisher: 0
+Average messages Relayed: 0
+Average Percentage of direct peers: NaN %
+Average Number of Propagating Peers: 0
+Starting Run 0 from 3, with peer_n=305, time=240secs, pub_interval=Fix(60)
+500
+Starting Experiment
+Starting Run 0 from 3, with peer_n=500, time=240secs, pub_interval=Fix(60)
+400
+Starting Experiment
+Starting Run 0 from 3, with peer_n=400, time=240secs, pub_interval=Fix(60)
+300
+Starting Experiment
+Starting Run 0 from 3, with peer_n=300, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 0 messages from 299 peers.
+Direct from Publisher: 0
+Relayed: 0
+Percentage of direct peers: NaN %
+Number of Propagating Peers: 0
+Starting Run 1 from 3, with peer_n=300, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 0 messages from 299 peers.
+Direct from Publisher: 0
+Relayed: 0
+Percentage of direct peers: NaN %
+Number of Propagating Peers: 0
+Starting Run 2 from 3, with peer_n=300, time=240secs, pub_interval=Fix(60)
+500
+Starting Experiment
+Starting Run 0 from 3, with peer_n=500, time=240secs, pub_interval=Fix(60)
+400
+Starting Experiment
+Starting Run 0 from 3, with peer_n=400, time=240secs, pub_interval=Fix(60)
+300
+Starting Experiment
+Starting Run 0 from 3, with peer_n=300, time=240secs, pub_interval=Fix(60)
+300
+Starting Experiment
+Starting Run 0 from 3, with peer_n=300, time=240secs, pub_interval=Fix(60)
+500
+Starting Experiment
+Starting Run 0 from 3, with peer_n=500, time=240secs, pub_interval=Fix(60)
+400
+Starting Experiment
+Starting Run 0 from 3, with peer_n=400, time=240secs, pub_interval=Fix(60)
+300
+Starting Experiment
+Starting Run 0 from 3, with peer_n=300, time=240secs, pub_interval=Fix(60)
+300
+Starting Experiment
+Starting Run 0 from 3, with peer_n=300, time=240secs, pub_interval=Fix(60)
+500
+Starting Experiment
+Starting Run 0 from 3, with peer_n=500, time=240secs, pub_interval=Fix(60)
+400
+Starting Experiment
+Starting Run 0 from 3, with peer_n=400, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 399 messages from 399 peers.
+Direct from Publisher: 8
+Relayed: 391
+Percentage of direct peers: 2.0050125 %
+Number of Propagating Peers: 152
+Starting Run 1 from 3, with peer_n=400, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 399 messages from 399 peers.
+Direct from Publisher: 5
+Relayed: 394
+Percentage of direct peers: 1.2531328 %
+Number of Propagating Peers: 161
+Starting Run 2 from 3, with peer_n=400, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 399 messages from 399 peers.
+Direct from Publisher: 5
+Relayed: 394
+Percentage of direct peers: 1.2531328 %
+Number of Propagating Peers: 171
+All Repetitions done!
+Average messages direct from Publisher: 6
+Average messages Relayed: 393
+Average Percentage of direct peers: 1.5037594 %
+Average Number of Propagating Peers: 161
+Starting Run 0 from 3, with peer_n=425, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 422 messages from 424 peers.
+Direct from Publisher: 5
+Relayed: 417
+Percentage of direct peers: 1.1848341 %
+Number of Propagating Peers: 162
+Starting Run 1 from 3, with peer_n=425, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 424 messages from 424 peers.
+Direct from Publisher: 9
+Relayed: 415
+Percentage of direct peers: 2.1226416 %
+Number of Propagating Peers: 174
+Starting Run 2 from 3, with peer_n=425, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 424 messages from 424 peers.
+Direct from Publisher: 1
+Relayed: 423
+Percentage of direct peers: 0.23584905 %
+Number of Propagating Peers: 174
+All Repetitions done!
+Average messages direct from Publisher: 5
+Average messages Relayed: 418.33334
+Average Percentage of direct peers: 1.1811024 %
+Average Number of Propagating Peers: 170
+Starting Run 0 from 3, with peer_n=450, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 448 messages from 449 peers.
+Direct from Publisher: 10
+Relayed: 438
+Percentage of direct peers: 2.232143 %
+Number of Propagating Peers: 195
+Starting Run 1 from 3, with peer_n=450, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 448 messages from 449 peers.
+Direct from Publisher: 8
+Relayed: 440
+Percentage of direct peers: 1.7857144 %
+Number of Propagating Peers: 170
+Starting Run 2 from 3, with peer_n=450, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 449 messages from 449 peers.
+Direct from Publisher: 8
+Relayed: 441
+Percentage of direct peers: 1.7817372 %
+Number of Propagating Peers: 203
+All Repetitions done!
+Average messages direct from Publisher: 8.666667
+Average messages Relayed: 439.66666
+Average Percentage of direct peers: 1.9330857 %
+Average Number of Propagating Peers: 189
+Starting Run 0 from 3, with peer_n=475, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 473 messages from 474 peers.
+Direct from Publisher: 2
+Relayed: 471
+Percentage of direct peers: 0.42283297 %
+Number of Propagating Peers: 197
+Starting Run 1 from 3, with peer_n=475, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 473 messages from 474 peers.
+Direct from Publisher: 2
+Relayed: 471
+Percentage of direct peers: 0.42283297 %
+Number of Propagating Peers: 196
+Starting Run 2 from 3, with peer_n=475, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 474 messages from 474 peers.
+Direct from Publisher: 8
+Relayed: 466
+Percentage of direct peers: 1.6877637 %
+Number of Propagating Peers: 176
+All Repetitions done!
+Average messages direct from Publisher: 4
+Average messages Relayed: 469.33334
+Average Percentage of direct peers: 0.84507036 %
+Average Number of Propagating Peers: 189
+Starting Run 0 from 3, with peer_n=500, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 496 messages from 499 peers.
+Direct from Publisher: 6
+Relayed: 490
+Percentage of direct peers: 1.2096773 %
+Number of Propagating Peers: 217
+Starting Run 1 from 3, with peer_n=500, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 499 messages from 499 peers.
+Direct from Publisher: 10
+Relayed: 489
+Percentage of direct peers: 2.004008 %
+Number of Propagating Peers: 210
+Starting Run 2 from 3, with peer_n=500, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 495 messages from 499 peers.
+Direct from Publisher: 10
+Relayed: 485
+Percentage of direct peers: 2.020202 %
+Number of Propagating Peers: 207
+All Repetitions done!
+Average messages direct from Publisher: 8.666667
+Average messages Relayed: 488
+Average Percentage of direct peers: 1.7449666 %
+Average Number of Propagating Peers: 211
+300
+Starting Experiment
+Starting Run 0 from 3, with peer_n=300, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 299 messages from 299 peers.
+Direct from Publisher: 10
+Relayed: 289
+Percentage of direct peers: 3.3444815 %
+Number of Propagating Peers: 120
+Starting Run 1 from 3, with peer_n=300, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 299 messages from 299 peers.
+Direct from Publisher: 9
+Relayed: 290
+Percentage of direct peers: 3.0100334 %
+Number of Propagating Peers: 112
+Starting Run 2 from 3, with peer_n=300, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 299 messages from 299 peers.
+Direct from Publisher: 9
+Relayed: 290
+Percentage of direct peers: 3.0100334 %
+Number of Propagating Peers: 92
+All Repetitions done!
+Average messages direct from Publisher: 9.333333
+Average messages Relayed: 289.66666
+Average Percentage of direct peers: 3.1215162 %
+Average Number of Propagating Peers: 108
+Starting Run 0 from 3, with peer_n=325, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 324 messages from 324 peers.
+Direct from Publisher: 12
+Relayed: 312
+Percentage of direct peers: 3.7037036 %
+Number of Propagating Peers: 116
+Starting Run 1 from 3, with peer_n=325, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 324 messages from 324 peers.
+Direct from Publisher: 6
+Relayed: 318
+Percentage of direct peers: 1.8518518 %
+Number of Propagating Peers: 131
+Starting Run 2 from 3, with peer_n=325, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 324 messages from 324 peers.
+Direct from Publisher: 10
+Relayed: 314
+Percentage of direct peers: 3.0864198 %
+Number of Propagating Peers: 121
+All Repetitions done!
+Average messages direct from Publisher: 9.333333
+Average messages Relayed: 314.66666
+Average Percentage of direct peers: 2.8806584 %
+Average Number of Propagating Peers: 122
+Starting Run 0 from 3, with peer_n=350, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 349 messages from 349 peers.
+Direct from Publisher: 10
+Relayed: 339
+Percentage of direct peers: 2.8653295 %
+Number of Propagating Peers: 141
+Starting Run 1 from 3, with peer_n=350, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 349 messages from 349 peers.
+Direct from Publisher: 8
+Relayed: 341
+Percentage of direct peers: 2.2922637 %
+Number of Propagating Peers: 128
+Starting Run 2 from 3, with peer_n=350, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 349 messages from 349 peers.
+Direct from Publisher: 11
+Relayed: 338
+Percentage of direct peers: 3.1518624 %
+Number of Propagating Peers: 125
+All Repetitions done!
+Average messages direct from Publisher: 9.666667
+Average messages Relayed: 339.33334
+Average Percentage of direct peers: 2.7698185 %
+Average Number of Propagating Peers: 131
+Starting Run 0 from 3, with peer_n=375, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 374 messages from 374 peers.
+Direct from Publisher: 7
+Relayed: 367
+Percentage of direct peers: 1.8716577 %
+Number of Propagating Peers: 140
+Starting Run 1 from 3, with peer_n=375, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 374 messages from 374 peers.
+Direct from Publisher: 5
+Relayed: 369
+Percentage of direct peers: 1.3368983 %
+Number of Propagating Peers: 150
+Starting Run 2 from 3, with peer_n=375, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 374 messages from 374 peers.
+Direct from Publisher: 15
+Relayed: 359
+Percentage of direct peers: 4.0106955 %
+Number of Propagating Peers: 142
+All Repetitions done!
+Average messages direct from Publisher: 9
+Average messages Relayed: 365
+Average Percentage of direct peers: 2.4064171 %
+Average Number of Propagating Peers: 144
+Starting Run 0 from 3, with peer_n=400, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 399 messages from 399 peers.
+Direct from Publisher: 10
+Relayed: 389
+Percentage of direct peers: 2.5062656 %
+Number of Propagating Peers: 159
+Starting Run 1 from 3, with peer_n=400, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 399 messages from 399 peers.
+Direct from Publisher: 8
+Relayed: 391
+Percentage of direct peers: 2.0050125 %
+Number of Propagating Peers: 179
+Starting Run 2 from 3, with peer_n=400, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 398 messages from 399 peers.
+Direct from Publisher: 2
+Relayed: 396
+Percentage of direct peers: 0.5025126 %
+Number of Propagating Peers: 164
+All Repetitions done!
+Average messages direct from Publisher: 6.6666665
+Average messages Relayed: 392
+Average Percentage of direct peers: 1.6722407 %
+Average Number of Propagating Peers: 167
+200
+Starting Experiment
+Starting Run 0 from 3, with peer_n=200, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 199 messages from 199 peers.
+Direct from Publisher: 10
+Relayed: 189
+Percentage of direct peers: 5.0251255 %
+Number of Propagating Peers: 79
+Starting Run 1 from 3, with peer_n=200, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 199 messages from 199 peers.
+Direct from Publisher: 10
+Relayed: 189
+Percentage of direct peers: 5.0251255 %
+Number of Propagating Peers: 68
+Starting Run 2 from 3, with peer_n=200, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 199 messages from 199 peers.
+Direct from Publisher: 12
+Relayed: 187
+Percentage of direct peers: 6.030151 %
+Number of Propagating Peers: 70
+All Repetitions done!
+Average messages direct from Publisher: 10.666667
+Average messages Relayed: 188.33333
+Average Percentage of direct peers: 5.360134 %
+Average Number of Propagating Peers: 72
+Starting Run 0 from 3, with peer_n=225, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 224 messages from 224 peers.
+Direct from Publisher: 5
+Relayed: 219
+Percentage of direct peers: 2.232143 %
+Number of Propagating Peers: 85
+Starting Run 1 from 3, with peer_n=225, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 224 messages from 224 peers.
+Direct from Publisher: 5
+Relayed: 219
+Percentage of direct peers: 2.232143 %
+Number of Propagating Peers: 89
+Starting Run 2 from 3, with peer_n=225, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 224 messages from 224 peers.
+Direct from Publisher: 9
+Relayed: 215
+Percentage of direct peers: 4.017857 %
+Number of Propagating Peers: 84
+All Repetitions done!
+Average messages direct from Publisher: 6.3333335
+Average messages Relayed: 217.66667
+Average Percentage of direct peers: 2.827381 %
+Average Number of Propagating Peers: 86
+Starting Run 0 from 3, with peer_n=250, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 249 messages from 249 peers.
+Direct from Publisher: 12
+Relayed: 237
+Percentage of direct peers: 4.819277 %
+Number of Propagating Peers: 102
+Starting Run 1 from 3, with peer_n=250, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 249 messages from 249 peers.
+Direct from Publisher: 8
+Relayed: 241
+Percentage of direct peers: 3.2128513 %
+Number of Propagating Peers: 98
+Starting Run 2 from 3, with peer_n=250, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 249 messages from 249 peers.
+Direct from Publisher: 9
+Relayed: 240
+Percentage of direct peers: 3.6144576 %
+Number of Propagating Peers: 92
+All Repetitions done!
+Average messages direct from Publisher: 9.666667
+Average messages Relayed: 239.33333
+Average Percentage of direct peers: 3.8821955 %
+Average Number of Propagating Peers: 97
+Starting Run 0 from 3, with peer_n=275, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 274 messages from 274 peers.
+Direct from Publisher: 9
+Relayed: 265
+Percentage of direct peers: 3.2846715 %
+Number of Propagating Peers: 97
+Starting Run 1 from 3, with peer_n=275, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 274 messages from 274 peers.
+Direct from Publisher: 9
+Relayed: 265
+Percentage of direct peers: 3.2846715 %
+Number of Propagating Peers: 114
+Starting Run 2 from 3, with peer_n=275, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 274 messages from 274 peers.
+Direct from Publisher: 7
+Relayed: 267
+Percentage of direct peers: 2.5547445 %
+Number of Propagating Peers: 88
+All Repetitions done!
+Average messages direct from Publisher: 8.333333
+Average messages Relayed: 265.66666
+Average Percentage of direct peers: 3.0413623 %
+Average Number of Propagating Peers: 99
+Starting Run 0 from 3, with peer_n=300, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 299 messages from 299 peers.
+Direct from Publisher: 13
+Relayed: 286
+Percentage of direct peers: 4.347826 %
+Number of Propagating Peers: 114
+Starting Run 1 from 3, with peer_n=300, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 299 messages from 299 peers.
+Direct from Publisher: 10
+Relayed: 289
+Percentage of direct peers: 3.3444815 %
+Number of Propagating Peers: 103
+Starting Run 2 from 3, with peer_n=300, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 299 messages from 299 peers.
+Direct from Publisher: 11
+Relayed: 288
+Percentage of direct peers: 3.6789298 %
+Number of Propagating Peers: 107
+All Repetitions done!
+Average messages direct from Publisher: 11.333333
+Average messages Relayed: 287.66666
+Average Percentage of direct peers: 3.7904124 %
+Average Number of Propagating Peers: 108
+100
+Starting Experiment
+Starting Run 0 from 3, with peer_n=100, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 99 messages from 99 peers.
+Direct from Publisher: 8
+Relayed: 91
+Percentage of direct peers: 8.080808 %
+Number of Propagating Peers: 32
+Starting Run 1 from 3, with peer_n=100, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 99 messages from 99 peers.
+Direct from Publisher: 4
+Relayed: 95
+Percentage of direct peers: 4.040404 %
+Number of Propagating Peers: 40
+Starting Run 2 from 3, with peer_n=100, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 99 messages from 99 peers.
+Direct from Publisher: 7
+Relayed: 92
+Percentage of direct peers: 7.070707 %
+Number of Propagating Peers: 39
+All Repetitions done!
+Average messages direct from Publisher: 6.3333335
+Average messages Relayed: 92.666664
+Average Percentage of direct peers: 6.397307 %
+Average Number of Propagating Peers: 37
+Starting Run 0 from 3, with peer_n=125, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 124 messages from 124 peers.
+Direct from Publisher: 10
+Relayed: 114
+Percentage of direct peers: 8.064516 %
+Number of Propagating Peers: 46
+Starting Run 1 from 3, with peer_n=125, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 124 messages from 124 peers.
+Direct from Publisher: 8
+Relayed: 116
+Percentage of direct peers: 6.4516125 %
+Number of Propagating Peers: 43
+Starting Run 2 from 3, with peer_n=125, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 124 messages from 124 peers.
+Direct from Publisher: 7
+Relayed: 117
+Percentage of direct peers: 5.645161 %
+Number of Propagating Peers: 47
+All Repetitions done!
+Average messages direct from Publisher: 8.333333
+Average messages Relayed: 115.666664
+Average Percentage of direct peers: 6.7204294 %
+Average Number of Propagating Peers: 45
+Starting Run 0 from 3, with peer_n=150, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 149 messages from 149 peers.
+Direct from Publisher: 8
+Relayed: 141
+Percentage of direct peers: 5.3691278 %
+Number of Propagating Peers: 58
+Starting Run 1 from 3, with peer_n=150, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 149 messages from 149 peers.
+Direct from Publisher: 11
+Relayed: 138
+Percentage of direct peers: 7.3825502 %
+Number of Propagating Peers: 49
+Starting Run 2 from 3, with peer_n=150, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 149 messages from 149 peers.
+Direct from Publisher: 9
+Relayed: 140
+Percentage of direct peers: 6.0402684 %
+Number of Propagating Peers: 55
+All Repetitions done!
+Average messages direct from Publisher: 9.333333
+Average messages Relayed: 139.66667
+Average Percentage of direct peers: 6.263982 %
+Average Number of Propagating Peers: 54
+Starting Run 0 from 3, with peer_n=175, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 174 messages from 174 peers.
+Direct from Publisher: 5
+Relayed: 169
+Percentage of direct peers: 2.8735633 %
+Number of Propagating Peers: 65
+Starting Run 1 from 3, with peer_n=175, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 174 messages from 174 peers.
+Direct from Publisher: 14
+Relayed: 160
+Percentage of direct peers: 8.045978 %
+Number of Propagating Peers: 60
+Starting Run 2 from 3, with peer_n=175, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 174 messages from 174 peers.
+Direct from Publisher: 9
+Relayed: 165
+Percentage of direct peers: 5.172414 %
+Number of Propagating Peers: 58
+All Repetitions done!
+Average messages direct from Publisher: 9.333333
+Average messages Relayed: 164.66667
+Average Percentage of direct peers: 5.3639846 %
+Average Number of Propagating Peers: 61
+Starting Run 0 from 3, with peer_n=200, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 199 messages from 199 peers.
+Direct from Publisher: 9
+Relayed: 190
+Percentage of direct peers: 4.522613 %
+Number of Propagating Peers: 73
+Starting Run 1 from 3, with peer_n=200, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 199 messages from 199 peers.
+Direct from Publisher: 9
+Relayed: 190
+Percentage of direct peers: 4.522613 %
+Number of Propagating Peers: 78
+Starting Run 2 from 3, with peer_n=200, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 199 messages from 199 peers.
+Direct from Publisher: 6
+Relayed: 193
+Percentage of direct peers: 3.0150754 %
+Number of Propagating Peers: 81
+All Repetitions done!
+Average messages direct from Publisher: 8
+Average messages Relayed: 191
+Average Percentage of direct peers: 4.0201006 %
+Average Number of Propagating Peers: 77
+500
+Starting Experiment
+Starting Run 0 from 3, with peer_n=500, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 0 messages from 499 peers.
+Direct from Publisher: 0
+Relayed: 0
+Percentage of direct peers: NaN %
+Number of Propagating Peers: 0
+Starting Run 1 from 3, with peer_n=500, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 495 messages from 499 peers.
+Direct from Publisher: 9
+Relayed: 486
+Percentage of direct peers: 1.8181818 %
+Number of Propagating Peers: 202
+Starting Run 2 from 3, with peer_n=500, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 0 messages from 499 peers.
+Direct from Publisher: 0
+Relayed: 0
+Percentage of direct peers: NaN %
+Number of Propagating Peers: 0
+All Repetitions done!
+Average messages direct from Publisher: 3
+Average messages Relayed: 162
+Average Percentage of direct peers: 1.8181818 %
+Average Number of Propagating Peers: 67
+Starting Run 0 from 3, with peer_n=525, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 518 messages from 524 peers.
+Direct from Publisher: 4
+Relayed: 514
+Percentage of direct peers: 0.77220076 %
+Number of Propagating Peers: 176
+Starting Run 1 from 3, with peer_n=525, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 511 messages from 524 peers.
+Direct from Publisher: 9
+Relayed: 502
+Percentage of direct peers: 1.7612524 %
+Number of Propagating Peers: 230
+Starting Run 2 from 3, with peer_n=525, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 511 messages from 524 peers.
+Direct from Publisher: 5
+Relayed: 506
+Percentage of direct peers: 0.97847354 %
+Number of Propagating Peers: 213
+All Repetitions done!
+Average messages direct from Publisher: 6
+Average messages Relayed: 507.33334
+Average Percentage of direct peers: 1.1688311 %
+Average Number of Propagating Peers: 206
+Starting Run 0 from 3, with peer_n=550, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 526 messages from 549 peers.
+Direct from Publisher: 1
+Relayed: 525
+Percentage of direct peers: 0.19011407 %
+Number of Propagating Peers: 223
+Starting Run 1 from 3, with peer_n=550, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 0 messages from 549 peers.
+Direct from Publisher: 0
+Relayed: 0
+Percentage of direct peers: NaN %
+Number of Propagating Peers: 0
+Starting Run 2 from 3, with peer_n=550, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 504 messages from 549 peers.
+Direct from Publisher: 1
+Relayed: 503
+Percentage of direct peers: 0.19841272 %
+Number of Propagating Peers: 183
+All Repetitions done!
+Average messages direct from Publisher: 0.6666667
+Average messages Relayed: 342.66666
+Average Percentage of direct peers: 0.19417477 %
+Average Number of Propagating Peers: 135
+Starting Run 0 from 3, with peer_n=575, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 542 messages from 574 peers.
+Direct from Publisher: 4
+Relayed: 538
+Percentage of direct peers: 0.73800737 %
+Number of Propagating Peers: 230
+Starting Run 1 from 3, with peer_n=575, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 512 messages from 574 peers.
+Direct from Publisher: 5
+Relayed: 507
+Percentage of direct peers: 0.9765625 %
+Number of Propagating Peers: 201
+Starting Run 2 from 3, with peer_n=575, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 509 messages from 574 peers.
+Direct from Publisher: 7
+Relayed: 502
+Percentage of direct peers: 1.3752456 %
+Number of Propagating Peers: 211
+All Repetitions done!
+Average messages direct from Publisher: 5.3333335
+Average messages Relayed: 515.6667
+Average Percentage of direct peers: 1.0236725 %
+Average Number of Propagating Peers: 214
+Starting Run 0 from 3, with peer_n=600, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 0 messages from 599 peers.
+Direct from Publisher: 0
+Relayed: 0
+Percentage of direct peers: NaN %
+Number of Propagating Peers: 0
+Starting Run 1 from 3, with peer_n=600, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 0 messages from 599 peers.
+Direct from Publisher: 0
+Relayed: 0
+Percentage of direct peers: NaN %
+Number of Propagating Peers: 0
+Starting Run 2 from 3, with peer_n=600, time=240secs, pub_interval=Fix(60)
+Stopping
+peers stopped
+Received 528 messages from 599 peers.
+Direct from Publisher: 6
+Relayed: 522
+Percentage of direct peers: 1.1363636 %
+Number of Propagating Peers: 217
+All Repetitions done!
+Average messages direct from Publisher: 2
+Average messages Relayed: 174
+Average Percentage of direct peers: 1.1363636 %
+Average Number of Propagating Peers: 72
+600
+Starting Experiment
+Starting Run 0 from 3, with peer_n=600, time=240secs, pub_interval=Fix(60)
+700
+Starting Experiment
+Starting Run 0 from 3, with peer_n=700, time=240secs, pub_interval=Fix(60)
+800
+Starting Experiment
+Starting Run 0 from 3, with peer_n=800, time=240secs, pub_interval=Fix(60)
+900
+Starting Experiment
+Starting Run 0 from 3, with peer_n=900, time=240secs, pub_interval=Fix(60)
+500
+Starting Experiment
+Starting Run 0 from 3, with peer_n=500, time=240secs, pub_interval=Fix(60)
+600
+Starting Experiment
+Starting Run 0 from 3, with peer_n=600, time=240secs, pub_interval=Fix(60)
+700
+Starting Experiment
+Starting Run 0 from 3, with peer_n=700, time=240secs, pub_interval=Fix(60)
+800
+Starting Experiment
+Starting Run 0 from 3, with peer_n=800, time=240secs, pub_interval=Fix(60)
+900
+Starting Experiment
+Starting Run 0 from 3, with peer_n=900, time=240secs, pub_interval=Fix(60)
+500
+Starting Experiment
+Starting Run 0 from 4, with peer_n=500, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 499 messages from 499 peers.
+Direct from Publisher: 10
+Relayed: 489
+Percentage of direct peers: 2.004008 %
+Number of Propagating Peers: 167
+Starting Run 1 from 4, with peer_n=500, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 499 messages from 499 peers.
+Direct from Publisher: 11
+Relayed: 488
+Percentage of direct peers: 2.204409 %
+Number of Propagating Peers: 169
+Starting Run 2 from 4, with peer_n=500, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 499 messages from 499 peers.
+Direct from Publisher: 10
+Relayed: 489
+Percentage of direct peers: 2.004008 %
+Number of Propagating Peers: 162
+Starting Run 3 from 4, with peer_n=500, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 499 messages from 499 peers.
+Direct from Publisher: 11
+Relayed: 488
+Percentage of direct peers: 2.204409 %
+Number of Propagating Peers: 173
+All Repetitions done!
+Average messages direct from Publisher: 10.5
+Average messages Relayed: 488.5
+Average Percentage of direct peers: 2.1042085 %
+Average Number of Propagating Peers: 167
+Starting Run 0 from 4, with peer_n=525, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 524 messages from 524 peers.
+Direct from Publisher: 12
+Relayed: 512
+Percentage of direct peers: 2.2900765 %
+Number of Propagating Peers: 164
+Starting Run 1 from 4, with peer_n=525, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 524 messages from 524 peers.
+Direct from Publisher: 10
+Relayed: 514
+Percentage of direct peers: 1.908397 %
+Number of Propagating Peers: 163
+Starting Run 2 from 4, with peer_n=525, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 524 messages from 524 peers.
+Direct from Publisher: 10
+Relayed: 514
+Percentage of direct peers: 1.908397 %
+Number of Propagating Peers: 170
+Starting Run 3 from 4, with peer_n=525, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 524 messages from 524 peers.
+Direct from Publisher: 11
+Relayed: 513
+Percentage of direct peers: 2.0992367 %
+Number of Propagating Peers: 167
+All Repetitions done!
+Average messages direct from Publisher: 10.75
+Average messages Relayed: 513.25
+Average Percentage of direct peers: 2.0515268 %
+Average Number of Propagating Peers: 166
+Starting Run 0 from 4, with peer_n=550, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 549 messages from 549 peers.
+Direct from Publisher: 11
+Relayed: 538
+Percentage of direct peers: 2.003643 %
+Number of Propagating Peers: 175
+Starting Run 1 from 4, with peer_n=550, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 549 messages from 549 peers.
+Direct from Publisher: 12
+Relayed: 537
+Percentage of direct peers: 2.1857922 %
+Number of Propagating Peers: 182
+Starting Run 2 from 4, with peer_n=550, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 549 messages from 549 peers.
+Direct from Publisher: 10
+Relayed: 539
+Percentage of direct peers: 1.8214935 %
+Number of Propagating Peers: 176
+Starting Run 3 from 4, with peer_n=550, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 549 messages from 549 peers.
+Direct from Publisher: 10
+Relayed: 539
+Percentage of direct peers: 1.8214935 %
+Number of Propagating Peers: 180
+All Repetitions done!
+Average messages direct from Publisher: 10.75
+Average messages Relayed: 538.25
+Average Percentage of direct peers: 1.9581057 %
+Average Number of Propagating Peers: 178
+Starting Run 0 from 4, with peer_n=575, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 574 messages from 574 peers.
+Direct from Publisher: 10
+Relayed: 564
+Percentage of direct peers: 1.7421603 %
+Number of Propagating Peers: 195
+Starting Run 1 from 4, with peer_n=575, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 574 messages from 574 peers.
+Direct from Publisher: 13
+Relayed: 561
+Percentage of direct peers: 2.2648084 %
+Number of Propagating Peers: 179
+Starting Run 2 from 4, with peer_n=575, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 574 messages from 574 peers.
+Direct from Publisher: 11
+Relayed: 563
+Percentage of direct peers: 1.9163764 %
+Number of Propagating Peers: 197
+Starting Run 3 from 4, with peer_n=575, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 574 messages from 574 peers.
+Direct from Publisher: 12
+Relayed: 562
+Percentage of direct peers: 2.0905924 %
+Number of Propagating Peers: 184
+All Repetitions done!
+Average messages direct from Publisher: 11.5
+Average messages Relayed: 562.5
+Average Percentage of direct peers: 2.0034845 %
+Average Number of Propagating Peers: 188
+Starting Run 0 from 4, with peer_n=600, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 599 messages from 599 peers.
+Direct from Publisher: 10
+Relayed: 589
+Percentage of direct peers: 1.6694492 %
+Number of Propagating Peers: 181
+Starting Run 1 from 4, with peer_n=600, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 599 messages from 599 peers.
+Direct from Publisher: 10
+Relayed: 589
+Percentage of direct peers: 1.6694492 %
+Number of Propagating Peers: 171
+Starting Run 2 from 4, with peer_n=600, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 599 messages from 599 peers.
+Direct from Publisher: 13
+Relayed: 586
+Percentage of direct peers: 2.1702838 %
+Number of Propagating Peers: 185
+Starting Run 3 from 4, with peer_n=600, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 599 messages from 599 peers.
+Direct from Publisher: 9
+Relayed: 590
+Percentage of direct peers: 1.5025042 %
+Number of Propagating Peers: 202
+All Repetitions done!
+Average messages direct from Publisher: 10.5
+Average messages Relayed: 588.5
+Average Percentage of direct peers: 1.7529216 %
+Average Number of Propagating Peers: 184
+600
+Starting Experiment
+Starting Run 0 from 4, with peer_n=600, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 599 messages from 599 peers.
+Direct from Publisher: 8
+Relayed: 591
+Percentage of direct peers: 1.3355592 %
+Number of Propagating Peers: 218
+Starting Run 1 from 4, with peer_n=600, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 599 messages from 599 peers.
+Direct from Publisher: 10
+Relayed: 589
+Percentage of direct peers: 1.6694492 %
+Number of Propagating Peers: 197
+Starting Run 2 from 4, with peer_n=600, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 599 messages from 599 peers.
+Direct from Publisher: 11
+Relayed: 588
+Percentage of direct peers: 1.836394 %
+Number of Propagating Peers: 178
+Starting Run 3 from 4, with peer_n=600, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 599 messages from 599 peers.
+Direct from Publisher: 10
+Relayed: 589
+Percentage of direct peers: 1.6694492 %
+Number of Propagating Peers: 191
+All Repetitions done!
+Average messages direct from Publisher: 9.75
+Average messages Relayed: 589.25
+Average Percentage of direct peers: 1.6277128 %
+Average Number of Propagating Peers: 196
+Starting Run 0 from 4, with peer_n=625, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 624 messages from 624 peers.
+Direct from Publisher: 10
+Relayed: 614
+Percentage of direct peers: 1.6025642 %
+Number of Propagating Peers: 204
+Starting Run 1 from 4, with peer_n=625, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 624 messages from 624 peers.
+Direct from Publisher: 10
+Relayed: 614
+Percentage of direct peers: 1.6025642 %
+Number of Propagating Peers: 208
+Starting Run 2 from 4, with peer_n=625, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 624 messages from 624 peers.
+Direct from Publisher: 10
+Relayed: 614
+Percentage of direct peers: 1.6025642 %
+Number of Propagating Peers: 184
+Starting Run 3 from 4, with peer_n=625, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 624 messages from 624 peers.
+Direct from Publisher: 11
+Relayed: 613
+Percentage of direct peers: 1.7628206 %
+Number of Propagating Peers: 211
+All Repetitions done!
+Average messages direct from Publisher: 10.25
+Average messages Relayed: 613.75
+Average Percentage of direct peers: 1.6426282 %
+Average Number of Propagating Peers: 201
+Starting Run 0 from 4, with peer_n=650, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 649 messages from 649 peers.
+Direct from Publisher: 10
+Relayed: 639
+Percentage of direct peers: 1.540832 %
+Number of Propagating Peers: 210
+Starting Run 1 from 4, with peer_n=650, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 649 messages from 649 peers.
+Direct from Publisher: 9
+Relayed: 640
+Percentage of direct peers: 1.3867488 %
+Number of Propagating Peers: 200
+Starting Run 2 from 4, with peer_n=650, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 649 messages from 649 peers.
+Direct from Publisher: 11
+Relayed: 638
+Percentage of direct peers: 1.6949153 %
+Number of Propagating Peers: 211
+Starting Run 3 from 4, with peer_n=650, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 649 messages from 649 peers.
+Direct from Publisher: 10
+Relayed: 639
+Percentage of direct peers: 1.540832 %
+Number of Propagating Peers: 213
+All Repetitions done!
+Average messages direct from Publisher: 10
+Average messages Relayed: 639
+Average Percentage of direct peers: 1.540832 %
+Average Number of Propagating Peers: 208
+Starting Run 0 from 4, with peer_n=675, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 674 messages from 674 peers.
+Direct from Publisher: 13
+Relayed: 661
+Percentage of direct peers: 1.9287834 %
+Number of Propagating Peers: 214
+Starting Run 1 from 4, with peer_n=675, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 674 messages from 674 peers.
+Direct from Publisher: 14
+Relayed: 660
+Percentage of direct peers: 2.0771513 %
+Number of Propagating Peers: 214
+Starting Run 2 from 4, with peer_n=675, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 674 messages from 674 peers.
+Direct from Publisher: 12
+Relayed: 662
+Percentage of direct peers: 1.7804155 %
+Number of Propagating Peers: 183
+Starting Run 3 from 4, with peer_n=675, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 674 messages from 674 peers.
+Direct from Publisher: 10
+Relayed: 664
+Percentage of direct peers: 1.4836795 %
+Number of Propagating Peers: 210
+All Repetitions done!
+Average messages direct from Publisher: 12.25
+Average messages Relayed: 661.75
+Average Percentage of direct peers: 1.8175075 %
+Average Number of Propagating Peers: 205
+Starting Run 0 from 4, with peer_n=700, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 699 messages from 699 peers.
+Direct from Publisher: 11
+Relayed: 688
+Percentage of direct peers: 1.5736766 %
+Number of Propagating Peers: 213
+Starting Run 1 from 4, with peer_n=700, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 699 messages from 699 peers.
+Direct from Publisher: 5
+Relayed: 694
+Percentage of direct peers: 0.7153076 %
+Number of Propagating Peers: 234
+Starting Run 2 from 4, with peer_n=700, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 699 messages from 699 peers.
+Direct from Publisher: 11
+Relayed: 688
+Percentage of direct peers: 1.5736766 %
+Number of Propagating Peers: 238
+Starting Run 3 from 4, with peer_n=700, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 699 messages from 699 peers.
+Direct from Publisher: 10
+Relayed: 689
+Percentage of direct peers: 1.4306152 %
+Number of Propagating Peers: 219
+All Repetitions done!
+Average messages direct from Publisher: 9.25
+Average messages Relayed: 689.75
+Average Percentage of direct peers: 1.3233191 %
+Average Number of Propagating Peers: 226
+700
+Starting Experiment
+Starting Run 0 from 4, with peer_n=700, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 699 messages from 699 peers.
+Direct from Publisher: 5
+Relayed: 694
+Percentage of direct peers: 0.7153076 %
+Number of Propagating Peers: 274
+Starting Run 1 from 4, with peer_n=700, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 699 messages from 699 peers.
+Direct from Publisher: 10
+Relayed: 689
+Percentage of direct peers: 1.4306152 %
+Number of Propagating Peers: 223
+Starting Run 2 from 4, with peer_n=700, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 699 messages from 699 peers.
+Direct from Publisher: 10
+Relayed: 689
+Percentage of direct peers: 1.4306152 %
+Number of Propagating Peers: 235
+Starting Run 3 from 4, with peer_n=700, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 699 messages from 699 peers.
+Direct from Publisher: 8
+Relayed: 691
+Percentage of direct peers: 1.1444921 %
+Number of Propagating Peers: 222
+All Repetitions done!
+Average messages direct from Publisher: 8.25
+Average messages Relayed: 690.75
+Average Percentage of direct peers: 1.1802576 %
+Average Number of Propagating Peers: 238
+Starting Run 0 from 4, with peer_n=725, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 724 messages from 724 peers.
+Direct from Publisher: 7
+Relayed: 717
+Percentage of direct peers: 0.9668509 %
+Number of Propagating Peers: 220
+Starting Run 1 from 4, with peer_n=725, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 724 messages from 724 peers.
+Direct from Publisher: 8
+Relayed: 716
+Percentage of direct peers: 1.1049724 %
+Number of Propagating Peers: 211
+Starting Run 2 from 4, with peer_n=725, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 724 messages from 724 peers.
+Direct from Publisher: 5
+Relayed: 719
+Percentage of direct peers: 0.6906077 %
+Number of Propagating Peers: 226
+Starting Run 3 from 4, with peer_n=725, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 724 messages from 724 peers.
+Direct from Publisher: 4
+Relayed: 720
+Percentage of direct peers: 0.5524862 %
+Number of Propagating Peers: 218
+All Repetitions done!
+Average messages direct from Publisher: 6
+Average messages Relayed: 718
+Average Percentage of direct peers: 0.8287293 %
+Average Number of Propagating Peers: 218
+Starting Run 0 from 4, with peer_n=750, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 749 messages from 749 peers.
+Direct from Publisher: 10
+Relayed: 739
+Percentage of direct peers: 1.3351135 %
+Number of Propagating Peers: 249
+Starting Run 1 from 4, with peer_n=750, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 749 messages from 749 peers.
+Direct from Publisher: 10
+Relayed: 739
+Percentage of direct peers: 1.3351135 %
+Number of Propagating Peers: 246
+Starting Run 2 from 4, with peer_n=750, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 749 messages from 749 peers.
+Direct from Publisher: 12
+Relayed: 737
+Percentage of direct peers: 1.6021361 %
+Number of Propagating Peers: 236
+Starting Run 3 from 4, with peer_n=750, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 749 messages from 749 peers.
+Direct from Publisher: 10
+Relayed: 739
+Percentage of direct peers: 1.3351135 %
+Number of Propagating Peers: 248
+All Repetitions done!
+Average messages direct from Publisher: 10.5
+Average messages Relayed: 738.5
+Average Percentage of direct peers: 1.401869 %
+Average Number of Propagating Peers: 244
+Starting Run 0 from 4, with peer_n=775, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 774 messages from 774 peers.
+Direct from Publisher: 5
+Relayed: 769
+Percentage of direct peers: 0.64599484 %
+Number of Propagating Peers: 247
+Starting Run 1 from 4, with peer_n=775, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 774 messages from 774 peers.
+Direct from Publisher: 7
+Relayed: 767
+Percentage of direct peers: 0.9043927 %
+Number of Propagating Peers: 249
+Starting Run 2 from 4, with peer_n=775, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 774 messages from 774 peers.
+Direct from Publisher: 10
+Relayed: 764
+Percentage of direct peers: 1.2919897 %
+Number of Propagating Peers: 246
+Starting Run 3 from 4, with peer_n=775, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 774 messages from 774 peers.
+Direct from Publisher: 6
+Relayed: 768
+Percentage of direct peers: 0.7751938 %
+Number of Propagating Peers: 259
+All Repetitions done!
+Average messages direct from Publisher: 7
+Average messages Relayed: 767
+Average Percentage of direct peers: 0.9043927 %
+Average Number of Propagating Peers: 250
+Starting Run 0 from 4, with peer_n=800, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 799 messages from 799 peers.
+Direct from Publisher: 5
+Relayed: 794
+Percentage of direct peers: 0.62578225 %
+Number of Propagating Peers: 300
+Starting Run 1 from 4, with peer_n=800, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 799 messages from 799 peers.
+Direct from Publisher: 9
+Relayed: 790
+Percentage of direct peers: 1.126408 %
+Number of Propagating Peers: 287
+Starting Run 2 from 4, with peer_n=800, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 799 messages from 799 peers.
+Direct from Publisher: 4
+Relayed: 795
+Percentage of direct peers: 0.5006258 %
+Number of Propagating Peers: 286
+Starting Run 3 from 4, with peer_n=800, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 799 messages from 799 peers.
+Direct from Publisher: 3
+Relayed: 796
+Percentage of direct peers: 0.37546933 %
+Number of Propagating Peers: 264
+All Repetitions done!
+Average messages direct from Publisher: 5.25
+Average messages Relayed: 793.75
+Average Percentage of direct peers: 0.65707135 %
+Average Number of Propagating Peers: 284
+800
+Starting Experiment
+Starting Run 0 from 4, with peer_n=800, time=240secs, pub_interval=Fix(70)
+900
+Starting Experiment
+Starting Run 0 from 4, with peer_n=900, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 0 messages from 899 peers.
+Direct from Publisher: 0
+Relayed: 0
+Percentage of direct peers: NaN %
+Number of Propagating Peers: 0
+Starting Run 1 from 4, with peer_n=900, time=240secs, pub_interval=Fix(70)
+500
+Starting Experiment
+Starting Run 0 from 4, with peer_n=500, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 499 messages from 499 peers.
+Direct from Publisher: 11
+Relayed: 488
+Percentage of direct peers: 2.204409 %
+Number of Propagating Peers: 162
+Starting Run 1 from 4, with peer_n=500, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 499 messages from 499 peers.
+Direct from Publisher: 11
+Relayed: 488
+Percentage of direct peers: 2.204409 %
+Number of Propagating Peers: 166
+Starting Run 2 from 4, with peer_n=500, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 499 messages from 499 peers.
+Direct from Publisher: 11
+Relayed: 488
+Percentage of direct peers: 2.204409 %
+Number of Propagating Peers: 162
+Starting Run 3 from 4, with peer_n=500, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 499 messages from 499 peers.
+Direct from Publisher: 13
+Relayed: 486
+Percentage of direct peers: 2.6052105 %
+Number of Propagating Peers: 179
+All Repetitions done!
+Average messages direct from Publisher: 11.5
+Average messages Relayed: 487.5
+Average Percentage of direct peers: 2.3046093 %
+Average Number of Propagating Peers: 167
+Starting Run 0 from 4, with peer_n=525, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 524 messages from 524 peers.
+Direct from Publisher: 10
+Relayed: 514
+Percentage of direct peers: 1.908397 %
+Number of Propagating Peers: 187
+Starting Run 1 from 4, with peer_n=525, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 524 messages from 524 peers.
+Direct from Publisher: 12
+Relayed: 512
+Percentage of direct peers: 2.2900765 %
+Number of Propagating Peers: 165
+Starting Run 2 from 4, with peer_n=525, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 524 messages from 524 peers.
+Direct from Publisher: 10
+Relayed: 514
+Percentage of direct peers: 1.908397 %
+Number of Propagating Peers: 166
+Starting Run 3 from 4, with peer_n=525, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 524 messages from 524 peers.
+Direct from Publisher: 10
+Relayed: 514
+Percentage of direct peers: 1.908397 %
+Number of Propagating Peers: 171
+All Repetitions done!
+Average messages direct from Publisher: 10.5
+Average messages Relayed: 513.5
+Average Percentage of direct peers: 2.0038166 %
+Average Number of Propagating Peers: 172
+Starting Run 0 from 4, with peer_n=550, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 549 messages from 549 peers.
+Direct from Publisher: 11
+Relayed: 538
+Percentage of direct peers: 2.003643 %
+Number of Propagating Peers: 170
+Starting Run 1 from 4, with peer_n=550, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 549 messages from 549 peers.
+Direct from Publisher: 16
+Relayed: 533
+Percentage of direct peers: 2.9143898 %
+Number of Propagating Peers: 172
+Starting Run 2 from 4, with peer_n=550, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 549 messages from 549 peers.
+Direct from Publisher: 11
+Relayed: 538
+Percentage of direct peers: 2.003643 %
+Number of Propagating Peers: 173
+Starting Run 3 from 4, with peer_n=550, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 549 messages from 549 peers.
+Direct from Publisher: 10
+Relayed: 539
+Percentage of direct peers: 1.8214935 %
+Number of Propagating Peers: 182
+All Repetitions done!
+Average messages direct from Publisher: 12
+Average messages Relayed: 537
+Average Percentage of direct peers: 2.1857922 %
+Average Number of Propagating Peers: 174
+Starting Run 0 from 4, with peer_n=575, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 574 messages from 574 peers.
+Direct from Publisher: 13
+Relayed: 561
+Percentage of direct peers: 2.2648084 %
+Number of Propagating Peers: 168
+Starting Run 1 from 4, with peer_n=575, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 574 messages from 574 peers.
+Direct from Publisher: 7
+Relayed: 567
+Percentage of direct peers: 1.2195121 %
+Number of Propagating Peers: 196
+Starting Run 2 from 4, with peer_n=575, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 574 messages from 574 peers.
+Direct from Publisher: 11
+Relayed: 563
+Percentage of direct peers: 1.9163764 %
+Number of Propagating Peers: 187
+Starting Run 3 from 4, with peer_n=575, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 574 messages from 574 peers.
+Direct from Publisher: 10
+Relayed: 564
+Percentage of direct peers: 1.7421603 %
+Number of Propagating Peers: 187
+All Repetitions done!
+Average messages direct from Publisher: 10.25
+Average messages Relayed: 563.75
+Average Percentage of direct peers: 1.7857144 %
+Average Number of Propagating Peers: 184
+Starting Run 0 from 4, with peer_n=600, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 599 messages from 599 peers.
+Direct from Publisher: 10
+Relayed: 589
+Percentage of direct peers: 1.6694492 %
+Number of Propagating Peers: 177
+Starting Run 1 from 4, with peer_n=600, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 599 messages from 599 peers.
+Direct from Publisher: 11
+Relayed: 588
+Percentage of direct peers: 1.836394 %
+Number of Propagating Peers: 190
+Starting Run 2 from 4, with peer_n=600, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 599 messages from 599 peers.
+Direct from Publisher: 10
+Relayed: 589
+Percentage of direct peers: 1.6694492 %
+Number of Propagating Peers: 196
+Starting Run 3 from 4, with peer_n=600, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 599 messages from 599 peers.
+Direct from Publisher: 10
+Relayed: 589
+Percentage of direct peers: 1.6694492 %
+Number of Propagating Peers: 206
+All Repetitions done!
+Average messages direct from Publisher: 10.25
+Average messages Relayed: 588.75
+Average Percentage of direct peers: 1.7111852 %
+Average Number of Propagating Peers: 192
+600
+Starting Experiment
+Starting Run 0 from 4, with peer_n=600, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 599 messages from 599 peers.
+Direct from Publisher: 6
+Relayed: 593
+Percentage of direct peers: 1.0016694 %
+Number of Propagating Peers: 219
+Starting Run 1 from 4, with peer_n=600, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 599 messages from 599 peers.
+Direct from Publisher: 10
+Relayed: 589
+Percentage of direct peers: 1.6694492 %
+Number of Propagating Peers: 202
+Starting Run 2 from 4, with peer_n=600, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 599 messages from 599 peers.
+Direct from Publisher: 12
+Relayed: 587
+Percentage of direct peers: 2.0033388 %
+Number of Propagating Peers: 195
+Starting Run 3 from 4, with peer_n=600, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 599 messages from 599 peers.
+Direct from Publisher: 10
+Relayed: 589
+Percentage of direct peers: 1.6694492 %
+Number of Propagating Peers: 192
+All Repetitions done!
+Average messages direct from Publisher: 9.5
+Average messages Relayed: 589.5
+Average Percentage of direct peers: 1.5859766 %
+Average Number of Propagating Peers: 202
+Starting Run 0 from 4, with peer_n=625, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 624 messages from 624 peers.
+Direct from Publisher: 13
+Relayed: 611
+Percentage of direct peers: 2.0833335 %
+Number of Propagating Peers: 227
+Starting Run 1 from 4, with peer_n=625, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 624 messages from 624 peers.
+Direct from Publisher: 14
+Relayed: 610
+Percentage of direct peers: 2.2435899 %
+Number of Propagating Peers: 210
+Starting Run 2 from 4, with peer_n=625, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 624 messages from 624 peers.
+Direct from Publisher: 10
+Relayed: 614
+Percentage of direct peers: 1.6025642 %
+Number of Propagating Peers: 203
+Starting Run 3 from 4, with peer_n=625, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 624 messages from 624 peers.
+Direct from Publisher: 10
+Relayed: 614
+Percentage of direct peers: 1.6025642 %
+Number of Propagating Peers: 204
+All Repetitions done!
+Average messages direct from Publisher: 11.75
+Average messages Relayed: 612.25
+Average Percentage of direct peers: 1.8830128 %
+Average Number of Propagating Peers: 211
+Starting Run 0 from 4, with peer_n=650, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 649 messages from 649 peers.
+Direct from Publisher: 12
+Relayed: 637
+Percentage of direct peers: 1.8489984 %
+Number of Propagating Peers: 194
+Starting Run 1 from 4, with peer_n=650, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 649 messages from 649 peers.
+Direct from Publisher: 9
+Relayed: 640
+Percentage of direct peers: 1.3867488 %
+Number of Propagating Peers: 211
+Starting Run 2 from 4, with peer_n=650, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 649 messages from 649 peers.
+Direct from Publisher: 10
+Relayed: 639
+Percentage of direct peers: 1.540832 %
+Number of Propagating Peers: 208
+Starting Run 3 from 4, with peer_n=650, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 649 messages from 649 peers.
+Direct from Publisher: 10
+Relayed: 639
+Percentage of direct peers: 1.540832 %
+Number of Propagating Peers: 217
+All Repetitions done!
+Average messages direct from Publisher: 10.25
+Average messages Relayed: 638.75
+Average Percentage of direct peers: 1.5793529 %
+Average Number of Propagating Peers: 207
+Starting Run 0 from 4, with peer_n=675, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 674 messages from 674 peers.
+Direct from Publisher: 10
+Relayed: 664
+Percentage of direct peers: 1.4836795 %
+Number of Propagating Peers: 203
+Starting Run 1 from 4, with peer_n=675, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 674 messages from 674 peers.
+Direct from Publisher: 10
+Relayed: 664
+Percentage of direct peers: 1.4836795 %
+Number of Propagating Peers: 222
+Starting Run 2 from 4, with peer_n=675, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 674 messages from 674 peers.
+Direct from Publisher: 12
+Relayed: 662
+Percentage of direct peers: 1.7804155 %
+Number of Propagating Peers: 226
+Starting Run 3 from 4, with peer_n=675, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 674 messages from 674 peers.
+Direct from Publisher: 12
+Relayed: 662
+Percentage of direct peers: 1.7804155 %
+Number of Propagating Peers: 218
+All Repetitions done!
+Average messages direct from Publisher: 11
+Average messages Relayed: 663
+Average Percentage of direct peers: 1.6320474 %
+Average Number of Propagating Peers: 217
+Starting Run 0 from 4, with peer_n=700, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 699 messages from 699 peers.
+Direct from Publisher: 14
+Relayed: 685
+Percentage of direct peers: 2.0028613 %
+Number of Propagating Peers: 246
+Starting Run 1 from 4, with peer_n=700, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 699 messages from 699 peers.
+Direct from Publisher: 11
+Relayed: 688
+Percentage of direct peers: 1.5736766 %
+Number of Propagating Peers: 225
+Starting Run 2 from 4, with peer_n=700, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 699 messages from 699 peers.
+Direct from Publisher: 10
+Relayed: 689
+Percentage of direct peers: 1.4306152 %
+Number of Propagating Peers: 221
+Starting Run 3 from 4, with peer_n=700, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 699 messages from 699 peers.
+Direct from Publisher: 11
+Relayed: 688
+Percentage of direct peers: 1.5736766 %
+Number of Propagating Peers: 221
+All Repetitions done!
+Average messages direct from Publisher: 11.5
+Average messages Relayed: 687.5
+Average Percentage of direct peers: 1.6452074 %
+Average Number of Propagating Peers: 228
+700
+Starting Experiment
+Starting Run 0 from 4, with peer_n=700, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 696 messages from 699 peers.
+Direct from Publisher: 4
+Relayed: 692
+Percentage of direct peers: 0.57471263 %
+Number of Propagating Peers: 290
+Starting Run 1 from 4, with peer_n=700, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 699 messages from 699 peers.
+Direct from Publisher: 8
+Relayed: 691
+Percentage of direct peers: 1.1444921 %
+Number of Propagating Peers: 231
+Starting Run 2 from 4, with peer_n=700, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 699 messages from 699 peers.
+Direct from Publisher: 9
+Relayed: 690
+Percentage of direct peers: 1.2875537 %
+Number of Propagating Peers: 222
+Starting Run 3 from 4, with peer_n=700, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 699 messages from 699 peers.
+Direct from Publisher: 10
+Relayed: 689
+Percentage of direct peers: 1.4306152 %
+Number of Propagating Peers: 227
+All Repetitions done!
+Average messages direct from Publisher: 7.75
+Average messages Relayed: 690.5
+Average Percentage of direct peers: 1.1099176 %
+Average Number of Propagating Peers: 242
+Starting Run 0 from 4, with peer_n=725, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 724 messages from 724 peers.
+Direct from Publisher: 4
+Relayed: 720
+Percentage of direct peers: 0.5524862 %
+Number of Propagating Peers: 232
+Starting Run 1 from 4, with peer_n=725, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 724 messages from 724 peers.
+Direct from Publisher: 6
+Relayed: 718
+Percentage of direct peers: 0.8287293 %
+Number of Propagating Peers: 230
+Starting Run 2 from 4, with peer_n=725, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 724 messages from 724 peers.
+Direct from Publisher: 9
+Relayed: 715
+Percentage of direct peers: 1.2430938 %
+Number of Propagating Peers: 219
+Starting Run 3 from 4, with peer_n=725, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 724 messages from 724 peers.
+Direct from Publisher: 11
+Relayed: 713
+Percentage of direct peers: 1.519337 %
+Number of Propagating Peers: 222
+All Repetitions done!
+Average messages direct from Publisher: 7.5
+Average messages Relayed: 716.5
+Average Percentage of direct peers: 1.0359116 %
+Average Number of Propagating Peers: 225
+Starting Run 0 from 4, with peer_n=750, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 749 messages from 749 peers.
+Direct from Publisher: 10
+Relayed: 739
+Percentage of direct peers: 1.3351135 %
+Number of Propagating Peers: 255
+Starting Run 1 from 4, with peer_n=750, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 749 messages from 749 peers.
+Direct from Publisher: 10
+Relayed: 739
+Percentage of direct peers: 1.3351135 %
+Number of Propagating Peers: 245
+Starting Run 2 from 4, with peer_n=750, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 749 messages from 749 peers.
+Direct from Publisher: 10
+Relayed: 739
+Percentage of direct peers: 1.3351135 %
+Number of Propagating Peers: 247
+Starting Run 3 from 4, with peer_n=750, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 749 messages from 749 peers.
+Direct from Publisher: 5
+Relayed: 744
+Percentage of direct peers: 0.66755676 %
+Number of Propagating Peers: 255
+All Repetitions done!
+Average messages direct from Publisher: 8.75
+Average messages Relayed: 740.25
+Average Percentage of direct peers: 1.1682243 %
+Average Number of Propagating Peers: 250
+Starting Run 0 from 4, with peer_n=775, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 774 messages from 774 peers.
+Direct from Publisher: 5
+Relayed: 769
+Percentage of direct peers: 0.64599484 %
+Number of Propagating Peers: 258
+Starting Run 1 from 4, with peer_n=775, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 774 messages from 774 peers.
+Direct from Publisher: 5
+Relayed: 769
+Percentage of direct peers: 0.64599484 %
+Number of Propagating Peers: 286
+Starting Run 2 from 4, with peer_n=775, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 774 messages from 774 peers.
+Direct from Publisher: 6
+Relayed: 768
+Percentage of direct peers: 0.7751938 %
+Number of Propagating Peers: 258
+Starting Run 3 from 4, with peer_n=775, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 774 messages from 774 peers.
+Direct from Publisher: 10
+Relayed: 764
+Percentage of direct peers: 1.2919897 %
+Number of Propagating Peers: 263
+All Repetitions done!
+Average messages direct from Publisher: 6.5
+Average messages Relayed: 767.5
+Average Percentage of direct peers: 0.8397933 %
+Average Number of Propagating Peers: 266
+Starting Run 0 from 4, with peer_n=800, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 799 messages from 799 peers.
+Direct from Publisher: 3
+Relayed: 796
+Percentage of direct peers: 0.37546933 %
+Number of Propagating Peers: 289
+Starting Run 1 from 4, with peer_n=800, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 799 messages from 799 peers.
+Direct from Publisher: 2
+Relayed: 797
+Percentage of direct peers: 0.2503129 %
+Number of Propagating Peers: 253
+Starting Run 2 from 4, with peer_n=800, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 799 messages from 799 peers.
+Direct from Publisher: 2
+Relayed: 797
+Percentage of direct peers: 0.2503129 %
+Number of Propagating Peers: 271
+Starting Run 3 from 4, with peer_n=800, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 799 messages from 799 peers.
+Direct from Publisher: 7
+Relayed: 792
+Percentage of direct peers: 0.8760952 %
+Number of Propagating Peers: 303
+All Repetitions done!
+Average messages direct from Publisher: 3.5
+Average messages Relayed: 795.5
+Average Percentage of direct peers: 0.4380476 %
+Average Number of Propagating Peers: 279
+800
+Starting Experiment
+Starting Run 0 from 4, with peer_n=800, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 0 messages from 799 peers.
+Direct from Publisher: 0
+Relayed: 0
+Percentage of direct peers: NaN %
+Number of Propagating Peers: 0
+Starting Run 1 from 4, with peer_n=800, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 799 messages from 799 peers.
+Direct from Publisher: 2
+Relayed: 797
+Percentage of direct peers: 0.2503129 %
+Number of Propagating Peers: 266
+Starting Run 2 from 4, with peer_n=800, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 799 messages from 799 peers.
+Direct from Publisher: 4
+Relayed: 795
+Percentage of direct peers: 0.5006258 %
+Number of Propagating Peers: 294
+Starting Run 3 from 4, with peer_n=800, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 799 messages from 799 peers.
+Direct from Publisher: 2
+Relayed: 797
+Percentage of direct peers: 0.2503129 %
+Number of Propagating Peers: 270
+All Repetitions done!
+Average messages direct from Publisher: 2
+Average messages Relayed: 597.25
+Average Percentage of direct peers: 0.33375052 %
+Average Number of Propagating Peers: 207
+Starting Run 0 from 4, with peer_n=825, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 824 messages from 824 peers.
+Direct from Publisher: 3
+Relayed: 821
+Percentage of direct peers: 0.3640777 %
+Number of Propagating Peers: 311
+Starting Run 1 from 4, with peer_n=825, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 824 messages from 824 peers.
+Direct from Publisher: 4
+Relayed: 820
+Percentage of direct peers: 0.4854369 %
+Number of Propagating Peers: 315
+Starting Run 2 from 4, with peer_n=825, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 824 messages from 824 peers.
+Direct from Publisher: 5
+Relayed: 819
+Percentage of direct peers: 0.6067961 %
+Number of Propagating Peers: 319
+Starting Run 3 from 4, with peer_n=825, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 824 messages from 824 peers.
+Direct from Publisher: 4
+Relayed: 820
+Percentage of direct peers: 0.4854369 %
+Number of Propagating Peers: 305
+All Repetitions done!
+Average messages direct from Publisher: 4
+Average messages Relayed: 820
+Average Percentage of direct peers: 0.4854369 %
+Average Number of Propagating Peers: 312
+Starting Run 0 from 4, with peer_n=850, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 849 messages from 849 peers.
+Direct from Publisher: 4
+Relayed: 845
+Percentage of direct peers: 0.47114253 %
+Number of Propagating Peers: 319
+Starting Run 1 from 4, with peer_n=850, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 0 messages from 849 peers.
+Direct from Publisher: 0
+Relayed: 0
+Percentage of direct peers: NaN %
+Number of Propagating Peers: 0
+Starting Run 2 from 4, with peer_n=850, time=240secs, pub_interval=Fix(70)
+900
+Starting Experiment
+Starting Run 0 from 4, with peer_n=900, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 0 messages from 899 peers.
+Direct from Publisher: 0
+Relayed: 0
+Percentage of direct peers: NaN %
+Number of Propagating Peers: 0
+Starting Run 1 from 4, with peer_n=900, time=240secs, pub_interval=Fix(70)
+0
+Starting Experiment
+100
+Starting Experiment
+Starting Run 0 from 4, with peer_n=100, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 99 messages from 99 peers.
+Direct from Publisher: 7
+Relayed: 92
+Percentage of direct peers: 7.070707 %
+Number of Propagating Peers: 35
+Starting Run 1 from 4, with peer_n=100, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 99 messages from 99 peers.
+Direct from Publisher: 7
+Relayed: 92
+Percentage of direct peers: 7.070707 %
+Number of Propagating Peers: 21
+Starting Run 2 from 4, with peer_n=100, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 99 messages from 99 peers.
+Direct from Publisher: 6
+Relayed: 93
+Percentage of direct peers: 6.060606 %
+Number of Propagating Peers: 31
+Starting Run 3 from 4, with peer_n=100, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 99 messages from 99 peers.
+Direct from Publisher: 8
+Relayed: 91
+Percentage of direct peers: 8.080808 %
+Number of Propagating Peers: 34
+All Repetitions done!
+Average messages direct from Publisher: 7
+Average messages Relayed: 92
+Average Percentage of direct peers: 7.070707 %
+Average Number of Propagating Peers: 30
+Starting Run 0 from 4, with peer_n=125, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 124 messages from 124 peers.
+Direct from Publisher: 9
+Relayed: 115
+Percentage of direct peers: 7.2580643 %
+Number of Propagating Peers: 37
+Starting Run 1 from 4, with peer_n=125, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 124 messages from 124 peers.
+Direct from Publisher: 7
+Relayed: 117
+Percentage of direct peers: 5.645161 %
+Number of Propagating Peers: 37
+Starting Run 2 from 4, with peer_n=125, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 124 messages from 124 peers.
+Direct from Publisher: 7
+Relayed: 117
+Percentage of direct peers: 5.645161 %
+Number of Propagating Peers: 43
+Starting Run 3 from 4, with peer_n=125, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 124 messages from 124 peers.
+Direct from Publisher: 8
+Relayed: 116
+Percentage of direct peers: 6.4516125 %
+Number of Propagating Peers: 50
+All Repetitions done!
+Average messages direct from Publisher: 7.75
+Average messages Relayed: 116.25
+Average Percentage of direct peers: 6.25 %
+Average Number of Propagating Peers: 41
+Starting Run 0 from 4, with peer_n=150, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 149 messages from 149 peers.
+Direct from Publisher: 8
+Relayed: 141
+Percentage of direct peers: 5.3691278 %
+Number of Propagating Peers: 46
+Starting Run 1 from 4, with peer_n=150, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 149 messages from 149 peers.
+Direct from Publisher: 9
+Relayed: 140
+Percentage of direct peers: 6.0402684 %
+Number of Propagating Peers: 43
+Starting Run 2 from 4, with peer_n=150, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 149 messages from 149 peers.
+Direct from Publisher: 10
+Relayed: 139
+Percentage of direct peers: 6.711409 %
+Number of Propagating Peers: 54
+Starting Run 3 from 4, with peer_n=150, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 149 messages from 149 peers.
+Direct from Publisher: 10
+Relayed: 139
+Percentage of direct peers: 6.711409 %
+Number of Propagating Peers: 45
+All Repetitions done!
+Average messages direct from Publisher: 9.25
+Average messages Relayed: 139.75
+Average Percentage of direct peers: 6.2080536 %
+Average Number of Propagating Peers: 47
+Starting Run 0 from 4, with peer_n=175, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 174 messages from 174 peers.
+Direct from Publisher: 10
+Relayed: 164
+Percentage of direct peers: 5.7471266 %
+Number of Propagating Peers: 49
+Starting Run 1 from 4, with peer_n=175, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 174 messages from 174 peers.
+Direct from Publisher: 10
+Relayed: 164
+Percentage of direct peers: 5.7471266 %
+Number of Propagating Peers: 53
+Starting Run 2 from 4, with peer_n=175, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 174 messages from 174 peers.
+Direct from Publisher: 11
+Relayed: 163
+Percentage of direct peers: 6.3218393 %
+Number of Propagating Peers: 52
+Starting Run 3 from 4, with peer_n=175, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 174 messages from 174 peers.
+Direct from Publisher: 8
+Relayed: 166
+Percentage of direct peers: 4.597701 %
+Number of Propagating Peers: 56
+All Repetitions done!
+Average messages direct from Publisher: 9.75
+Average messages Relayed: 164.25
+Average Percentage of direct peers: 5.6034484 %
+Average Number of Propagating Peers: 52
+Starting Run 0 from 4, with peer_n=200, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 199 messages from 199 peers.
+Direct from Publisher: 11
+Relayed: 188
+Percentage of direct peers: 5.5276384 %
+Number of Propagating Peers: 53
+Starting Run 1 from 4, with peer_n=200, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 199 messages from 199 peers.
+Direct from Publisher: 7
+Relayed: 192
+Percentage of direct peers: 3.517588 %
+Number of Propagating Peers: 65
+Starting Run 2 from 4, with peer_n=200, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 199 messages from 199 peers.
+Direct from Publisher: 10
+Relayed: 189
+Percentage of direct peers: 5.0251255 %
+Number of Propagating Peers: 63
+Starting Run 3 from 4, with peer_n=200, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 199 messages from 199 peers.
+Direct from Publisher: 11
+Relayed: 188
+Percentage of direct peers: 5.5276384 %
+Number of Propagating Peers: 64
+All Repetitions done!
+Average messages direct from Publisher: 9.75
+Average messages Relayed: 189.25
+Average Percentage of direct peers: 4.8994975 %
+Average Number of Propagating Peers: 61
+200
+Starting Experiment
+Starting Run 0 from 4, with peer_n=200, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 199 messages from 199 peers.
+Direct from Publisher: 8
+Relayed: 191
+Percentage of direct peers: 4.0201006 %
+Number of Propagating Peers: 70
+Starting Run 1 from 4, with peer_n=200, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 199 messages from 199 peers.
+Direct from Publisher: 9
+Relayed: 190
+Percentage of direct peers: 4.522613 %
+Number of Propagating Peers: 66
+Starting Run 2 from 4, with peer_n=200, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 199 messages from 199 peers.
+Direct from Publisher: 11
+Relayed: 188
+Percentage of direct peers: 5.5276384 %
+Number of Propagating Peers: 67
+Starting Run 3 from 4, with peer_n=200, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 199 messages from 199 peers.
+Direct from Publisher: 9
+Relayed: 190
+Percentage of direct peers: 4.522613 %
+Number of Propagating Peers: 64
+All Repetitions done!
+Average messages direct from Publisher: 9.25
+Average messages Relayed: 189.75
+Average Percentage of direct peers: 4.648241 %
+Average Number of Propagating Peers: 66
+Starting Run 0 from 4, with peer_n=225, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 224 messages from 224 peers.
+Direct from Publisher: 10
+Relayed: 214
+Percentage of direct peers: 4.464286 %
+Number of Propagating Peers: 71
+Starting Run 1 from 4, with peer_n=225, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 224 messages from 224 peers.
+Direct from Publisher: 10
+Relayed: 214
+Percentage of direct peers: 4.464286 %
+Number of Propagating Peers: 76
+Starting Run 2 from 4, with peer_n=225, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 224 messages from 224 peers.
+Direct from Publisher: 9
+Relayed: 215
+Percentage of direct peers: 4.017857 %
+Number of Propagating Peers: 82
+Starting Run 3 from 4, with peer_n=225, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 224 messages from 224 peers.
+Direct from Publisher: 10
+Relayed: 214
+Percentage of direct peers: 4.464286 %
+Number of Propagating Peers: 80
+All Repetitions done!
+Average messages direct from Publisher: 9.75
+Average messages Relayed: 214.25
+Average Percentage of direct peers: 4.352679 %
+Average Number of Propagating Peers: 77
+Starting Run 0 from 4, with peer_n=250, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 249 messages from 249 peers.
+Direct from Publisher: 8
+Relayed: 241
+Percentage of direct peers: 3.2128513 %
+Number of Propagating Peers: 85
+Starting Run 1 from 4, with peer_n=250, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 249 messages from 249 peers.
+Direct from Publisher: 10
+Relayed: 239
+Percentage of direct peers: 4.016064 %
+Number of Propagating Peers: 73
+Starting Run 2 from 4, with peer_n=250, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 249 messages from 249 peers.
+Direct from Publisher: 6
+Relayed: 243
+Percentage of direct peers: 2.4096384 %
+Number of Propagating Peers: 78
+Starting Run 3 from 4, with peer_n=250, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 249 messages from 249 peers.
+Direct from Publisher: 9
+Relayed: 240
+Percentage of direct peers: 3.6144576 %
+Number of Propagating Peers: 79
+All Repetitions done!
+Average messages direct from Publisher: 8.25
+Average messages Relayed: 240.75
+Average Percentage of direct peers: 3.3132532 %
+Average Number of Propagating Peers: 78
+Starting Run 0 from 4, with peer_n=275, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 274 messages from 274 peers.
+Direct from Publisher: 9
+Relayed: 265
+Percentage of direct peers: 3.2846715 %
+Number of Propagating Peers: 90
+Starting Run 1 from 4, with peer_n=275, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 274 messages from 274 peers.
+Direct from Publisher: 10
+Relayed: 264
+Percentage of direct peers: 3.6496348 %
+Number of Propagating Peers: 89
+Starting Run 2 from 4, with peer_n=275, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 274 messages from 274 peers.
+Direct from Publisher: 8
+Relayed: 266
+Percentage of direct peers: 2.919708 %
+Number of Propagating Peers: 88
+Starting Run 3 from 4, with peer_n=275, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 274 messages from 274 peers.
+Direct from Publisher: 9
+Relayed: 265
+Percentage of direct peers: 3.2846715 %
+Number of Propagating Peers: 91
+All Repetitions done!
+Average messages direct from Publisher: 9
+Average messages Relayed: 265
+Average Percentage of direct peers: 3.2846715 %
+Average Number of Propagating Peers: 89
+Starting Run 0 from 4, with peer_n=300, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 299 messages from 299 peers.
+Direct from Publisher: 4
+Relayed: 295
+Percentage of direct peers: 1.3377926 %
+Number of Propagating Peers: 98
+Starting Run 1 from 4, with peer_n=300, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 299 messages from 299 peers.
+Direct from Publisher: 10
+Relayed: 289
+Percentage of direct peers: 3.3444815 %
+Number of Propagating Peers: 104
+Starting Run 2 from 4, with peer_n=300, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 299 messages from 299 peers.
+Direct from Publisher: 10
+Relayed: 289
+Percentage of direct peers: 3.3444815 %
+Number of Propagating Peers: 102
+Starting Run 3 from 4, with peer_n=300, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 299 messages from 299 peers.
+Direct from Publisher: 12
+Relayed: 287
+Percentage of direct peers: 4.0133777 %
+Number of Propagating Peers: 102
+All Repetitions done!
+Average messages direct from Publisher: 9
+Average messages Relayed: 290
+Average Percentage of direct peers: 3.0100334 %
+Average Number of Propagating Peers: 101
+300
+Starting Experiment
+Starting Run 0 from 4, with peer_n=300, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 299 messages from 299 peers.
+Direct from Publisher: 10
+Relayed: 289
+Percentage of direct peers: 3.3444815 %
+Number of Propagating Peers: 95
+Starting Run 1 from 4, with peer_n=300, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 299 messages from 299 peers.
+Direct from Publisher: 10
+Relayed: 289
+Percentage of direct peers: 3.3444815 %
+Number of Propagating Peers: 105
+Starting Run 2 from 4, with peer_n=300, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 299 messages from 299 peers.
+Direct from Publisher: 13
+Relayed: 286
+Percentage of direct peers: 4.347826 %
+Number of Propagating Peers: 95
+Starting Run 3 from 4, with peer_n=300, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 299 messages from 299 peers.
+Direct from Publisher: 9
+Relayed: 290
+Percentage of direct peers: 3.0100334 %
+Number of Propagating Peers: 95
+All Repetitions done!
+Average messages direct from Publisher: 10.5
+Average messages Relayed: 288.5
+Average Percentage of direct peers: 3.5117056 %
+Average Number of Propagating Peers: 97
+Starting Run 0 from 4, with peer_n=325, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 324 messages from 324 peers.
+Direct from Publisher: 9
+Relayed: 315
+Percentage of direct peers: 2.777778 %
+Number of Propagating Peers: 105
+Starting Run 1 from 4, with peer_n=325, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 324 messages from 324 peers.
+Direct from Publisher: 10
+Relayed: 314
+Percentage of direct peers: 3.0864198 %
+Number of Propagating Peers: 105
+Starting Run 2 from 4, with peer_n=325, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 324 messages from 324 peers.
+Direct from Publisher: 8
+Relayed: 316
+Percentage of direct peers: 2.4691358 %
+Number of Propagating Peers: 111
+Starting Run 3 from 4, with peer_n=325, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 324 messages from 324 peers.
+Direct from Publisher: 8
+Relayed: 316
+Percentage of direct peers: 2.4691358 %
+Number of Propagating Peers: 115
+All Repetitions done!
+Average messages direct from Publisher: 8.75
+Average messages Relayed: 315.25
+Average Percentage of direct peers: 2.7006173 %
+Average Number of Propagating Peers: 109
+Starting Run 0 from 4, with peer_n=350, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 349 messages from 349 peers.
+Direct from Publisher: 8
+Relayed: 341
+Percentage of direct peers: 2.2922637 %
+Number of Propagating Peers: 116
+Starting Run 1 from 4, with peer_n=350, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 349 messages from 349 peers.
+Direct from Publisher: 12
+Relayed: 337
+Percentage of direct peers: 3.4383953 %
+Number of Propagating Peers: 108
+Starting Run 2 from 4, with peer_n=350, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 349 messages from 349 peers.
+Direct from Publisher: 11
+Relayed: 338
+Percentage of direct peers: 3.1518624 %
+Number of Propagating Peers: 108
+Starting Run 3 from 4, with peer_n=350, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 349 messages from 349 peers.
+Direct from Publisher: 4
+Relayed: 345
+Percentage of direct peers: 1.1461319 %
+Number of Propagating Peers: 122
+All Repetitions done!
+Average messages direct from Publisher: 8.75
+Average messages Relayed: 340.25
+Average Percentage of direct peers: 2.5071633 %
+Average Number of Propagating Peers: 113
+Starting Run 0 from 4, with peer_n=375, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 374 messages from 374 peers.
+Direct from Publisher: 11
+Relayed: 363
+Percentage of direct peers: 2.9411764 %
+Number of Propagating Peers: 114
+Starting Run 1 from 4, with peer_n=375, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 374 messages from 374 peers.
+Direct from Publisher: 10
+Relayed: 364
+Percentage of direct peers: 2.6737967 %
+Number of Propagating Peers: 127
+Starting Run 2 from 4, with peer_n=375, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 374 messages from 374 peers.
+Direct from Publisher: 13
+Relayed: 361
+Percentage of direct peers: 3.4759357 %
+Number of Propagating Peers: 117
+Starting Run 3 from 4, with peer_n=375, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 374 messages from 374 peers.
+Direct from Publisher: 10
+Relayed: 364
+Percentage of direct peers: 2.6737967 %
+Number of Propagating Peers: 140
+All Repetitions done!
+Average messages direct from Publisher: 11
+Average messages Relayed: 363
+Average Percentage of direct peers: 2.9411764 %
+Average Number of Propagating Peers: 124
+Starting Run 0 from 4, with peer_n=400, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 399 messages from 399 peers.
+Direct from Publisher: 7
+Relayed: 392
+Percentage of direct peers: 1.754386 %
+Number of Propagating Peers: 128
+Starting Run 1 from 4, with peer_n=400, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 399 messages from 399 peers.
+Direct from Publisher: 10
+Relayed: 389
+Percentage of direct peers: 2.5062656 %
+Number of Propagating Peers: 132
+Starting Run 2 from 4, with peer_n=400, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 399 messages from 399 peers.
+Direct from Publisher: 10
+Relayed: 389
+Percentage of direct peers: 2.5062656 %
+Number of Propagating Peers: 139
+Starting Run 3 from 4, with peer_n=400, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 399 messages from 399 peers.
+Direct from Publisher: 12
+Relayed: 387
+Percentage of direct peers: 3.0075188 %
+Number of Propagating Peers: 138
+All Repetitions done!
+Average messages direct from Publisher: 9.75
+Average messages Relayed: 389.25
+Average Percentage of direct peers: 2.443609 %
+Average Number of Propagating Peers: 134
+400
+Starting Experiment
+Starting Run 0 from 4, with peer_n=400, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 399 messages from 399 peers.
+Direct from Publisher: 10
+Relayed: 389
+Percentage of direct peers: 2.5062656 %
+Number of Propagating Peers: 132
+Starting Run 1 from 4, with peer_n=400, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 399 messages from 399 peers.
+Direct from Publisher: 9
+Relayed: 390
+Percentage of direct peers: 2.255639 %
+Number of Propagating Peers: 125
+Starting Run 2 from 4, with peer_n=400, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 399 messages from 399 peers.
+Direct from Publisher: 10
+Relayed: 389
+Percentage of direct peers: 2.5062656 %
+Number of Propagating Peers: 132
+Starting Run 3 from 4, with peer_n=400, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 399 messages from 399 peers.
+Direct from Publisher: 1
+Relayed: 398
+Percentage of direct peers: 0.25062656 %
+Number of Propagating Peers: 140
+All Repetitions done!
+Average messages direct from Publisher: 7.5
+Average messages Relayed: 391.5
+Average Percentage of direct peers: 1.8796991 %
+Average Number of Propagating Peers: 132
+Starting Run 0 from 4, with peer_n=425, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 424 messages from 424 peers.
+Direct from Publisher: 10
+Relayed: 414
+Percentage of direct peers: 2.3584907 %
+Number of Propagating Peers: 153
+Starting Run 1 from 4, with peer_n=425, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 424 messages from 424 peers.
+Direct from Publisher: 1
+Relayed: 423
+Percentage of direct peers: 0.23584905 %
+Number of Propagating Peers: 148
+Starting Run 2 from 4, with peer_n=425, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 424 messages from 424 peers.
+Direct from Publisher: 7
+Relayed: 417
+Percentage of direct peers: 1.6509434 %
+Number of Propagating Peers: 138
+Starting Run 3 from 4, with peer_n=425, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 424 messages from 424 peers.
+Direct from Publisher: 2
+Relayed: 422
+Percentage of direct peers: 0.4716981 %
+Number of Propagating Peers: 137
+All Repetitions done!
+Average messages direct from Publisher: 5
+Average messages Relayed: 419
+Average Percentage of direct peers: 1.1792454 %
+Average Number of Propagating Peers: 144
+Starting Run 0 from 4, with peer_n=450, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 449 messages from 449 peers.
+Direct from Publisher: 8
+Relayed: 441
+Percentage of direct peers: 1.7817372 %
+Number of Propagating Peers: 129
+Starting Run 1 from 4, with peer_n=450, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 449 messages from 449 peers.
+Direct from Publisher: 11
+Relayed: 438
+Percentage of direct peers: 2.4498885 %
+Number of Propagating Peers: 146
+Starting Run 2 from 4, with peer_n=450, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 449 messages from 449 peers.
+Direct from Publisher: 10
+Relayed: 439
+Percentage of direct peers: 2.2271714 %
+Number of Propagating Peers: 149
+Starting Run 3 from 4, with peer_n=450, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 449 messages from 449 peers.
+Direct from Publisher: 8
+Relayed: 441
+Percentage of direct peers: 1.7817372 %
+Number of Propagating Peers: 146
+All Repetitions done!
+Average messages direct from Publisher: 9.25
+Average messages Relayed: 439.75
+Average Percentage of direct peers: 2.0601337 %
+Average Number of Propagating Peers: 142
+Starting Run 0 from 4, with peer_n=475, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 474 messages from 474 peers.
+Direct from Publisher: 10
+Relayed: 464
+Percentage of direct peers: 2.1097047 %
+Number of Propagating Peers: 143
+Starting Run 1 from 4, with peer_n=475, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 474 messages from 474 peers.
+Direct from Publisher: 11
+Relayed: 463
+Percentage of direct peers: 2.3206751 %
+Number of Propagating Peers: 154
+Starting Run 2 from 4, with peer_n=475, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 474 messages from 474 peers.
+Direct from Publisher: 10
+Relayed: 464
+Percentage of direct peers: 2.1097047 %
+Number of Propagating Peers: 157
+Starting Run 3 from 4, with peer_n=475, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 474 messages from 474 peers.
+Direct from Publisher: 10
+Relayed: 464
+Percentage of direct peers: 2.1097047 %
+Number of Propagating Peers: 162
+All Repetitions done!
+Average messages direct from Publisher: 10.25
+Average messages Relayed: 463.75
+Average Percentage of direct peers: 2.1624472 %
+Average Number of Propagating Peers: 154
+Starting Run 0 from 4, with peer_n=500, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 499 messages from 499 peers.
+Direct from Publisher: 6
+Relayed: 493
+Percentage of direct peers: 1.2024047 %
+Number of Propagating Peers: 170
+Starting Run 1 from 4, with peer_n=500, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 499 messages from 499 peers.
+Direct from Publisher: 7
+Relayed: 492
+Percentage of direct peers: 1.4028057 %
+Number of Propagating Peers: 178
+Starting Run 2 from 4, with peer_n=500, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 499 messages from 499 peers.
+Direct from Publisher: 10
+Relayed: 489
+Percentage of direct peers: 2.004008 %
+Number of Propagating Peers: 177
+Starting Run 3 from 4, with peer_n=500, time=240secs, pub_interval=Fix(70)
+Stopping
+peers stopped
+Received 499 messages from 499 peers.
+Direct from Publisher: 11
+Relayed: 488
+Percentage of direct peers: 2.204409 %
+Number of Propagating Peers: 171
+All Repetitions done!
+Average messages direct from Publisher: 8.5
+Average messages Relayed: 490.5
+Average Percentage of direct peers: 1.7034068 %
+Average Number of Propagating Peers: 174

@@ -1,9 +1,8 @@
-use async_trait::async_trait;
-use libp2p::swarm::{ NetworkBehaviour, SwarmEvent};
-use tokio::sync::mpsc;
 use crate::abstswarm::Notification;
+use async_trait::async_trait;
 use dactie_utils::mls_wrapper::MyOpenMls;
-
+use libp2p::swarm::{NetworkBehaviour, SwarmEvent};
+use tokio::sync::mpsc;
 
 #[async_trait]
 pub(crate) trait EventHandler

@@ -1,23 +1,23 @@
+pub(crate) mod abstswarm_builder;
 pub(crate) mod event_handler;
 pub(crate) mod instruction_handler;
-pub(crate) mod abstswarm_builder;
 
+use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 use std::sync::Arc;
-use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::mpsc;
 
-use libp2p::futures::StreamExt;
-use libp2p::PeerId;
-use libp2p::Swarm;
-use libp2p::swarm::NetworkBehaviour;
+use crate::storage::{MyStorageError, Storage};
+use dactie_utils::mls_wrapper::{MyOpenMLSError, MyOpenMls};
+use dactie_utils::shared_structs::Instruction;
 use event_handler::EventHandler;
 use instruction_handler::InstructionHandler;
+use libp2p::futures::StreamExt;
+use libp2p::swarm::NetworkBehaviour;
+use libp2p::PeerId;
+use libp2p::Swarm;
 use openmls::group::GroupId;
-use dactie_utils::shared_structs::Instruction;
-use dactie_utils::mls_wrapper::{MyOpenMls, MyOpenMLSError};
-use crate::storage::{Storage, MyStorageError};
 
 ///
 /// The `AbstSwarm` is a convenience wrapper around the `Swarm` for a `NetworkBehaviour`.
@@ -46,7 +46,7 @@ where
     group_commit_rx: mpsc::UnboundedReceiver<GroupId>,
     swarm: Swarm<TBehaviour>,
     my_open_mls: Arc<MyOpenMls>,
-    storage: Storage
+    storage: Storage,
 }
 
 impl<TBehaviour> AbstSwarm<TBehaviour>
@@ -59,9 +59,16 @@ where
         group_commit_rx: mpsc::UnboundedReceiver<GroupId>,
         swarm: Swarm<TBehaviour>,
         my_open_mls: MyOpenMls,
-        storage: Storage
+        storage: Storage,
     ) -> Self {
-        AbstSwarm { instruction_rx, notification_tx, swarm, my_open_mls: Arc::new(my_open_mls), storage, group_commit_rx}
+        AbstSwarm {
+            instruction_rx,
+            notification_tx,
+            swarm,
+            my_open_mls: Arc::new(my_open_mls),
+            storage,
+            group_commit_rx,
+        }
     }
 
     pub(crate) async fn run(mut self) {
@@ -90,8 +97,6 @@ where
     }
 }
 
-
-
 /// A notification from the swarm to one of its consumers.
 /// Either arbitrary data, the list of known peers or an error.
 #[derive(Debug)]
@@ -108,16 +113,22 @@ pub(crate) struct Message<T: Debug + Clone> {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) enum Address {
     Broadcast(String),
-    Group(usize)
+    Group(usize),
 }
 
 #[derive(Debug, Error)]
+#[allow(clippy::enum_variant_names)]
 pub(crate) enum AbstSwarmError {
     #[error("Failed to send broadcast: `{reason:?}`")]
     SendError { reason: String },
     #[error("MLS Error: {0}")]
     MLSError(#[from] MyOpenMLSError),
     #[error("MLS Error: {0}")]
-    StorageError(#[from] MyStorageError),
+    StorageError(#[from] Box<MyStorageError>),
+}
 
+impl From<MyStorageError> for AbstSwarmError {
+    fn from(err: MyStorageError) -> Self {
+        AbstSwarmError::StorageError(Box::new(err))
+    }
 }

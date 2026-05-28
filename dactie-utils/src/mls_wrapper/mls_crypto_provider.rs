@@ -1,8 +1,8 @@
-use std::fs::File;
-use std::path::PathBuf;
 pub(crate) use openmls_memory_storage::{MemoryStorage, MemoryStorageError};
 use openmls_rust_crypto::RustCrypto;
 use openmls_traits::OpenMlsProvider;
+use std::fs::File;
+use std::path::PathBuf;
 
 #[derive(Default, Debug)]
 #[cfg_attr(feature = "test-utils", derive(Clone))]
@@ -31,17 +31,17 @@ impl OpenMlsProvider for OpenMlsRustCrypto {
 
 impl OpenMlsRustCrypto {
     pub fn save_keystore(&self, path: PathBuf) -> Result<(), String> {
-        let file = match  File::create(path){
+        let file = match File::create(path) {
             Ok(val) => val,
-            Err(e) => return Err(e.to_string())
+            Err(e) => return Err(e.to_string()),
         };
         self.key_store.save_to_file(&file)
     }
 
     pub fn load_keystore(&mut self, path: PathBuf) -> Result<(), String> {
-        let file = match  File::open(path){
+        let file = match File::open(path) {
             Ok(val) => val,
-            Err(e) => return Err(e.to_string())
+            Err(e) => return Err(e.to_string()),
         };
         self.key_store.load_from_file(&file)
     }

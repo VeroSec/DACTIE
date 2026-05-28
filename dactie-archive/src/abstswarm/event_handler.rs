@@ -1,6 +1,6 @@
 use async_trait::async_trait;
-use libp2p::swarm::{ NetworkBehaviour, SwarmEvent};
 use dactie_utils::mls_wrapper::MyOpenMls;
+use libp2p::swarm::{NetworkBehaviour, SwarmEvent};
 
 #[async_trait]
 pub(crate) trait EventHandler
@@ -11,6 +11,6 @@ where
         &mut self,
         event: SwarmEvent<Self::ToSwarm>,
         pool: &sqlx::PgPool,
-        my_open_mls: &MyOpenMls
+        my_open_mls: &MyOpenMls,
     );
 }

@@ -1,16 +1,16 @@
 # DACTIE: Decentral Anoymous CTI Exchange
-This repository contains the results of my master thesis on the development of a p2p architecture for CTI Exchange.
+This repository contains the artifacts for the implementation and evaluation of DACTIE.
 This ReadMe gives you an overview of the Repos Content and a short usage example. More detailed explanations can be found in the subdirectories.
-## Folder Structure
 
-- Thesis: Master Thesis and Presentation
+## Folder Structure
 - dactie-authority: Implementation of the Authority Peer Type
 - dactie-peer: Implementation of the standard Sharing Peer Type
 - dactie-archive: Implementation of the Archive Peer Type
 - dactie-utils: Helper functions and wrappers, that are used in all peers
-- dactie-experiment-anonymity: The setup of the experiment used to show that gossipsub provides source anonymity
 - ps16: Implementation of the Pointcheval-Sanders Group Signature
 - thressig: Implementation of Short Threshold Dynamic Group Signatures by Carmenisch et al (Modified version for single issuer)
+- dactie-experiment-anonymity: The setup of the experiment used to show that gossipsub provides source anonymity
+- dactie-experiment-eclipse: The setup of the experiment used to show that eclipse attacks are not possible
 
 ## How to use:
 Here we explain of how to use our concept based on a simple example. We will have one authority, two archives and two peers.
@@ -20,7 +20,7 @@ This is an explanation of how to build the concept from source. For the Docker V
 1. Install rust(not via Packagemanager)
 2. Clone the repos and navigate to the stored folder
 3. Build the project by running `cargo build`
-4. Create a key material folder for each of the 5 peers
+4. Create an empty key material folder for each of the 5 peers (e.g. ./key_material/key_material_0..4)
 5. Open four terminals and navigate to the dactie folder
 6. Start two databases. Either use an own PostgresDB or start the docker container with `docker compose start db db2`
 
@@ -30,6 +30,8 @@ In each terminal start:
 3. Start archive2 with `RUST_LOG=info cargo run --package dactie-archive --bin dactie-archive -- -K <folder archive_key_material> -u "postgres://archive:archivepw@localhost:5433/archivedb" -i archive2 -a <peer_id_aa> -B /ip4/127.0.0.1/tcp/10001`
 4. Start peer1 with `RUST_LOG=info cargo run --package dactie-peer --bin dactie-peer -- -K <folder peer1_key_material> -b <peer_id_aa> -B /ip4/127.0.0.1/tcp/10001`
 5. Start peer2 with `RUST_LOG=info cargo run --package dactie-peer --bin dactie-peer -- -K <folder peer2_key_material> -b <peer_id_aa> -B /ip4/127.0.0.1/tcp/10001`
+
+RUST_LOG=info cargo run --package dactie-peer --bin dactie-peer -- -K ./key_material/key_material_4 -b 12D3KooWLsUHkQfXqqC6DuGaKcZUqYB9bKLWMUgNdnwcRSKdHgBA -B /ip4/127.0.0.1/tcp/10001
 
 ### Docker
 This section explains the docker setup. If docker is choosen the part above can be ignored

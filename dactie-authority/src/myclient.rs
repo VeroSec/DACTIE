@@ -1,8 +1,7 @@
+use crate::abstswarm::Notification;
+use dactie_utils::shared_structs::Instruction;
 use tokio::io::{self, AsyncBufReadExt, BufReader, Lines, Stdin};
 use tokio::sync::mpsc;
-use crate::abstswarm::{Notification};
-use dactie_utils::shared_structs::Instruction;
-
 
 /// The `NetworkClient` ireads user input from standard input and transforms it
 /// into `Instruction`s. It then sends the `Instruction` on the mpsc channel that the `Network`
@@ -19,7 +18,6 @@ impl MyClient {
     pub fn new(
         instruction_tx: mpsc::UnboundedSender<Instruction>,
         notification_rx: mpsc::UnboundedReceiver<Notification>,
-
     ) -> MyClient {
         MyClient {
             instruction_tx,
@@ -47,12 +45,9 @@ impl MyClient {
         }
     }
 
-    async fn handle_user_input(
-        &mut self,
-        input: &str,
-    ) -> anyhow::Result<()> {
+    async fn handle_user_input(&mut self, input: &str) -> anyhow::Result<()> {
         let split: Vec<&str> = input.split_whitespace().collect();
-        if input.starts_with("req_open") && split.len() > 1{
+        if input.starts_with("req_open") && split.len() > 1 {
             let signatur = hex::decode(split[1])?;
             Self::send_req_open(signatur, self.instruction_tx.clone()).await?;
         } else if input.starts_with("open") && split.len() > 1 {
@@ -61,25 +56,21 @@ impl MyClient {
         } else if input.starts_with("end") {
             Self::send_end_init_archive(self.instruction_tx.clone()).await?;
         } else {
-        println!("Available Commands:
+            println!(
+                "Available Commands:
         - req_open <signatur>: Requests open pairings from archives
         - open <signatur>: Opens Signatur   
-        - end_init_archive: Ends Init Phase no new archives can join")
+        - end_init_archive: Ends Init Phase no new archives can join"
+            )
         }
 
         Ok(())
     }
 
-
-
-    async fn handle_notification(
-        notification: Notification,
-    ) -> anyhow::Result<()> {
+    async fn handle_notification(notification: Notification) -> anyhow::Result<()> {
         match notification {
             Notification::Err(error) => {
-                match error {
-                    _ => log::error!("Received error from network: {error}")
-                }
+                log::error!("Received error from network: {error}")
             }
         }
 
@@ -89,7 +80,7 @@ impl MyClient {
         signature: Vec<u8>,
         instruction_tx: mpsc::UnboundedSender<Instruction>,
     ) -> anyhow::Result<()> {
-        let instruction = Instruction::ReqOpen {signature};
+        let instruction = Instruction::ReqOpen { signature };
 
         instruction_tx.send(instruction)?;
 
@@ -102,7 +93,7 @@ impl MyClient {
         signature: Vec<u8>,
         instruction_tx: mpsc::UnboundedSender<Instruction>,
     ) -> anyhow::Result<()> {
-        let instruction = Instruction::Open {signature};
+        let instruction = Instruction::Open { signature };
 
         instruction_tx.send(instruction)?;
 

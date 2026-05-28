@@ -1,9 +1,9 @@
-use std::str::FromStr;
 use libp2p::PeerId;
+use std::str::FromStr;
 
 #[derive(Debug)]
 pub(crate) struct PeerOut {
-    pub(crate) prop_id: PeerId            //PeerId of the propagation_source
+    pub(crate) _prop_id: PeerId, //PeerId of the propagation_source
 }
 
 #[derive(Clone, Debug)]
@@ -17,7 +17,7 @@ pub(crate) enum ControlSignal {
 #[derive(Clone, Debug)]
 pub(crate) enum PubInterval {
     Fix(u64), //in seconds
-    Random((usize,usize))
+    Random((usize, usize)),
 }
 
 // Implement FromStr for PubInterval to handle argument parsing
@@ -26,20 +26,27 @@ impl FromStr for PubInterval {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if let Some(fix_value) = s.strip_prefix("fix=") {
-            fix_value.parse::<u64>()
+            fix_value
+                .parse::<u64>()
                 .map(PubInterval::Fix)
-                .map_err(|_| format!("Invalid number for Fix: '{}'", fix_value))
+                .map_err(|_| format!("Invalid number for Fix: '{fix_value}'"))
         } else if let Some(random_values) = s.strip_prefix("random=") {
             let parts: Vec<&str> = random_values.split(',').collect();
             if parts.len() == 2 {
-                let start = parts[0].parse::<usize>().map_err(|_| format!("Invalid number: '{}'", parts[0]))?;
-                let end = parts[1].parse::<usize>().map_err(|_| format!("Invalid number: '{}'", parts[1]))?;
+                let start = parts[0]
+                    .parse::<usize>()
+                    .map_err(|_| format!("Invalid number: '{}'", parts[0]))?;
+                let end = parts[1]
+                    .parse::<usize>()
+                    .map_err(|_| format!("Invalid number: '{}'", parts[1]))?;
                 Ok(PubInterval::Random((start, end)))
             } else {
-                Err(format!("Invalid format for Random: '{}'", random_values))
+                Err(format!("Invalid format for Random: '{random_values}'"))
             }
         } else {
-            Err(format!("Invalid interval type: '{}'. Use 'fix=<number>' or 'random=<start,end>'.", s))
+            Err(format!(
+                "Invalid interval type: '{s}'. Use 'fix=<number>' or 'random=<start,end>'."
+            ))
         }
     }
 }

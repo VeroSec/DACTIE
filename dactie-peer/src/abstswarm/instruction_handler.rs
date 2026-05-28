@@ -1,9 +1,8 @@
+use crate::abstswarm::{Instruction, Notification};
 use async_trait::async_trait;
+use dactie_utils::mls_wrapper::MyOpenMls;
 use libp2p::swarm::NetworkBehaviour;
 use tokio::sync::mpsc;
-use crate::abstswarm::{Instruction, Notification};
-use dactie_utils::mls_wrapper::MyOpenMls;
-
 
 #[async_trait]
 pub(crate) trait InstructionHandler

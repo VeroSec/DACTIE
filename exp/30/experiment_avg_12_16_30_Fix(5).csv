@@ -1,0 +1,6 @@
+total_peers,honest_peers,attacker_peers,received_messages
+42,12,30,0
+43,13,30,0
+44,14,30,0
+45,15,30,0
+46,16,30,0

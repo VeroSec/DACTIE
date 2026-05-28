@@ -1,0 +1,438 @@
+import csv
+import re
+
+# Konsolenausgabe (hier als mehrzeiliger String)
+console_output = """
+40
+Starting Experiment
+Starting Run 0 from 3, with peer_n=40, time=120secs, pub_interval=Fix(3)
+40
+Starting Experiment
+Starting Run 0 from 3, with peer_n=40, time=120secs, pub_interval=Fix(3)
+Stopping
+peers stopped
+Received 39 messages from 39 peers.
+Direct from Publisher: 8
+Relayed: 31
+Percentage of direct peers: 20.512821 %
+Number of Propagating Peers: 15
+Starting Run 1 from 3, with peer_n=40, time=120secs, pub_interval=Fix(3)
+Stopping
+peers stopped
+Received 39 messages from 39 peers.
+Direct from Publisher: 11
+Relayed: 28
+Percentage of direct peers: 28.20513 %
+Number of Propagating Peers: 15
+Starting Run 2 from 3, with peer_n=40, time=120secs, pub_interval=Fix(3)
+Stopping
+peers stopped
+Received 39 messages from 39 peers.
+Direct from Publisher: 8
+Relayed: 31
+Percentage of direct peers: 20.512821 %
+Number of Propagating Peers: 16
+All Repetitions done!
+Average messages direct from Publisher: 9
+Average messages Relayed: 30
+Average Percentage of direct peers: 23.076923 %
+Average Number of Propagating Peers: 15
+Starting Run 0 from 3, with peer_n=45, time=120secs, pub_interval=Fix(3)
+Stopping
+peers stopped
+Received 44 messages from 44 peers.
+Direct from Publisher: 8
+Relayed: 36
+Percentage of direct peers: 18.181818 %
+Number of Propagating Peers: 16
+Starting Run 1 from 3, with peer_n=45, time=120secs, pub_interval=Fix(3)
+Stopping
+peers stopped
+Received 44 messages from 44 peers.
+Direct from Publisher: 8
+Relayed: 36
+Percentage of direct peers: 18.181818 %
+Number of Propagating Peers: 19
+Starting Run 2 from 3, with peer_n=45, time=120secs, pub_interval=Fix(3)
+Stopping
+peers stopped
+Received 44 messages from 44 peers.
+Direct from Publisher: 9
+Relayed: 35
+Percentage of direct peers: 20.454546 %
+Number of Propagating Peers: 15
+All Repetitions done!
+Average messages direct from Publisher: 8.333333
+Average messages Relayed: 35.666668
+Average Percentage of direct peers: 18.939394 %
+Average Number of Propagating Peers: 16
+Starting Run 0 from 3, with peer_n=50, time=120secs, pub_interval=Fix(3)
+Stopping
+peers stopped
+Received 49 messages from 49 peers.
+Direct from Publisher: 11
+Relayed: 38
+Percentage of direct peers: 22.448978 %
+Number of Propagating Peers: 19
+Starting Run 1 from 3, with peer_n=50, time=120secs, pub_interval=Fix(3)
+Stopping
+peers stopped
+Received 49 messages from 49 peers.
+Direct from Publisher: 8
+Relayed: 41
+Percentage of direct peers: 16.32653 %
+Number of Propagating Peers: 18
+Starting Run 2 from 3, with peer_n=50, time=120secs, pub_interval=Fix(3)
+Stopping
+peers stopped
+Received 49 messages from 49 peers.
+Direct from Publisher: 6
+Relayed: 43
+Percentage of direct peers: 12.244898 %
+Number of Propagating Peers: 18
+All Repetitions done!
+Average messages direct from Publisher: 8.333333
+Average messages Relayed: 40.666668
+Average Percentage of direct peers: 17.006802 %
+Average Number of Propagating Peers: 18
+Starting Run 0 from 3, with peer_n=55, time=120secs, pub_interval=Fix(3)
+Stopping
+peers stopped
+Received 54 messages from 54 peers.
+Direct from Publisher: 5
+Relayed: 49
+Percentage of direct peers: 9.259259 %
+Number of Propagating Peers: 21
+Starting Run 1 from 3, with peer_n=55, time=120secs, pub_interval=Fix(3)
+Stopping
+peers stopped
+Received 54 messages from 54 peers.
+Direct from Publisher: 10
+Relayed: 44
+Percentage of direct peers: 18.518518 %
+Number of Propagating Peers: 21
+Starting Run 2 from 3, with peer_n=55, time=120secs, pub_interval=Fix(3)
+Stopping
+peers stopped
+Received 54 messages from 54 peers.
+Direct from Publisher: 7
+Relayed: 47
+Percentage of direct peers: 12.962963 %
+Number of Propagating Peers: 19
+All Repetitions done!
+Average messages direct from Publisher: 7.3333335
+Average messages Relayed: 46.666668
+Average Percentage of direct peers: 13.580248 %
+Average Number of Propagating Peers: 20
+Starting Run 0 from 3, with peer_n=60, time=120secs, pub_interval=Fix(3)
+Stopping
+peers stopped
+Received 59 messages from 59 peers.
+Direct from Publisher: 6
+Relayed: 53
+Percentage of direct peers: 10.169491 %
+Number of Propagating Peers: 27
+Starting Run 1 from 3, with peer_n=60, time=120secs, pub_interval=Fix(3)
+Stopping
+peers stopped
+Received 59 messages from 59 peers.
+Direct from Publisher: 7
+Relayed: 52
+Percentage of direct peers: 11.864407 %
+Number of Propagating Peers: 25
+Starting Run 2 from 3, with peer_n=60, time=120secs, pub_interval=Fix(3)
+Stopping
+peers stopped
+Received 59 messages from 59 peers.
+Direct from Publisher: 8
+Relayed: 51
+Percentage of direct peers: 13.559322 %
+Number of Propagating Peers: 22
+All Repetitions done!
+Average messages direct from Publisher: 7
+Average messages Relayed: 52
+Average Percentage of direct peers: 11.864407 %
+Average Number of Propagating Peers: 24
+Starting Run 0 from 3, with peer_n=65, time=120secs, pub_interval=Fix(3)
+Stopping
+peers stopped
+Received 64 messages from 64 peers.
+Direct from Publisher: 5
+Relayed: 59
+Percentage of direct peers: 7.8125 %
+Number of Propagating Peers: 27
+Starting Run 1 from 3, with peer_n=65, time=120secs, pub_interval=Fix(3)
+Stopping
+peers stopped
+Received 64 messages from 64 peers.
+Direct from Publisher: 4
+Relayed: 60
+Percentage of direct peers: 6.25 %
+Number of Propagating Peers: 28
+Starting Run 2 from 3, with peer_n=65, time=120secs, pub_interval=Fix(3)
+Stopping
+peers stopped
+Received 64 messages from 64 peers.
+Direct from Publisher: 6
+Relayed: 58
+Percentage of direct peers: 9.375 %
+Number of Propagating Peers: 28
+All Repetitions done!
+Average messages direct from Publisher: 5
+Average messages Relayed: 59
+Average Percentage of direct peers: 7.8125 %
+Average Number of Propagating Peers: 27
+Starting Run 0 from 3, with peer_n=70, time=120secs, pub_interval=Fix(3)
+Stopping
+peers stopped
+Received 69 messages from 69 peers.
+Direct from Publisher: 4
+Relayed: 65
+Percentage of direct peers: 5.7971015 %
+Number of Propagating Peers: 26
+Starting Run 1 from 3, with peer_n=70, time=120secs, pub_interval=Fix(3)
+Stopping
+peers stopped
+Received 69 messages from 69 peers.
+Direct from Publisher: 7
+Relayed: 62
+Percentage of direct peers: 10.144927 %
+Number of Propagating Peers: 28
+Starting Run 2 from 3, with peer_n=70, time=120secs, pub_interval=Fix(3)
+Stopping
+peers stopped
+Received 69 messages from 69 peers.
+Direct from Publisher: 2
+Relayed: 67
+Percentage of direct peers: 2.8985507 %
+Number of Propagating Peers: 32
+All Repetitions done!
+Average messages direct from Publisher: 4.3333335
+Average messages Relayed: 64.666664
+Average Percentage of direct peers: 6.2801933 %
+Average Number of Propagating Peers: 28
+Starting Run 0 from 3, with peer_n=75, time=120secs, pub_interval=Fix(3)
+Stopping
+peers stopped
+Received 74 messages from 74 peers.
+Direct from Publisher: 5
+Relayed: 69
+Percentage of direct peers: 6.7567563 %
+Number of Propagating Peers: 29
+Starting Run 1 from 3, with peer_n=75, time=120secs, pub_interval=Fix(3)
+Stopping
+peers stopped
+Received 74 messages from 74 peers.
+Direct from Publisher: 6
+Relayed: 68
+Percentage of direct peers: 8.108108 %
+Number of Propagating Peers: 27
+Starting Run 2 from 3, with peer_n=75, time=120secs, pub_interval=Fix(3)
+Stopping
+peers stopped
+Received 74 messages from 74 peers.
+Direct from Publisher: 8
+Relayed: 66
+Percentage of direct peers: 10.810811 %
+Number of Propagating Peers: 34
+All Repetitions done!
+Average messages direct from Publisher: 6.3333335
+Average messages Relayed: 67.666664
+Average Percentage of direct peers: 8.558558 %
+Average Number of Propagating Peers: 30
+Starting Run 0 from 3, with peer_n=80, time=120secs, pub_interval=Fix(3)
+Stopping
+peers stopped
+Received 79 messages from 79 peers.
+Direct from Publisher: 10
+Relayed: 69
+Percentage of direct peers: 12.658228 %
+Number of Propagating Peers: 30
+Starting Run 1 from 3, with peer_n=80, time=120secs, pub_interval=Fix(3)
+Stopping
+peers stopped
+Received 79 messages from 79 peers.
+Direct from Publisher: 4
+Relayed: 75
+Percentage of direct peers: 5.063291 %
+Number of Propagating Peers: 35
+Starting Run 2 from 3, with peer_n=80, time=120secs, pub_interval=Fix(3)
+Stopping
+peers stopped
+Received 79 messages from 79 peers.
+Direct from Publisher: 5
+Relayed: 74
+Percentage of direct peers: 6.329114 %
+Number of Propagating Peers: 29
+All Repetitions done!
+Average messages direct from Publisher: 6.3333335
+Average messages Relayed: 72.666664
+Average Percentage of direct peers: 8.016877 %
+Average Number of Propagating Peers: 31
+Starting Run 0 from 3, with peer_n=85, time=120secs, pub_interval=Fix(3)
+Stopping
+peers stopped
+Received 0 messages from 84 peers.
+Direct from Publisher: 0
+Relayed: 0
+Percentage of direct peers: NaN %
+Number of Propagating Peers: 0
+Starting Run 1 from 3, with peer_n=85, time=120secs, pub_interval=Fix(3)
+Stopping
+peers stopped
+Received 83 messages from 84 peers.
+Direct from Publisher: 2
+Relayed: 81
+Percentage of direct peers: 2.4096384 %
+Number of Propagating Peers: 31
+Starting Run 2 from 3, with peer_n=85, time=120secs, pub_interval=Fix(3)
+Stopping
+peers stopped
+Received 84 messages from 84 peers.
+Direct from Publisher: 4
+Relayed: 80
+Percentage of direct peers: 4.7619047 %
+Number of Propagating Peers: 35
+All Repetitions done!
+Average messages direct from Publisher: 2
+Average messages Relayed: 53.666668
+Average Percentage of direct peers: 3.5928142 %
+Average Number of Propagating Peers: 22
+Starting Run 0 from 3, with peer_n=90, time=120secs, pub_interval=Fix(3)
+Stopping
+peers stopped
+Received 88 messages from 89 peers.
+Direct from Publisher: 2
+Relayed: 86
+Percentage of direct peers: 2.2727273 %
+Number of Propagating Peers: 41
+Starting Run 1 from 3, with peer_n=90, time=120secs, pub_interval=Fix(3)
+Stopping
+peers stopped
+Received 88 messages from 89 peers.
+Direct from Publisher: 1
+Relayed: 87
+Percentage of direct peers: 1.1363636 %
+Number of Propagating Peers: 42
+Starting Run 2 from 3, with peer_n=90, time=120secs, pub_interval=Fix(3)
+Stopping
+peers stopped
+Received 88 messages from 89 peers.
+Direct from Publisher: 3
+Relayed: 85
+Percentage of direct peers: 3.409091 %
+Number of Propagating Peers: 40
+All Repetitions done!
+Average messages direct from Publisher: 2
+Average messages Relayed: 86
+Average Percentage of direct peers: 2.2727273 %
+Average Number of Propagating Peers: 41
+Starting Run 0 from 3, with peer_n=95, time=120secs, pub_interval=Fix(3)
+Stopping
+peers stopped
+Received 91 messages from 94 peers.
+Direct from Publisher: 4
+Relayed: 87
+Percentage of direct peers: 4.3956046 %
+Number of Propagating Peers: 38
+Starting Run 1 from 3, with peer_n=95, time=120secs, pub_interval=Fix(3)
+Stopping
+peers stopped
+Received 0 messages from 94 peers.
+Direct from Publisher: 0
+Relayed: 0
+Percentage of direct peers: NaN %
+Number of Propagating Peers: 0
+Starting Run 2 from 3, with peer_n=95, time=120secs, pub_interval=Fix(3)
+Stopping
+peers stopped
+Received 0 messages from 94 peers.
+Direct from Publisher: 0
+Relayed: 0
+Percentage of direct peers: NaN %
+Number of Propagating Peers: 0
+All Repetitions done!
+Average messages direct from Publisher: 1.3333334
+Average messages Relayed: 29
+Average Percentage of direct peers: 4.3956046 %
+Average Number of Propagating Peers: 12
+Starting Run 0 from 3, with peer_n=100, time=120secs, pub_interval=Fix(3)
+Stopping
+peers stopped
+Received 89 messages from 99 peers.
+Direct from Publisher: 2
+Relayed: 87
+Percentage of direct peers: 2.247191 %
+Number of Propagating Peers: 36
+Starting Run 1 from 3, with peer_n=100, time=120secs, pub_interval=Fix(3)
+Stopping
+peers stopped
+Received 0 messages from 99 peers.
+Direct from Publisher: 0
+Relayed: 0
+Percentage of direct peers: NaN %
+Number of Propagating Peers: 0
+Starting Run 2 from 3, with peer_n=100, time=120secs, pub_interval=Fix(3)
+Stopping
+peers stopped
+Received 91 messages from 99 peers.
+Direct from Publisher: 4
+Relayed: 87
+Percentage of direct peers: 4.3956046 %
+Number of Propagating Peers: 35
+All Repetitions done!
+Average messages direct from Publisher: 2
+Average messages Relayed: 58
+Average Percentage of direct peers: 3.3333335 %
+Average Number of Propagating Peers: 23
+Starting Run 0 from 3, with peer_n=105, time=120secs, pub_interval=Fix(3)
+Stopping
+peers stopped
+Received 0 messages from 104 peers.
+Direct from Publisher: 0
+Relayed: 0
+Percentage of direct peers: NaN %
+Number of Propagating Peers: 0
+Starting Run 1 from 3, with peer_n=105, time=120secs, pub_interval=Fix(3)
+"""
+# Liste zur Speicherung der Zeilen
+data = []
+
+# Reguläre Ausdrücke zur Extraktion der benötigten Daten
+pattern_start = r"Starting Run \d+ from \d+, with peer_n=(\d+), time=\d+secs, pub_interval=Fix\(3\)"
+pattern_received = r"Received (\d+) messages from (\d+) peers."
+pattern_direct = r"Direct from Publisher: (\d+)"
+pattern_relayed = r"Relayed: (\d+)"
+pattern_percentage = r"Percentage of direct peers: ([\d.]+) %"
+pattern_propagating = r"Number of Propagating Peers: (\d+)"
+
+# Zeilen durchlaufen und Daten extrahieren
+for line in console_output.splitlines():
+    if "Starting Run" in line:
+        total_peers = int(re.search(pattern_start, line).group(1))
+    elif "Received" in line:
+        received_messages = int(re.search(pattern_received, line).group(1))
+        all_expected_messages = int(re.search(pattern_received, line).group(2))
+        from_publisher = int(re.search(pattern_direct, line).group(1))
+        relayed = int(re.search(pattern_relayed, line).group(1))
+        direct_publisher_percent = re.search(pattern_percentage, line).group(1)
+        number_propagating = int(re.search(pattern_propagating, line).group(1))
+
+        # Daten zur Liste hinzufügen
+        data.append([
+            total_peers,
+            received_messages,
+            all_expected_messages,
+            from_publisher,
+            relayed,
+            direct_publisher_percent,
+            number_propagating
+        ])
+
+# CSV-Datei schreiben
+with open('results.csv', mode='w', newline='') as file:
+    writer = csv.writer(file)
+    writer.writerow(["total_peers", "received_messages", "all_expected_messages", "from_publisher", "relayed", "direct_publisher_percent", "number_propagating"])
+    writer.writerows(data)
+
+print("results.csv wurde erfolgreich erstellt.")

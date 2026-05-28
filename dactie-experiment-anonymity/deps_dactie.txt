@@ -1,0 +1,747 @@
+dactie-experiments v0.1.0 (/usr/share/mantra/new/dactie/dactie-experiment-anonymity)
+├── clap v4.5.9
+│   ├── clap_builder v4.5.9
+│   │   ├── anstream v0.6.14
+│   │   │   ├── anstyle v1.0.7
+│   │   │   ├── anstyle-parse v0.2.4
+│   │   │   │   └── utf8parse v0.2.2
+│   │   │   ├── anstyle-query v1.1.0
+│   │   │   ├── colorchoice v1.0.1
+│   │   │   ├── is_terminal_polyfill v1.70.0
+│   │   │   └── utf8parse v0.2.2
+│   │   ├── anstyle v1.0.7
+│   │   ├── clap_lex v0.7.1
+│   │   └── strsim v0.11.1
+│   └── clap_derive v4.5.8 (proc-macro)
+│       ├── heck v0.5.0
+│       ├── proc-macro2 v1.0.86
+│       │   └── unicode-ident v1.0.12
+│       ├── quote v1.0.36
+│       │   └── proc-macro2 v1.0.86 (*)
+│       └── syn v2.0.71
+│           ├── proc-macro2 v1.0.86 (*)
+│           ├── quote v1.0.36 (*)
+│           └── unicode-ident v1.0.12
+├── futures v0.3.30
+│   ├── futures-channel v0.3.30
+│   │   ├── futures-core v0.3.30
+│   │   └── futures-sink v0.3.30
+│   ├── futures-core v0.3.30
+│   ├── futures-executor v0.3.30
+│   │   ├── futures-core v0.3.30
+│   │   ├── futures-task v0.3.30
+│   │   ├── futures-util v0.3.30
+│   │   │   ├── futures-channel v0.3.30 (*)
+│   │   │   ├── futures-core v0.3.30
+│   │   │   ├── futures-io v0.3.30
+│   │   │   ├── futures-macro v0.3.30 (proc-macro)
+│   │   │   │   ├── proc-macro2 v1.0.86 (*)
+│   │   │   │   ├── quote v1.0.36 (*)
+│   │   │   │   └── syn v2.0.71 (*)
+│   │   │   ├── futures-sink v0.3.30
+│   │   │   ├── futures-task v0.3.30
+│   │   │   ├── memchr v2.7.4
+│   │   │   ├── pin-project-lite v0.2.14
+│   │   │   ├── pin-utils v0.1.0
+│   │   │   └── slab v0.4.9
+│   │   │       [build-dependencies]
+│   │   │       └── autocfg v1.3.0
+│   │   └── num_cpus v1.16.0
+│   │       └── libc v0.2.155
+│   ├── futures-io v0.3.30
+│   ├── futures-sink v0.3.30
+│   ├── futures-task v0.3.30
+│   └── futures-util v0.3.30 (*)
+├── libp2p v0.54.0 (https://github.com/libp2p/rust-libp2p?rev=32e917f#32e917ff)
+│   ├── bytes v1.6.1
+│   │   └── serde v1.0.204
+│   │       └── serde_derive v1.0.204 (proc-macro)
+│   │           ├── proc-macro2 v1.0.86 (*)
+│   │           ├── quote v1.0.36 (*)
+│   │           └── syn v2.0.71 (*)
+│   ├── either v1.13.0
+│   ├── futures v0.3.30 (*)
+│   ├── futures-timer v3.0.3
+│   ├── getrandom v0.2.15
+│   │   ├── cfg-if v1.0.0
+│   │   └── libc v0.2.155
+│   ├── libp2p-allow-block-list v0.3.0 (https://github.com/libp2p/rust-libp2p?rev=32e917f#32e917ff)
+│   │   ├── libp2p-core v0.41.3 (https://github.com/libp2p/rust-libp2p?rev=32e917f#32e917ff)
+│   │   │   ├── either v1.13.0
+│   │   │   ├── fnv v1.0.7
+│   │   │   ├── futures v0.3.30 (*)
+│   │   │   ├── futures-timer v3.0.3
+│   │   │   ├── libp2p-identity v0.2.9
+│   │   │   │   ├── asn1_der v0.7.6
+│   │   │   │   ├── bs58 v0.5.1
+│   │   │   │   ├── ed25519-dalek v2.1.1
+│   │   │   │   │   ├── curve25519-dalek v4.1.3
+│   │   │   │   │   │   ├── cfg-if v1.0.0
+│   │   │   │   │   │   ├── cpufeatures v0.2.12
+│   │   │   │   │   │   ├── curve25519-dalek-derive v0.1.1 (proc-macro)
+│   │   │   │   │   │   │   ├── proc-macro2 v1.0.86 (*)
+│   │   │   │   │   │   │   ├── quote v1.0.36 (*)
+│   │   │   │   │   │   │   └── syn v2.0.71 (*)
+│   │   │   │   │   │   ├── digest v0.10.7
+│   │   │   │   │   │   │   ├── block-buffer v0.10.4
+│   │   │   │   │   │   │   │   └── generic-array v0.14.7
+│   │   │   │   │   │   │   │       ├── typenum v1.17.0
+│   │   │   │   │   │   │   │       └── zeroize v1.8.1
+│   │   │   │   │   │   │   │           └── zeroize_derive v1.4.2 (proc-macro)
+│   │   │   │   │   │   │   │               ├── proc-macro2 v1.0.86 (*)
+│   │   │   │   │   │   │   │               ├── quote v1.0.36 (*)
+│   │   │   │   │   │   │   │               └── syn v2.0.71 (*)
+│   │   │   │   │   │   │   │       [build-dependencies]
+│   │   │   │   │   │   │   │       └── version_check v0.9.4
+│   │   │   │   │   │   │   ├── const-oid v0.9.6
+│   │   │   │   │   │   │   ├── crypto-common v0.1.6
+│   │   │   │   │   │   │   │   ├── generic-array v0.14.7 (*)
+│   │   │   │   │   │   │   │   └── typenum v1.17.0
+│   │   │   │   │   │   │   └── subtle v2.6.1
+│   │   │   │   │   │   ├── subtle v2.6.1
+│   │   │   │   │   │   └── zeroize v1.8.1 (*)
+│   │   │   │   │   │   [build-dependencies]
+│   │   │   │   │   │   └── rustc_version v0.4.0
+│   │   │   │   │   │       └── semver v1.0.23
+│   │   │   │   │   ├── ed25519 v2.2.3
+│   │   │   │   │   │   └── signature v2.2.0
+│   │   │   │   │   │       ├── digest v0.10.7 (*)
+│   │   │   │   │   │       └── rand_core v0.6.4
+│   │   │   │   │   │           └── getrandom v0.2.15 (*)
+│   │   │   │   │   ├── rand_core v0.6.4 (*)
+│   │   │   │   │   ├── sha2 v0.10.8
+│   │   │   │   │   │   ├── cfg-if v1.0.0
+│   │   │   │   │   │   ├── cpufeatures v0.2.12
+│   │   │   │   │   │   └── digest v0.10.7 (*)
+│   │   │   │   │   ├── subtle v2.6.1
+│   │   │   │   │   └── zeroize v1.8.1 (*)
+│   │   │   │   ├── hkdf v0.12.4
+│   │   │   │   │   └── hmac v0.12.1
+│   │   │   │   │       └── digest v0.10.7 (*)
+│   │   │   │   ├── multihash v0.19.1
+│   │   │   │   │   ├── core2 v0.4.0
+│   │   │   │   │   │   └── memchr v2.7.4
+│   │   │   │   │   ├── serde v1.0.204 (*)
+│   │   │   │   │   └── unsigned-varint v0.7.2
+│   │   │   │   ├── p256 v0.13.2
+│   │   │   │   │   ├── ecdsa v0.16.9
+│   │   │   │   │   │   ├── der v0.7.9
+│   │   │   │   │   │   │   ├── const-oid v0.9.6
+│   │   │   │   │   │   │   ├── pem-rfc7468 v0.7.0
+│   │   │   │   │   │   │   │   └── base64ct v1.6.0
+│   │   │   │   │   │   │   └── zeroize v1.8.1 (*)
+│   │   │   │   │   │   ├── digest v0.10.7 (*)
+│   │   │   │   │   │   ├── elliptic-curve v0.13.8
+│   │   │   │   │   │   │   ├── base16ct v0.2.0
+│   │   │   │   │   │   │   ├── crypto-bigint v0.5.5
+│   │   │   │   │   │   │   │   ├── generic-array v0.14.7 (*)
+│   │   │   │   │   │   │   │   ├── rand_core v0.6.4 (*)
+│   │   │   │   │   │   │   │   ├── subtle v2.6.1
+│   │   │   │   │   │   │   │   └── zeroize v1.8.1 (*)
+│   │   │   │   │   │   │   ├── digest v0.10.7 (*)
+│   │   │   │   │   │   │   ├── ff v0.13.0
+│   │   │   │   │   │   │   │   ├── rand_core v0.6.4 (*)
+│   │   │   │   │   │   │   │   └── subtle v2.6.1
+│   │   │   │   │   │   │   ├── generic-array v0.14.7 (*)
+│   │   │   │   │   │   │   ├── group v0.13.0
+│   │   │   │   │   │   │   │   ├── ff v0.13.0 (*)
+│   │   │   │   │   │   │   │   ├── rand_core v0.6.4 (*)
+│   │   │   │   │   │   │   │   └── subtle v2.6.1
+│   │   │   │   │   │   │   ├── pem-rfc7468 v0.7.0 (*)
+│   │   │   │   │   │   │   ├── pkcs8 v0.10.2
+│   │   │   │   │   │   │   │   ├── der v0.7.9 (*)
+│   │   │   │   │   │   │   │   └── spki v0.7.3
+│   │   │   │   │   │   │   │       └── der v0.7.9 (*)
+│   │   │   │   │   │   │   ├── rand_core v0.6.4 (*)
+│   │   │   │   │   │   │   ├── sec1 v0.7.3
+│   │   │   │   │   │   │   │   ├── base16ct v0.2.0
+│   │   │   │   │   │   │   │   ├── der v0.7.9 (*)
+│   │   │   │   │   │   │   │   ├── generic-array v0.14.7 (*)
+│   │   │   │   │   │   │   │   ├── pkcs8 v0.10.2 (*)
+│   │   │   │   │   │   │   │   ├── subtle v2.6.1
+│   │   │   │   │   │   │   │   └── zeroize v1.8.1 (*)
+│   │   │   │   │   │   │   ├── subtle v2.6.1
+│   │   │   │   │   │   │   └── zeroize v1.8.1 (*)
+│   │   │   │   │   │   ├── rfc6979 v0.4.0
+│   │   │   │   │   │   │   ├── hmac v0.12.1 (*)
+│   │   │   │   │   │   │   └── subtle v2.6.1
+│   │   │   │   │   │   ├── signature v2.2.0 (*)
+│   │   │   │   │   │   └── spki v0.7.3 (*)
+│   │   │   │   │   ├── elliptic-curve v0.13.8 (*)
+│   │   │   │   │   ├── primeorder v0.13.6
+│   │   │   │   │   │   └── elliptic-curve v0.13.8 (*)
+│   │   │   │   │   └── sha2 v0.10.8 (*)
+│   │   │   │   ├── quick-protobuf v0.8.1
+│   │   │   │   │   └── byteorder v1.5.0
+│   │   │   │   ├── rand v0.8.5
+│   │   │   │   │   ├── libc v0.2.155
+│   │   │   │   │   ├── rand_chacha v0.3.1
+│   │   │   │   │   │   ├── ppv-lite86 v0.2.17
+│   │   │   │   │   │   └── rand_core v0.6.4 (*)
+│   │   │   │   │   └── rand_core v0.6.4 (*)
+│   │   │   │   ├── ring v0.17.8
+│   │   │   │   │   ├── cfg-if v1.0.0
+│   │   │   │   │   ├── getrandom v0.2.15 (*)
+│   │   │   │   │   ├── spin v0.9.8
+│   │   │   │   │   └── untrusted v0.9.0
+│   │   │   │   │   [build-dependencies]
+│   │   │   │   │   └── cc v1.1.5
+│   │   │   │   ├── sec1 v0.7.3 (*)
+│   │   │   │   ├── serde v1.0.204 (*)
+│   │   │   │   ├── sha2 v0.10.8 (*)
+│   │   │   │   ├── thiserror v1.0.62
+│   │   │   │   │   └── thiserror-impl v1.0.62 (proc-macro)
+│   │   │   │   │       ├── proc-macro2 v1.0.86 (*)
+│   │   │   │   │       ├── quote v1.0.36 (*)
+│   │   │   │   │       └── syn v2.0.71 (*)
+│   │   │   │   ├── tracing v0.1.40
+│   │   │   │   │   ├── pin-project-lite v0.2.14
+│   │   │   │   │   ├── tracing-attributes v0.1.27 (proc-macro)
+│   │   │   │   │   │   ├── proc-macro2 v1.0.86 (*)
+│   │   │   │   │   │   ├── quote v1.0.36 (*)
+│   │   │   │   │   │   └── syn v2.0.71 (*)
+│   │   │   │   │   └── tracing-core v0.1.32
+│   │   │   │   │       └── once_cell v1.19.0
+│   │   │   │   ├── void v1.0.2
+│   │   │   │   └── zeroize v1.8.1 (*)
+│   │   │   ├── multiaddr v0.18.1
+│   │   │   │   ├── arrayref v0.3.7
+│   │   │   │   ├── byteorder v1.5.0
+│   │   │   │   ├── data-encoding v2.6.0
+│   │   │   │   ├── libp2p-identity v0.2.9 (*)
+│   │   │   │   ├── multibase v0.9.1
+│   │   │   │   │   ├── base-x v0.2.11
+│   │   │   │   │   ├── data-encoding v2.6.0
+│   │   │   │   │   └── data-encoding-macro v0.1.15
+│   │   │   │   │       ├── data-encoding v2.6.0
+│   │   │   │   │       └── data-encoding-macro-internal v0.1.13 (proc-macro)
+│   │   │   │   │           ├── data-encoding v2.6.0
+│   │   │   │   │           └── syn v1.0.109
+│   │   │   │   │               ├── proc-macro2 v1.0.86 (*)
+│   │   │   │   │               ├── quote v1.0.36 (*)
+│   │   │   │   │               └── unicode-ident v1.0.12
+│   │   │   │   ├── multihash v0.19.1 (*)
+│   │   │   │   ├── percent-encoding v2.3.1
+│   │   │   │   ├── serde v1.0.204 (*)
+│   │   │   │   ├── static_assertions v1.1.0
+│   │   │   │   ├── unsigned-varint v0.7.2
+│   │   │   │   └── url v2.5.2
+│   │   │   │       ├── form_urlencoded v1.2.1
+│   │   │   │       │   └── percent-encoding v2.3.1
+│   │   │   │       ├── idna v0.5.0
+│   │   │   │       │   ├── unicode-bidi v0.3.15
+│   │   │   │       │   └── unicode-normalization v0.1.23
+│   │   │   │       │       └── tinyvec v1.8.0
+│   │   │   │       │           └── tinyvec_macros v0.1.1
+│   │   │   │       └── percent-encoding v2.3.1
+│   │   │   ├── multihash v0.19.1 (*)
+│   │   │   ├── multistream-select v0.13.0 (https://github.com/libp2p/rust-libp2p?rev=32e917f#32e917ff)
+│   │   │   │   ├── bytes v1.6.1 (*)
+│   │   │   │   ├── futures v0.3.30 (*)
+│   │   │   │   ├── pin-project v1.1.5
+│   │   │   │   │   └── pin-project-internal v1.1.5 (proc-macro)
+│   │   │   │   │       ├── proc-macro2 v1.0.86 (*)
+│   │   │   │   │       ├── quote v1.0.36 (*)
+│   │   │   │   │       └── syn v2.0.71 (*)
+│   │   │   │   ├── smallvec v1.13.2
+│   │   │   │   ├── tracing v0.1.40 (*)
+│   │   │   │   └── unsigned-varint v0.8.0
+│   │   │   ├── once_cell v1.19.0
+│   │   │   ├── parking_lot v0.12.3
+│   │   │   │   ├── lock_api v0.4.12
+│   │   │   │   │   └── scopeguard v1.2.0
+│   │   │   │   │   [build-dependencies]
+│   │   │   │   │   └── autocfg v1.3.0
+│   │   │   │   └── parking_lot_core v0.9.10
+│   │   │   │       ├── cfg-if v1.0.0
+│   │   │   │       ├── libc v0.2.155
+│   │   │   │       └── smallvec v1.13.2
+│   │   │   ├── pin-project v1.1.5 (*)
+│   │   │   ├── quick-protobuf v0.8.1 (*)
+│   │   │   ├── rand v0.8.5 (*)
+│   │   │   ├── rw-stream-sink v0.4.0 (https://github.com/libp2p/rust-libp2p?rev=32e917f#32e917ff)
+│   │   │   │   ├── futures v0.3.30 (*)
+│   │   │   │   ├── pin-project v1.1.5 (*)
+│   │   │   │   └── static_assertions v1.1.0
+│   │   │   ├── serde v1.0.204 (*)
+│   │   │   ├── smallvec v1.13.2
+│   │   │   ├── thiserror v1.0.62 (*)
+│   │   │   ├── tracing v0.1.40 (*)
+│   │   │   ├── unsigned-varint v0.8.0
+│   │   │   ├── void v1.0.2
+│   │   │   └── web-time v1.1.0
+│   │   ├── libp2p-identity v0.2.9 (*)
+│   │   ├── libp2p-swarm v0.45.0 (https://github.com/libp2p/rust-libp2p?rev=32e917f#32e917ff)
+│   │   │   ├── either v1.13.0
+│   │   │   ├── fnv v1.0.7
+│   │   │   ├── futures v0.3.30 (*)
+│   │   │   ├── futures-timer v3.0.3
+│   │   │   ├── libp2p-core v0.41.3 (https://github.com/libp2p/rust-libp2p?rev=32e917f#32e917ff) (*)
+│   │   │   ├── libp2p-identity v0.2.9 (*)
+│   │   │   ├── libp2p-swarm-derive v0.34.2 (proc-macro) (https://github.com/libp2p/rust-libp2p?rev=32e917f#32e917ff)
+│   │   │   │   ├── heck v0.5.0
+│   │   │   │   ├── proc-macro2 v1.0.86 (*)
+│   │   │   │   ├── quote v1.0.36 (*)
+│   │   │   │   └── syn v2.0.71 (*)
+│   │   │   ├── lru v0.12.3
+│   │   │   │   └── hashbrown v0.14.5
+│   │   │   │       ├── ahash v0.8.11
+│   │   │   │       │   ├── cfg-if v1.0.0
+│   │   │   │       │   ├── once_cell v1.19.0
+│   │   │   │       │   └── zerocopy v0.7.35
+│   │   │   │       │   [build-dependencies]
+│   │   │   │       │   └── version_check v0.9.4
+│   │   │   │       └── allocator-api2 v0.2.18
+│   │   │   ├── multistream-select v0.13.0 (https://github.com/libp2p/rust-libp2p?rev=32e917f#32e917ff) (*)
+│   │   │   ├── once_cell v1.19.0
+│   │   │   ├── rand v0.8.5 (*)
+│   │   │   ├── smallvec v1.13.2
+│   │   │   ├── tokio v1.38.0
+│   │   │   │   ├── bytes v1.6.1 (*)
+│   │   │   │   ├── libc v0.2.155
+│   │   │   │   ├── mio v0.8.11
+│   │   │   │   │   └── libc v0.2.155
+│   │   │   │   ├── num_cpus v1.16.0 (*)
+│   │   │   │   ├── parking_lot v0.12.3 (*)
+│   │   │   │   ├── pin-project-lite v0.2.14
+│   │   │   │   ├── signal-hook-registry v1.4.2
+│   │   │   │   │   └── libc v0.2.155
+│   │   │   │   ├── socket2 v0.5.7
+│   │   │   │   │   └── libc v0.2.155
+│   │   │   │   └── tokio-macros v2.3.0 (proc-macro)
+│   │   │   │       ├── proc-macro2 v1.0.86 (*)
+│   │   │   │       ├── quote v1.0.36 (*)
+│   │   │   │       └── syn v2.0.71 (*)
+│   │   │   ├── tracing v0.1.40 (*)
+│   │   │   ├── void v1.0.2
+│   │   │   └── web-time v1.1.0
+│   │   └── void v1.0.2
+│   ├── libp2p-connection-limits v0.3.1 (https://github.com/libp2p/rust-libp2p?rev=32e917f#32e917ff)
+│   │   ├── libp2p-core v0.41.3 (https://github.com/libp2p/rust-libp2p?rev=32e917f#32e917ff) (*)
+│   │   ├── libp2p-identity v0.2.9 (*)
+│   │   ├── libp2p-swarm v0.45.0 (https://github.com/libp2p/rust-libp2p?rev=32e917f#32e917ff) (*)
+│   │   └── void v1.0.2
+│   ├── libp2p-core v0.41.3 (https://github.com/libp2p/rust-libp2p?rev=32e917f#32e917ff) (*)
+│   ├── libp2p-dns v0.41.1 (https://github.com/libp2p/rust-libp2p?rev=32e917f#32e917ff)
+│   │   ├── async-trait v0.1.81 (proc-macro)
+│   │   │   ├── proc-macro2 v1.0.86 (*)
+│   │   │   ├── quote v1.0.36 (*)
+│   │   │   └── syn v2.0.71 (*)
+│   │   ├── futures v0.3.30 (*)
+│   │   ├── hickory-resolver v0.24.1
+│   │   │   ├── cfg-if v1.0.0
+│   │   │   ├── futures-util v0.3.30 (*)
+│   │   │   ├── hickory-proto v0.24.1
+│   │   │   │   ├── async-trait v0.1.81 (proc-macro) (*)
+│   │   │   │   ├── cfg-if v1.0.0
+│   │   │   │   ├── data-encoding v2.6.0
+│   │   │   │   ├── enum-as-inner v0.6.0 (proc-macro)
+│   │   │   │   │   ├── heck v0.4.1
+│   │   │   │   │   ├── proc-macro2 v1.0.86 (*)
+│   │   │   │   │   ├── quote v1.0.36 (*)
+│   │   │   │   │   └── syn v2.0.71 (*)
+│   │   │   │   ├── futures-channel v0.3.30 (*)
+│   │   │   │   ├── futures-io v0.3.30
+│   │   │   │   ├── futures-util v0.3.30 (*)
+│   │   │   │   ├── idna v0.4.0
+│   │   │   │   │   ├── unicode-bidi v0.3.15
+│   │   │   │   │   └── unicode-normalization v0.1.23 (*)
+│   │   │   │   ├── ipnet v2.9.0
+│   │   │   │   ├── once_cell v1.19.0
+│   │   │   │   ├── rand v0.8.5 (*)
+│   │   │   │   ├── socket2 v0.5.7 (*)
+│   │   │   │   ├── thiserror v1.0.62 (*)
+│   │   │   │   ├── tinyvec v1.8.0 (*)
+│   │   │   │   ├── tokio v1.38.0 (*)
+│   │   │   │   ├── tracing v0.1.40 (*)
+│   │   │   │   └── url v2.5.2 (*)
+│   │   │   ├── lru-cache v0.1.2
+│   │   │   │   └── linked-hash-map v0.5.6
+│   │   │   ├── once_cell v1.19.0
+│   │   │   ├── parking_lot v0.12.3 (*)
+│   │   │   ├── rand v0.8.5 (*)
+│   │   │   ├── resolv-conf v0.7.0
+│   │   │   │   ├── hostname v0.3.1
+│   │   │   │   │   ├── libc v0.2.155
+│   │   │   │   │   └── match_cfg v0.1.0
+│   │   │   │   └── quick-error v1.2.3
+│   │   │   ├── smallvec v1.13.2
+│   │   │   ├── thiserror v1.0.62 (*)
+│   │   │   ├── tokio v1.38.0 (*)
+│   │   │   └── tracing v0.1.40 (*)
+│   │   ├── libp2p-core v0.41.3 (https://github.com/libp2p/rust-libp2p?rev=32e917f#32e917ff) (*)
+│   │   ├── libp2p-identity v0.2.9 (*)
+│   │   ├── parking_lot v0.12.3 (*)
+│   │   ├── smallvec v1.13.2
+│   │   └── tracing v0.1.40 (*)
+│   ├── libp2p-gossipsub v0.46.2 (https://github.com/libp2p/rust-libp2p?rev=32e917f#32e917ff)
+│   │   ├── asynchronous-codec v0.7.0
+│   │   │   ├── bytes v1.6.1 (*)
+│   │   │   ├── futures-sink v0.3.30
+│   │   │   ├── futures-util v0.3.30 (*)
+│   │   │   ├── memchr v2.7.4
+│   │   │   └── pin-project-lite v0.2.14
+│   │   ├── base64 v0.22.1
+│   │   ├── byteorder v1.5.0
+│   │   ├── bytes v1.6.1 (*)
+│   │   ├── either v1.13.0
+│   │   ├── fnv v1.0.7
+│   │   ├── futures v0.3.30 (*)
+│   │   ├── futures-ticker v0.0.3
+│   │   │   ├── futures v0.3.30 (*)
+│   │   │   └── futures-timer v3.0.3
+│   │   ├── getrandom v0.2.15 (*)
+│   │   ├── hex_fmt v0.3.0
+│   │   ├── libp2p-core v0.41.3 (https://github.com/libp2p/rust-libp2p?rev=32e917f#32e917ff) (*)
+│   │   ├── libp2p-identity v0.2.9 (*)
+│   │   ├── libp2p-swarm v0.45.0 (https://github.com/libp2p/rust-libp2p?rev=32e917f#32e917ff) (*)
+│   │   ├── prometheus-client v0.22.2
+│   │   │   ├── dtoa v1.0.9
+│   │   │   ├── itoa v1.0.11
+│   │   │   ├── parking_lot v0.12.3 (*)
+│   │   │   └── prometheus-client-derive-encode v0.4.2 (proc-macro)
+│   │   │       ├── proc-macro2 v1.0.86 (*)
+│   │   │       ├── quote v1.0.36 (*)
+│   │   │       └── syn v2.0.71 (*)
+│   │   ├── quick-protobuf v0.8.1 (*)
+│   │   ├── quick-protobuf-codec v0.3.1 (https://github.com/libp2p/rust-libp2p?rev=32e917f#32e917ff)
+│   │   │   ├── asynchronous-codec v0.7.0 (*)
+│   │   │   ├── bytes v1.6.1 (*)
+│   │   │   ├── quick-protobuf v0.8.1 (*)
+│   │   │   ├── thiserror v1.0.62 (*)
+│   │   │   └── unsigned-varint v0.8.0
+│   │   ├── rand v0.8.5 (*)
+│   │   ├── regex v1.10.5
+│   │   │   ├── aho-corasick v1.1.3
+│   │   │   │   └── memchr v2.7.4
+│   │   │   ├── memchr v2.7.4
+│   │   │   ├── regex-automata v0.4.7
+│   │   │   │   ├── aho-corasick v1.1.3 (*)
+│   │   │   │   ├── memchr v2.7.4
+│   │   │   │   └── regex-syntax v0.8.4
+│   │   │   └── regex-syntax v0.8.4
+│   │   ├── serde v1.0.204 (*)
+│   │   ├── sha2 v0.10.8 (*)
+│   │   ├── smallvec v1.13.2
+│   │   ├── tracing v0.1.40 (*)
+│   │   ├── void v1.0.2
+│   │   └── web-time v1.1.0
+│   ├── libp2p-identify v0.44.2 (https://github.com/libp2p/rust-libp2p?rev=32e917f#32e917ff)
+│   │   ├── asynchronous-codec v0.7.0 (*)
+│   │   ├── either v1.13.0
+│   │   ├── futures v0.3.30 (*)
+│   │   ├── futures-bounded v0.2.4
+│   │   │   ├── futures-timer v3.0.3
+│   │   │   └── futures-util v0.3.30 (*)
+│   │   ├── futures-timer v3.0.3
+│   │   ├── libp2p-core v0.41.3 (https://github.com/libp2p/rust-libp2p?rev=32e917f#32e917ff) (*)
+│   │   ├── libp2p-identity v0.2.9 (*)
+│   │   ├── libp2p-swarm v0.45.0 (https://github.com/libp2p/rust-libp2p?rev=32e917f#32e917ff) (*)
+│   │   ├── lru v0.12.3 (*)
+│   │   ├── quick-protobuf v0.8.1 (*)
+│   │   ├── quick-protobuf-codec v0.3.1 (https://github.com/libp2p/rust-libp2p?rev=32e917f#32e917ff) (*)
+│   │   ├── smallvec v1.13.2
+│   │   ├── thiserror v1.0.62 (*)
+│   │   ├── tracing v0.1.40 (*)
+│   │   └── void v1.0.2
+│   ├── libp2p-identity v0.2.9 (*)
+│   ├── libp2p-kad v0.46.0 (https://github.com/libp2p/rust-libp2p?rev=32e917f#32e917ff)
+│   │   ├── arrayvec v0.7.4
+│   │   ├── asynchronous-codec v0.7.0 (*)
+│   │   ├── bytes v1.6.1 (*)
+│   │   ├── either v1.13.0
+│   │   ├── fnv v1.0.7
+│   │   ├── futures v0.3.30 (*)
+│   │   ├── futures-bounded v0.2.4 (*)
+│   │   ├── futures-timer v3.0.3
+│   │   ├── libp2p-core v0.41.3 (https://github.com/libp2p/rust-libp2p?rev=32e917f#32e917ff) (*)
+│   │   ├── libp2p-identity v0.2.9 (*)
+│   │   ├── libp2p-swarm v0.45.0 (https://github.com/libp2p/rust-libp2p?rev=32e917f#32e917ff) (*)
+│   │   ├── quick-protobuf v0.8.1 (*)
+│   │   ├── quick-protobuf-codec v0.3.1 (https://github.com/libp2p/rust-libp2p?rev=32e917f#32e917ff) (*)
+│   │   ├── rand v0.8.5 (*)
+│   │   ├── serde v1.0.204 (*)
+│   │   ├── sha2 v0.10.8 (*)
+│   │   ├── smallvec v1.13.2
+│   │   ├── thiserror v1.0.62 (*)
+│   │   ├── tracing v0.1.40 (*)
+│   │   ├── uint v0.9.5
+│   │   │   ├── byteorder v1.5.0
+│   │   │   ├── crunchy v0.2.2
+│   │   │   ├── hex v0.4.3
+│   │   │   └── static_assertions v1.1.0
+│   │   ├── void v1.0.2
+│   │   └── web-time v1.1.0
+│   ├── libp2p-mdns v0.45.1 (https://github.com/libp2p/rust-libp2p?rev=32e917f#32e917ff)
+│   │   ├── data-encoding v2.6.0
+│   │   ├── futures v0.3.30 (*)
+│   │   ├── hickory-proto v0.24.1 (*)
+│   │   ├── if-watch v3.2.0
+│   │   │   ├── fnv v1.0.7
+│   │   │   ├── futures v0.3.30 (*)
+│   │   │   ├── ipnet v2.9.0
+│   │   │   ├── log v0.4.22
+│   │   │   └── rtnetlink v0.10.1
+│   │   │       ├── futures v0.3.30 (*)
+│   │   │       ├── log v0.4.22
+│   │   │       ├── netlink-packet-route v0.12.0
+│   │   │       │   ├── anyhow v1.0.86
+│   │   │       │   ├── bitflags v1.3.2
+│   │   │       │   ├── byteorder v1.5.0
+│   │   │       │   ├── libc v0.2.155
+│   │   │       │   ├── netlink-packet-core v0.4.2
+│   │   │       │   │   ├── anyhow v1.0.86
+│   │   │       │   │   ├── byteorder v1.5.0
+│   │   │       │   │   ├── libc v0.2.155
+│   │   │       │   │   └── netlink-packet-utils v0.5.2
+│   │   │       │   │       ├── anyhow v1.0.86
+│   │   │       │   │       ├── byteorder v1.5.0
+│   │   │       │   │       ├── paste v1.0.15 (proc-macro)
+│   │   │       │   │       └── thiserror v1.0.62 (*)
+│   │   │       │   └── netlink-packet-utils v0.5.2 (*)
+│   │   │       ├── netlink-proto v0.10.0
+│   │   │       │   ├── bytes v1.6.1 (*)
+│   │   │       │   ├── futures v0.3.30 (*)
+│   │   │       │   ├── log v0.4.22
+│   │   │       │   ├── netlink-packet-core v0.4.2 (*)
+│   │   │       │   ├── netlink-sys v0.8.6
+│   │   │       │   │   ├── bytes v1.6.1 (*)
+│   │   │       │   │   ├── futures v0.3.30 (*)
+│   │   │       │   │   ├── libc v0.2.155
+│   │   │       │   │   ├── log v0.4.22
+│   │   │       │   │   └── tokio v1.38.0 (*)
+│   │   │       │   ├── thiserror v1.0.62 (*)
+│   │   │       │   └── tokio v1.38.0 (*)
+│   │   │       ├── nix v0.24.3
+│   │   │       │   ├── bitflags v1.3.2
+│   │   │       │   ├── cfg-if v1.0.0
+│   │   │       │   └── libc v0.2.155
+│   │   │       ├── thiserror v1.0.62 (*)
+│   │   │       └── tokio v1.38.0 (*)
+│   │   ├── libp2p-core v0.41.3 (https://github.com/libp2p/rust-libp2p?rev=32e917f#32e917ff) (*)
+│   │   ├── libp2p-identity v0.2.9 (*)
+│   │   ├── libp2p-swarm v0.45.0 (https://github.com/libp2p/rust-libp2p?rev=32e917f#32e917ff) (*)
+│   │   ├── rand v0.8.5 (*)
+│   │   ├── smallvec v1.13.2
+│   │   ├── socket2 v0.5.7 (*)
+│   │   ├── tokio v1.38.0 (*)
+│   │   ├── tracing v0.1.40 (*)
+│   │   └── void v1.0.2
+│   ├── libp2p-noise v0.44.0 (https://github.com/libp2p/rust-libp2p?rev=32e917f#32e917ff)
+│   │   ├── asynchronous-codec v0.7.0 (*)
+│   │   ├── bytes v1.6.1 (*)
+│   │   ├── curve25519-dalek v4.1.3 (*)
+│   │   ├── futures v0.3.30 (*)
+│   │   ├── libp2p-core v0.41.3 (https://github.com/libp2p/rust-libp2p?rev=32e917f#32e917ff) (*)
+│   │   ├── libp2p-identity v0.2.9 (*)
+│   │   ├── multiaddr v0.18.1 (*)
+│   │   ├── multihash v0.19.1 (*)
+│   │   ├── once_cell v1.19.0
+│   │   ├── quick-protobuf v0.8.1 (*)
+│   │   ├── rand v0.8.5 (*)
+│   │   ├── sha2 v0.10.8 (*)
+│   │   ├── snow v0.9.6
+│   │   │   ├── rand_core v0.6.4 (*)
+│   │   │   ├── ring v0.17.8 (*)
+│   │   │   └── subtle v2.6.1
+│   │   │   [build-dependencies]
+│   │   │   └── rustc_version v0.4.0 (*)
+│   │   ├── static_assertions v1.1.0
+│   │   ├── thiserror v1.0.62 (*)
+│   │   ├── tracing v0.1.40 (*)
+│   │   ├── x25519-dalek v2.0.1
+│   │   │   ├── curve25519-dalek v4.1.3 (*)
+│   │   │   ├── rand_core v0.6.4 (*)
+│   │   │   └── zeroize v1.8.1 (*)
+│   │   └── zeroize v1.8.1 (*)
+│   ├── libp2p-quic v0.10.3 (https://github.com/libp2p/rust-libp2p?rev=32e917f#32e917ff)
+│   │   ├── bytes v1.6.1 (*)
+│   │   ├── futures v0.3.30 (*)
+│   │   ├── futures-timer v3.0.3
+│   │   ├── if-watch v3.2.0 (*)
+│   │   ├── libp2p-core v0.41.3 (https://github.com/libp2p/rust-libp2p?rev=32e917f#32e917ff) (*)
+│   │   ├── libp2p-identity v0.2.9 (*)
+│   │   ├── libp2p-tls v0.4.0 (https://github.com/libp2p/rust-libp2p?rev=32e917f#32e917ff)
+│   │   │   ├── futures v0.3.30 (*)
+│   │   │   ├── futures-rustls v0.26.0
+│   │   │   │   ├── futures-io v0.3.30
+│   │   │   │   ├── rustls v0.23.11
+│   │   │   │   │   ├── once_cell v1.19.0
+│   │   │   │   │   ├── ring v0.17.8 (*)
+│   │   │   │   │   ├── rustls-pki-types v1.7.0
+│   │   │   │   │   ├── rustls-webpki v0.102.5
+│   │   │   │   │   │   ├── ring v0.17.8 (*)
+│   │   │   │   │   │   ├── rustls-pki-types v1.7.0
+│   │   │   │   │   │   └── untrusted v0.9.0
+│   │   │   │   │   ├── subtle v2.6.1
+│   │   │   │   │   └── zeroize v1.8.1 (*)
+│   │   │   │   └── rustls-pki-types v1.7.0
+│   │   │   ├── libp2p-core v0.41.3 (https://github.com/libp2p/rust-libp2p?rev=32e917f#32e917ff) (*)
+│   │   │   ├── libp2p-identity v0.2.9 (*)
+│   │   │   ├── rcgen v0.11.3
+│   │   │   │   ├── pem v3.0.4
+│   │   │   │   │   └── base64 v0.22.1
+│   │   │   │   ├── ring v0.16.20
+│   │   │   │   │   ├── libc v0.2.155
+│   │   │   │   │   ├── once_cell v1.19.0
+│   │   │   │   │   ├── spin v0.5.2
+│   │   │   │   │   └── untrusted v0.7.1
+│   │   │   │   │   [build-dependencies]
+│   │   │   │   │   └── cc v1.1.5
+│   │   │   │   ├── time v0.3.36
+│   │   │   │   │   ├── deranged v0.3.11
+│   │   │   │   │   │   └── powerfmt v0.2.0
+│   │   │   │   │   ├── itoa v1.0.11
+│   │   │   │   │   ├── num-conv v0.1.0
+│   │   │   │   │   ├── powerfmt v0.2.0
+│   │   │   │   │   ├── time-core v0.1.2
+│   │   │   │   │   └── time-macros v0.2.18 (proc-macro)
+│   │   │   │   │       ├── num-conv v0.1.0
+│   │   │   │   │       └── time-core v0.1.2
+│   │   │   │   └── yasna v0.5.2
+│   │   │   │       └── time v0.3.36 (*)
+│   │   │   ├── ring v0.17.8 (*)
+│   │   │   ├── rustls v0.23.11 (*)
+│   │   │   ├── rustls-webpki v0.101.7
+│   │   │   │   ├── ring v0.17.8 (*)
+│   │   │   │   └── untrusted v0.9.0
+│   │   │   ├── thiserror v1.0.62 (*)
+│   │   │   ├── x509-parser v0.16.0
+│   │   │   │   ├── asn1-rs v0.6.1
+│   │   │   │   │   ├── asn1-rs-derive v0.5.0 (proc-macro)
+│   │   │   │   │   │   ├── proc-macro2 v1.0.86 (*)
+│   │   │   │   │   │   ├── quote v1.0.36 (*)
+│   │   │   │   │   │   ├── syn v2.0.71 (*)
+│   │   │   │   │   │   └── synstructure v0.13.1
+│   │   │   │   │   │       ├── proc-macro2 v1.0.86 (*)
+│   │   │   │   │   │       ├── quote v1.0.36 (*)
+│   │   │   │   │   │       └── syn v2.0.71 (*)
+│   │   │   │   │   ├── asn1-rs-impl v0.2.0 (proc-macro)
+│   │   │   │   │   │   ├── proc-macro2 v1.0.86 (*)
+│   │   │   │   │   │   ├── quote v1.0.36 (*)
+│   │   │   │   │   │   └── syn v2.0.71 (*)
+│   │   │   │   │   ├── displaydoc v0.2.5 (proc-macro)
+│   │   │   │   │   │   ├── proc-macro2 v1.0.86 (*)
+│   │   │   │   │   │   ├── quote v1.0.36 (*)
+│   │   │   │   │   │   └── syn v2.0.71 (*)
+│   │   │   │   │   ├── nom v7.1.3
+│   │   │   │   │   │   ├── memchr v2.7.4
+│   │   │   │   │   │   └── minimal-lexical v0.2.1
+│   │   │   │   │   ├── num-traits v0.2.19
+│   │   │   │   │   │   [build-dependencies]
+│   │   │   │   │   │   └── autocfg v1.3.0
+│   │   │   │   │   ├── rusticata-macros v4.1.0
+│   │   │   │   │   │   └── nom v7.1.3 (*)
+│   │   │   │   │   ├── thiserror v1.0.62 (*)
+│   │   │   │   │   └── time v0.3.36 (*)
+│   │   │   │   ├── data-encoding v2.6.0
+│   │   │   │   ├── der-parser v9.0.0
+│   │   │   │   │   ├── asn1-rs v0.6.1 (*)
+│   │   │   │   │   ├── displaydoc v0.2.5 (proc-macro) (*)
+│   │   │   │   │   ├── nom v7.1.3 (*)
+│   │   │   │   │   ├── num-bigint v0.4.6
+│   │   │   │   │   │   ├── num-integer v0.1.46
+│   │   │   │   │   │   │   └── num-traits v0.2.19 (*)
+│   │   │   │   │   │   └── num-traits v0.2.19 (*)
+│   │   │   │   │   ├── num-traits v0.2.19 (*)
+│   │   │   │   │   └── rusticata-macros v4.1.0 (*)
+│   │   │   │   ├── lazy_static v1.5.0
+│   │   │   │   ├── nom v7.1.3 (*)
+│   │   │   │   ├── oid-registry v0.7.0
+│   │   │   │   │   └── asn1-rs v0.6.1 (*)
+│   │   │   │   ├── rusticata-macros v4.1.0 (*)
+│   │   │   │   ├── thiserror v1.0.62 (*)
+│   │   │   │   └── time v0.3.36 (*)
+│   │   │   └── yasna v0.5.2 (*)
+│   │   ├── parking_lot v0.12.3 (*)
+│   │   ├── quinn v0.11.2
+│   │   │   ├── bytes v1.6.1 (*)
+│   │   │   ├── futures-io v0.3.30
+│   │   │   ├── pin-project-lite v0.2.14
+│   │   │   ├── quinn-proto v0.11.3
+│   │   │   │   ├── bytes v1.6.1 (*)
+│   │   │   │   ├── rand v0.8.5 (*)
+│   │   │   │   ├── ring v0.17.8 (*)
+│   │   │   │   ├── rustc-hash v1.1.0
+│   │   │   │   ├── rustls v0.23.11 (*)
+│   │   │   │   ├── slab v0.4.9 (*)
+│   │   │   │   ├── thiserror v1.0.62 (*)
+│   │   │   │   ├── tinyvec v1.8.0 (*)
+│   │   │   │   └── tracing v0.1.40 (*)
+│   │   │   ├── quinn-udp v0.5.2
+│   │   │   │   ├── libc v0.2.155
+│   │   │   │   ├── socket2 v0.5.7 (*)
+│   │   │   │   └── tracing v0.1.40 (*)
+│   │   │   ├── rustc-hash v1.1.0
+│   │   │   ├── rustls v0.23.11 (*)
+│   │   │   ├── thiserror v1.0.62 (*)
+│   │   │   ├── tokio v1.38.0 (*)
+│   │   │   └── tracing v0.1.40 (*)
+│   │   ├── rand v0.8.5 (*)
+│   │   ├── ring v0.17.8 (*)
+│   │   ├── rustls v0.23.11 (*)
+│   │   ├── socket2 v0.5.7 (*)
+│   │   ├── thiserror v1.0.62 (*)
+│   │   ├── tokio v1.38.0 (*)
+│   │   └── tracing v0.1.40 (*)
+│   ├── libp2p-request-response v0.26.4 (https://github.com/libp2p/rust-libp2p?rev=32e917f#32e917ff)
+│   │   ├── async-trait v0.1.81 (proc-macro) (*)
+│   │   ├── futures v0.3.30 (*)
+│   │   ├── futures-bounded v0.2.4 (*)
+│   │   ├── futures-timer v3.0.3
+│   │   ├── libp2p-core v0.41.3 (https://github.com/libp2p/rust-libp2p?rev=32e917f#32e917ff) (*)
+│   │   ├── libp2p-identity v0.2.9 (*)
+│   │   ├── libp2p-swarm v0.45.0 (https://github.com/libp2p/rust-libp2p?rev=32e917f#32e917ff) (*)
+│   │   ├── rand v0.8.5 (*)
+│   │   ├── serde v1.0.204 (*)
+│   │   ├── serde_json v1.0.141
+│   │   │   ├── itoa v1.0.11
+│   │   │   ├── memchr v2.7.4
+│   │   │   ├── ryu v1.0.18
+│   │   │   └── serde v1.0.204 (*)
+│   │   ├── smallvec v1.13.2
+│   │   ├── tracing v0.1.40 (*)
+│   │   ├── void v1.0.2
+│   │   └── web-time v1.1.0
+│   ├── libp2p-swarm v0.45.0 (https://github.com/libp2p/rust-libp2p?rev=32e917f#32e917ff) (*)
+│   ├── libp2p-tcp v0.42.0 (https://github.com/libp2p/rust-libp2p?rev=32e917f#32e917ff)
+│   │   ├── futures v0.3.30 (*)
+│   │   ├── futures-timer v3.0.3
+│   │   ├── if-watch v3.2.0 (*)
+│   │   ├── libc v0.2.155
+│   │   ├── libp2p-core v0.41.3 (https://github.com/libp2p/rust-libp2p?rev=32e917f#32e917ff) (*)
+│   │   ├── libp2p-identity v0.2.9 (*)
+│   │   ├── socket2 v0.5.7 (*)
+│   │   ├── tokio v1.38.0 (*)
+│   │   └── tracing v0.1.40 (*)
+│   ├── libp2p-yamux v0.45.2 (https://github.com/libp2p/rust-libp2p?rev=32e917f#32e917ff)
+│   │   ├── either v1.13.0
+│   │   ├── futures v0.3.30 (*)
+│   │   ├── libp2p-core v0.41.3 (https://github.com/libp2p/rust-libp2p?rev=32e917f#32e917ff) (*)
+│   │   ├── thiserror v1.0.62 (*)
+│   │   ├── tracing v0.1.40 (*)
+│   │   ├── yamux v0.12.1
+│   │   │   ├── futures v0.3.30 (*)
+│   │   │   ├── log v0.4.22
+│   │   │   ├── nohash-hasher v0.2.0
+│   │   │   ├── parking_lot v0.12.3 (*)
+│   │   │   ├── pin-project v1.1.5 (*)
+│   │   │   ├── rand v0.8.5 (*)
+│   │   │   └── static_assertions v1.1.0
+│   │   └── yamux v0.13.3
+│   │       ├── futures v0.3.30 (*)
+│   │       ├── log v0.4.22
+│   │       ├── nohash-hasher v0.2.0
+│   │       ├── parking_lot v0.12.3 (*)
+│   │       ├── pin-project v1.1.5 (*)
+│   │       ├── rand v0.8.5 (*)
+│   │       ├── static_assertions v1.1.0
+│   │       └── web-time v1.1.0
+│   ├── multiaddr v0.18.1 (*)
+│   ├── pin-project v1.1.5 (*)
+│   ├── rw-stream-sink v0.4.0 (https://github.com/libp2p/rust-libp2p?rev=32e917f#32e917ff) (*)
+│   └── thiserror v1.0.62 (*)
+├── log v0.4.22
+├── rand v0.8.5 (*)
+├── time v0.3.36 (*)
+└── tokio v1.38.0 (*)

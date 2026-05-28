@@ -5,14 +5,14 @@ use std::time::Duration;
 use thiserror::Error;
 use tokio::sync::mpsc;
 
-use identity::Keypair;
-use libp2p::{identity, multiaddr, Multiaddr, noise, tcp, TransportError, yamux};
-use libp2p::swarm::{NetworkBehaviour};
-use openmls::group::GroupId;
-use crate::abstswarm::{Instruction, AbstSwarm, Notification};
 use crate::abstswarm::event_handler::EventHandler;
 use crate::abstswarm::instruction_handler::InstructionHandler;
+use crate::abstswarm::{AbstSwarm, Instruction, Notification};
 use dactie_utils::mls_wrapper::MyOpenMls;
+use identity::Keypair;
+use libp2p::swarm::NetworkBehaviour;
+use libp2p::{identity, multiaddr, noise, tcp, yamux, Multiaddr, TransportError};
+use openmls::group::GroupId;
 
 pub(crate) struct AbstSwarmBuilder<TBehaviour> {
     keypair: Keypair,
@@ -21,8 +21,7 @@ pub(crate) struct AbstSwarmBuilder<TBehaviour> {
     listen_address: Multiaddr,
     behaviour: TBehaviour,
     my_open_mls: MyOpenMls,
-    group_commit_rx: mpsc::UnboundedReceiver<GroupId>
-
+    group_commit_rx: mpsc::UnboundedReceiver<GroupId>,
 }
 
 impl<TBehaviour> AbstSwarmBuilder<TBehaviour>
@@ -35,7 +34,7 @@ where
         notification_tx: mpsc::UnboundedSender<Notification>,
         behaviour: TBehaviour,
         my_open_mls: MyOpenMls,
-        group_commit_rx: mpsc::UnboundedReceiver<GroupId>
+        group_commit_rx: mpsc::UnboundedReceiver<GroupId>,
     ) -> Result<AbstSwarmBuilder<TBehaviour>, AbstSwarmBuilderError> {
         Ok(AbstSwarmBuilder {
             listen_address: Self::default_listen_address()?,
@@ -44,7 +43,7 @@ where
             notification_tx,
             behaviour,
             my_open_mls,
-            group_commit_rx
+            group_commit_rx,
         })
     }
 
@@ -52,7 +51,6 @@ where
         self.listen_address = address;
         self
     }
-
 
     /// Listen on all interfaces, on a random port
     fn default_listen_address() -> Result<Multiaddr, AbstSwarmBuilderError> {

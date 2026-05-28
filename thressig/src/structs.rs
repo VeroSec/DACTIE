@@ -1,14 +1,12 @@
-use std::fmt;
-use std::str::FromStr;
 use amcl_wrapper::extension_field_gt::GT;
 use amcl_wrapper::field_elem::FieldElement;
 use amcl_wrapper::group_elem_g1::G1;
 use amcl_wrapper::group_elem_g2::G2;
-use serde::{Deserialize, Serialize};
-use bincode;
 use base64::{engine::general_purpose, Engine as _};
-
-
+use bincode;
+use serde::{Deserialize, Serialize};
+use std::fmt;
+use std::str::FromStr;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Grpkey {
@@ -52,26 +50,24 @@ pub struct Share {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct EncShare {
     pub index: usize,
-    pub c0: G2, //Enc Share Part 1
-    pub c1: G2, //Enc Share Part 2
-    pub c: FieldElement,    //NIZK Proof challange
-    pub s: FieldElement,    //NIZK Proof response
-    pub h_blind: G1
+    pub c0: G2,          //Enc Share Part 1
+    pub c1: G2,          //Enc Share Part 2
+    pub c: FieldElement, //NIZK Proof challange
+    pub s: FieldElement, //NIZK Proof response
+    pub h_blind: G1,
 }
-
-
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EncSharePairing {
     pub index: usize,
-    pub pairing: GT
+    pub pairing: GT,
 }
 
 impl fmt::Display for Signature {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let bytes = self.to_bytes();
         let encoded = general_purpose::STANDARD.encode(&bytes);
-        write!(f, "{}", encoded)
+        write!(f, "{encoded}")
     }
 }
 

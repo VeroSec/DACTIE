@@ -2,7 +2,6 @@ use amcl_wrapper::field_elem::FieldElement;
 use amcl_wrapper::group_elem::GroupElement;
 use amcl_wrapper::group_elem_g1::G1;
 
-
 pub fn sign(tau: &G1, g: &G1, msg: &[u8], x: &FieldElement) -> (FieldElement, FieldElement) {
     let r = FieldElement::random();
     let gr = g * &r;
@@ -17,11 +16,10 @@ pub fn sign(tau: &G1, g: &G1, msg: &[u8], x: &FieldElement) -> (FieldElement, Fi
     let c = FieldElement::from_msg_hash(&msg_to_send);
     let s = r - (&c * x);
 
-
     (s, c)
 }
 
-pub fn verify(tau: &G1, g: &G1, pi:(FieldElement,FieldElement),msg: &[u8]) -> bool{
+pub fn verify(tau: &G1, g: &G1, pi: (FieldElement, FieldElement), msg: &[u8]) -> bool {
     /* Compute g^pi->s * g^pi->c */
     let gs = g * &pi.0;
     let tauc = tau * &pi.1;

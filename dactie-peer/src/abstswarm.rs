@@ -1,22 +1,22 @@
+pub(crate) mod abstswarm_builder;
 pub(crate) mod event_handler;
 pub(crate) mod instruction_handler;
-pub(crate) mod abstswarm_builder;
 
+use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 use std::sync::Arc;
-use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::mpsc;
 
-use libp2p::futures::StreamExt;
-use libp2p::PeerId;
-use libp2p::Swarm;
-use libp2p::swarm::NetworkBehaviour;
+use dactie_utils::mls_wrapper::{MyOpenMLSError, MyOpenMls};
+use dactie_utils::shared_structs::{Instruction, MessageBody};
 use event_handler::EventHandler;
 use instruction_handler::InstructionHandler;
+use libp2p::futures::StreamExt;
+use libp2p::swarm::NetworkBehaviour;
+use libp2p::PeerId;
+use libp2p::Swarm;
 use openmls::group::GroupId;
-use dactie_utils::shared_structs::{MessageBody,Instruction};
-use dactie_utils::mls_wrapper::{MyOpenMls, MyOpenMLSError};
 
 ///
 /// The `AbstSwarm` is a convenience wrapper around the `Swarm` for a `NetworkBehaviour`.
@@ -44,7 +44,7 @@ where
     notification_tx: mpsc::UnboundedSender<Notification>,
     group_commit_rx: mpsc::UnboundedReceiver<GroupId>,
     swarm: Swarm<TBehaviour>,
-    my_open_mls: Arc<MyOpenMls>
+    my_open_mls: Arc<MyOpenMls>,
 }
 
 impl<TBehaviour> AbstSwarm<TBehaviour>
@@ -56,9 +56,15 @@ where
         notification_tx: mpsc::UnboundedSender<Notification>,
         group_commit_rx: mpsc::UnboundedReceiver<GroupId>,
         swarm: Swarm<TBehaviour>,
-        my_open_mls: MyOpenMls
+        my_open_mls: MyOpenMls,
     ) -> Self {
-        AbstSwarm { instruction_rx, notification_tx, swarm, my_open_mls: Arc::new(my_open_mls), group_commit_rx}
+        AbstSwarm {
+            instruction_rx,
+            notification_tx,
+            swarm,
+            my_open_mls: Arc::new(my_open_mls),
+            group_commit_rx,
+        }
     }
 
     pub(crate) async fn run(mut self) {
@@ -87,8 +93,6 @@ where
     }
 }
 
-
-
 /// A notification from the swarm to one of its consumers.
 /// Either arbitrary data, the list of known peers or an error.
 #[derive(Debug)]
@@ -96,7 +100,7 @@ pub(crate) enum Notification {
     Data {
         propagation_source: PeerId,
         message_body: MessageBody,
-        signature: Vec<u8>
+        signature: Vec<u8>,
     },
     Err(AbstSwarmError),
 }
@@ -110,17 +114,18 @@ pub(crate) struct Message<T: Debug + Clone> {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) enum Address {
     Broadcast(String),
-    Group(usize)
+    Group(usize),
 }
 
 #[derive(Debug, Error)]
+#[allow(clippy::enum_variant_names)]
 pub(crate) enum AbstSwarmError {
     #[error("Failed to send broadcast: `{reason:?}`")]
     SendError { reason: String },
     #[error("Failed to send Joingrequest to group `{group_id:?}`")]
-    SendJoinGroupError { group_id: Vec<u8>},
+    SendJoinGroupError { group_id: Vec<u8> },
     #[error("Failed to handle update: `{reason:?}`")]
-    HandleUpdateError{ reason: String },
+    HandleUpdateError { reason: String },
     #[error("Failed to send keypackage response")]
     SendKeyPackageError,
     #[error("Failed to subscribe to topic: `{reason:?}`")]
@@ -129,5 +134,4 @@ pub(crate) enum AbstSwarmError {
     MLSError(#[from] MyOpenMLSError),
     #[error("Failed to validate Message")]
     MessageValidationError,
-
 }

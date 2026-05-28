@@ -4,16 +4,16 @@ use std::time::Duration;
 
 use thiserror::Error;
 
-use identity::Keypair;
-use libp2p::{identity, multiaddr, Multiaddr, noise, tcp, TransportError, yamux};
-use libp2p::swarm::{NetworkBehaviour};
-use sqlx::{Pool, Postgres};
-use tokio::sync::mpsc;
-use dactie_utils::mls_wrapper::MyOpenMls;
-use dactie_utils::shared_structs::Instruction;
-use crate::abstswarm::{AbstSwarm};
 use crate::abstswarm::event_handler::EventHandler;
 use crate::abstswarm::instruction_handler::InstructionHandler;
+use crate::abstswarm::AbstSwarm;
+use dactie_utils::mls_wrapper::MyOpenMls;
+use dactie_utils::shared_structs::Instruction;
+use identity::Keypair;
+use libp2p::swarm::NetworkBehaviour;
+use libp2p::{identity, multiaddr, noise, tcp, yamux, Multiaddr, TransportError};
+use sqlx::{Pool, Postgres};
+use tokio::sync::mpsc;
 
 pub(crate) struct AbstSwarmBuilder<TBehaviour> {
     keypair: Keypair,
@@ -22,7 +22,6 @@ pub(crate) struct AbstSwarmBuilder<TBehaviour> {
     pool: Pool<Postgres>,
     behaviour: TBehaviour,
     my_open_mls: MyOpenMls,
-
 }
 
 impl<TBehaviour> AbstSwarmBuilder<TBehaviour>
@@ -35,7 +34,7 @@ where
         pool: Pool<Postgres>,
         behaviour: TBehaviour,
 
-        my_open_mls: MyOpenMls
+        my_open_mls: MyOpenMls,
     ) -> Result<AbstSwarmBuilder<TBehaviour>, AbstSwarmBuilderError> {
         Ok(AbstSwarmBuilder {
             listen_address: Self::default_listen_address()?,
@@ -43,7 +42,7 @@ where
             keypair,
             pool,
             behaviour,
-            my_open_mls
+            my_open_mls,
         })
     }
 
@@ -51,7 +50,6 @@ where
         self.listen_address = address;
         self
     }
-
 
     /// Listen on all interfaces, on a random port
     fn default_listen_address() -> Result<Multiaddr, AbstSwarmBuilderError> {
@@ -79,7 +77,7 @@ where
             self.pool,
             self.instruction_rx,
             swarm,
-            self.my_open_mls
+            self.my_open_mls,
         ))
     }
 }

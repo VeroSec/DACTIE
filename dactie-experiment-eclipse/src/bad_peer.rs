@@ -1,29 +1,24 @@
+use crate::shared_structs::*;
+use futures::StreamExt;
+use libp2p::gossipsub::{IdentTopic, MessageAcceptance};
+use libp2p::kad::store::MemoryStore;
+use libp2p::kad::{Mode, PROTOCOL_NAME};
+use libp2p::swarm::{NetworkBehaviour, SwarmEvent};
+use libp2p::{gossipsub, identify, kad, noise, tcp, yamux, Multiaddr, PeerId, Swarm};
+use rand::{distributions::Alphanumeric, Rng};
 use std::error::Error;
 use std::hash::{DefaultHasher, Hash, Hasher};
-use std::str::FromStr;
-use futures::StreamExt;
-use libp2p::{gossipsub, identify, kad, noise, tcp, yamux, Multiaddr, PeerId, Swarm};
-use libp2p::gossipsub::{IdentTopic, MessageAcceptance};
-use libp2p::kad::{Mode, PROTOCOL_NAME};
-use libp2p::kad::store::MemoryStore;
-use libp2p::swarm::{NetworkBehaviour, SwarmEvent};
-use tokio::{io, select};
 use tokio::sync::broadcast;
-use tokio::sync::mpsc::{UnboundedSender};
+use tokio::sync::mpsc::UnboundedSender;
 use tokio::time::{self, Duration, Interval};
-use rand::{distributions::Alphanumeric, Rng};
-use crate::shared_structs::*;
+use tokio::{io, select};
 
 pub(crate) struct Peer {
     swarm: Swarm<MyBehaviour>,
-    response_channel: UnboundedSender<PeerOut>,
     control_channel: broadcast::Receiver<ControlSignal>,
     censor_peer: PeerId,
     attack_mode: bool,
-
-
 }
-
 
 #[derive(NetworkBehaviour)]
 pub(crate) struct MyBehaviour {
@@ -37,14 +32,25 @@ pub(crate) struct MyBehaviour {
 }
 
 impl Peer {
+    pub(crate) fn new_peer(
+        boot_peer_id: PeerId,
+        control_channel: broadcast::Receiver<ControlSignal>,
+        _response_channel: UnboundedSender<PeerOut>,
+        censor_peer: PeerId,
+    ) -> Result<Peer, Box<dyn Error>> {
+        let swarm = Self::create_swarm(Some((boot_peer_id, "/ip4/127.0.0.1/tcp/10001".parse()?)))?;
 
-    pub(crate) fn new_peer(boot_peer_id: PeerId,control_channel: broadcast::Receiver<ControlSignal>, response_channel: UnboundedSender<PeerOut>, censor_peer: PeerId) -> Result<Peer,Box<dyn Error>>{
-        let swarm = Self::create_swarm(Some((boot_peer_id,"/ip4/127.0.0.1/tcp/10001".parse()? )))?;
-
-        Ok(Peer{swarm, control_channel, response_channel, censor_peer, attack_mode:false})
+        Ok(Peer {
+            swarm,
+            control_channel,
+            censor_peer,
+            attack_mode: false,
+        })
     }
 
-    fn create_swarm(bootstrap_peer: Option<(PeerId, Multiaddr)>) -> Result<Swarm<MyBehaviour>, Box<dyn Error>> {
+    fn create_swarm(
+        bootstrap_peer: Option<(PeerId, Multiaddr)>,
+    ) -> Result<Swarm<MyBehaviour>, Box<dyn Error>> {
         let mut swarm = libp2p::SwarmBuilder::with_new_identity()
             .with_tokio()
             .with_tcp(
@@ -67,15 +73,15 @@ impl Peer {
                     .flood_publish(false)
                     .validate_messages()
                     .build()
-                    .map_err(|msg| io::Error::new(io::ErrorKind::Other, msg)).unwrap(); // Temporary hack because `build` does not return a proper `std::error::Error`.
+                    .map_err(io::Error::other)
+                    .unwrap(); // Temporary hack because `build` does not return a proper `std::error::Error`.
 
                 let mut gossipsub = gossipsub::Behaviour::new(
                     gossipsub::MessageAuthenticity::Anonymous,
                     gossipsub_config,
                 )?;
 
-                gossipsub
-                    .subscribe(&IdentTopic::new("Test"))?;
+                gossipsub.subscribe(&IdentTopic::new("Test"))?;
 
                 let identify = identify::Behaviour::new(identify::Config::new(
                     identify::PROTOCOL_NAME.to_string(),
@@ -105,25 +111,18 @@ impl Peer {
             .with_swarm_config(|c| c.with_idle_connection_timeout(Duration::from_secs(60)))
             .build();
 
-
         swarm.behaviour_mut().kademlia.set_mode(Some(Mode::Server));
 
-        if None == bootstrap_peer {
+        if bootstrap_peer.is_none() {
             swarm.listen_on("/ip4/0.0.0.0/tcp/10001".parse()?)?;
         } else {
             swarm.listen_on("/ip4/0.0.0.0/tcp/0".parse()?)?;
         }
 
-
         Ok(swarm)
     }
 
-    pub(crate) fn get_peer_id(&mut self) -> PeerId{
-        self.swarm.local_peer_id().clone()
-    }
-
-    pub(crate) async fn run(mut self, pub_interval: PubInterval){
-
+    pub(crate) async fn run(mut self, pub_interval: PubInterval) {
         let mut timer: Option<Interval> = None;
         loop {
             select! {
@@ -158,8 +157,7 @@ impl Peer {
         }
     }
 
-    fn handle_event(&mut self, event: SwarmEvent<MyBehaviourEvent>){
-
+    fn handle_event(&mut self, event: SwarmEvent<MyBehaviourEvent>) {
         match event {
             SwarmEvent::Behaviour(MyBehaviourEvent::Identify(e)) => {
                 log::debug!("Received identify::Event: {:?}", e);
@@ -167,41 +165,54 @@ impl Peer {
                 if let identify::Event::Received {
                     peer_id,
                     info:
-                    identify::Info {
-                        listen_addrs,
-                        protocols,
-                        ..
-                    },
+                        identify::Info {
+                            listen_addrs,
+                            protocols,
+                            ..
+                        },
                 } = e
                 {
-                    if protocols
-                        .iter()
-                        .any(|p| *p == PROTOCOL_NAME)
-                    {
+                    if protocols.contains(&PROTOCOL_NAME) {
                         for addr in listen_addrs {
                             log::debug!("Adding received IdentifyInfo matching protocol  to the DHT. Peer: {}, addr: {}", peer_id, addr);
-                            self.swarm.behaviour_mut().kademlia.add_address(&peer_id, addr);
+                            self.swarm
+                                .behaviour_mut()
+                                .kademlia
+                                .add_address(&peer_id, addr);
                         }
                     }
                 }
-
-            },
+            }
             SwarmEvent::Behaviour(MyBehaviourEvent::Gossipsub(gossipsub::Event::Message {
-                                                                  propagation_source: peer_id,
-                                                                  message,
-                                                                    message_id
-                                                              })) => {
+                propagation_source: peer_id,
+                message: _,
+                message_id,
+            })) => {
                 if peer_id == self.censor_peer && self.attack_mode {
-                    self.swarm.behaviour_mut().gossipsub.report_message_validation_result(&message_id, &peer_id, MessageAcceptance::Ignore);
+                    let _ = self
+                        .swarm
+                        .behaviour_mut()
+                        .gossipsub
+                        .report_message_validation_result(
+                            &message_id,
+                            &peer_id,
+                            MessageAcceptance::Ignore,
+                        );
                 } else {
-                    self.swarm.behaviour_mut().gossipsub.report_message_validation_result(&message_id, &peer_id, MessageAcceptance::Accept);
+                    let _ = self
+                        .swarm
+                        .behaviour_mut()
+                        .gossipsub
+                        .report_message_validation_result(
+                            &message_id,
+                            &peer_id,
+                            MessageAcceptance::Accept,
+                        );
                 }
-
-            },
+            }
             //e => println!("{:?}",e)
-            _ => ()
+            _ => (),
         }
-
     }
 
     async fn tick(timer: &mut Option<Interval>) {
@@ -209,9 +220,6 @@ impl Peer {
             interval.tick().await;
         }
     }
-
-
-
 }
 
 fn generate_random_string(len: usize) -> String {
@@ -223,4 +231,3 @@ fn generate_random_string(len: usize) -> String {
         .collect();
     s
 }
-

@@ -1,17 +1,17 @@
-use std::collections::{HashMap, HashSet};
-use std::ops::Neg;
+use crate::ThressigError::{MemkeySetError, SerializationError, SignatureInvalid};
 pub use amcl_wrapper::extension_field_gt::GT;
 pub use amcl_wrapper::field_elem::FieldElement;
 pub use amcl_wrapper::group_elem::GroupElement;
 pub use amcl_wrapper::group_elem_g1::G1;
 pub use amcl_wrapper::group_elem_g2::G2;
 use serde::Serialize;
-use thiserror::Error;
+use sha2::{Digest, Sha256};
+use std::collections::{HashMap, HashSet};
+use std::ops::Neg;
 use structs::*;
-use crate::ThressigError::{MemkeySetError, SerializationError, SignatureInvalid};
-use sha2::{Sha256, Digest};
-pub mod structs;
+use thiserror::Error;
 mod spk_dlog;
+pub mod structs;
 
 #[cfg(test)]
 mod tests;
@@ -26,21 +26,18 @@ pub fn setup() -> (Grpkey, Mgrkey) {
     let y1_pub_tilde = &g_tilde * &y1;
     let y2_pub_tilde = &g_tilde * &y2;
 
-
-    (Grpkey {
-        r: FieldElement::new(),
-        g,
-        g_tilde,
-        x_pub_tilde,
-        y1_pub_tilde,
-        y2_pub_tilde,
-    }, Mgrkey {
-        x,
-        y1,
-        y2,
-    })
+    (
+        Grpkey {
+            r: FieldElement::new(),
+            g,
+            g_tilde,
+            x_pub_tilde,
+            y1_pub_tilde,
+            y2_pub_tilde,
+        },
+        Mgrkey { x, y1, y2 },
+    )
 }
-
 
 fn hash_to_field(tag: &[u8], id: &usize) -> FieldElement {
     let mut hasher = Sha256::new();
@@ -53,8 +50,7 @@ fn hash_to_field(tag: &[u8], id: &usize) -> FieldElement {
 }
 
 fn h0(id: &usize) -> FieldElement {
-    let h = hash_to_field(b"H0-h|", id);
-    h
+    hash_to_field(b"H0-h|", id)
 }
 
 pub fn shamir_feldman_share(
@@ -65,7 +61,7 @@ pub fn shamir_feldman_share(
 ) -> (Vec<Share>, Vec<G1>) {
     // 1. Generate random polynomial coefficients: p_1 to p_t
     let mut coeffs: Vec<FieldElement> = vec![sk_id.clone()];
-    for _ in 0..(t-1) {
+    for _ in 0..(t - 1) {
         coeffs.push(FieldElement::random());
     }
 
@@ -76,9 +72,9 @@ pub fn shamir_feldman_share(
         let mut y = FieldElement::zero();
         for (j, coeff) in coeffs.iter().enumerate() {
             let xj = x.pow(&FieldElement::from(j as u64));
-            y = y + coeff * xj;
+            y += coeff * xj;
         }
-        shares.push(Share{index:i,share:y});
+        shares.push(Share { index: i, share: y });
     }
 
     // 3. Compute Feldman commitments h_j = h^{p_j}
@@ -90,19 +86,23 @@ pub fn shamir_feldman_share(
 pub fn recover_secret(shares: &[Share]) -> FieldElement {
     let mut secret = FieldElement::zero();
 
-    for Share{index:xj,share:yj} in shares {
+    for Share {
+        index: xj,
+        share: yj,
+    } in shares
+    {
         let mut num = FieldElement::one();
         let mut den = FieldElement::one();
 
-        for Share{index:xm,..} in shares {
+        for Share { index: xm, .. } in shares {
             if xm == xj {
                 continue;
             }
-            let xm_fe = FieldElement::from(xm.clone() as u64);
-            let xj_fe = FieldElement::from(xj.clone() as u64);
+            let xm_fe = FieldElement::from(*xm as u64);
+            let xj_fe = FieldElement::from(*xj as u64);
 
-            num = num * (&xm_fe).neg();               // num *= -xm
-            den = den * (&xj_fe - &xm_fe);           // den *= (xj - xm)
+            num = num * (&xm_fe).neg(); // num *= -xm
+            den = den * (&xj_fe - &xm_fe); // den *= (xj - xm)
         }
 
         let lagrange_coeff = num * den.inverse(); // λj
@@ -113,11 +113,11 @@ pub fn recover_secret(shares: &[Share]) -> FieldElement {
 }
 
 pub fn verify_share(
-    h: &G1,                            // Generator used for commitments
+    h: &G1,             // Generator used for commitments
     share: Share,       // (i, s_i)
-    commitments: &[G1],               // Feldman commitments h_j = h^{p_j}
+    commitments: &[G1], // Feldman commitments h_j = h^{p_j}
 ) -> bool {
-    let Share{index,share} = share;
+    let Share { index, share } = share;
 
     // Compute LHS: h^{s_i}
     let lhs = h * share;
@@ -128,7 +128,7 @@ pub fn verify_share(
 
     for h_j in commitments {
         rhs += h_j * &i_pow;
-        i_pow = i_pow *  FieldElement::from(index as u64); // i^j for next round
+        i_pow = i_pow * FieldElement::from(index as u64); // i^j for next round
     }
 
     lhs == rhs
@@ -136,22 +136,28 @@ pub fn verify_share(
 
 pub fn elgamal_keygen(g_tilde: &G2) -> (FieldElement, G2) {
     let sk = FieldElement::random(); // Secret key in Zp
-    let pk = g_tilde * &sk;                // Public key: g^sk in G1
+    let pk = g_tilde * &sk; // Public key: g^sk in G1
     (sk, pk)
 }
 
-pub fn create_enc_shares(id: &usize, grpkey: &Grpkey, threshold: usize,opener_pubkeys: &[G2], sk: &FieldElement) -> (Vec<EncShare>, Vec<G1>) {
+pub fn create_enc_shares(
+    id: &usize,
+    grpkey: &Grpkey,
+    threshold: usize,
+    opener_pubkeys: &[G2],
+    sk: &FieldElement,
+) -> (Vec<EncShare>, Vec<G1>) {
     let alpha = FieldElement::random();
     let h_blind = &grpkey.g * h0(id) * &alpha;
 
-    let (shares,commits) = shamir_feldman_share(&sk,threshold,opener_pubkeys.len(),&h_blind);
+    let (shares, commits) = shamir_feldman_share(sk, threshold, opener_pubkeys.len(), &h_blind);
 
     let mut enc_shares = Vec::new();
-    for (i,s) in shares.iter().enumerate(){
-        let enc_share = prove_enc_share(&grpkey,&s,&opener_pubkeys[i],&h_blind,&commits);
+    for (i, s) in shares.iter().enumerate() {
+        let enc_share = prove_enc_share(grpkey, s, &opener_pubkeys[i], &h_blind, &commits);
         enc_shares.push(enc_share);
-    };
-    (enc_shares,commits)
+    }
+    (enc_shares, commits)
 }
 
 //Creates encrypted shares and blinds commits
@@ -167,14 +173,11 @@ pub fn prove_enc_share(
     let c0 = &grpkey.g_tilde * &r;
     let c1 = (f_i * &r) + (&grpkey.y1_pub_tilde * &share.share);
 
-
-
     //Create necessary values for NI Schnorr Proof
     let k = FieldElement::random();
     let t0 = &grpkey.g_tilde * &k;
     // Compute pairing commitment
-    let t1 = GT::ate_pairing(&h, f_i).pow(&k); // e(h,f^k)
-    
+    let t1 = GT::ate_pairing(h, f_i).pow(&k); // e(h,f^k)
 
     // Fiat Shamir Hash challenge
     let mut hash_input = vec![];
@@ -194,11 +197,25 @@ pub fn prove_enc_share(
     let c = FieldElement::from_msg_hash(&hash_input);
     let s = &k + &(&c * r);
 
-    EncShare{index:share.index,c0,c1,c,s,h_blind:h.clone()}
+    EncShare {
+        index: share.index,
+        c0,
+        c1,
+        c,
+        s,
+        h_blind: h.clone(),
+    }
 }
 
 pub fn verify_enc_share_correctness(
-    EncShare{index, c0,c1,c,s,h_blind}: &EncShare,
+    EncShare {
+        index,
+        c0,
+        c1,
+        c,
+        s,
+        h_blind,
+    }: &EncShare,
     groupkey: &Grpkey,
     f_i: &G2,
     h_coms: &[G1],
@@ -212,12 +229,13 @@ pub fn verify_enc_share_correctness(
 
     for h_j in h_coms {
         rhs += h_j * &i_pow;
-        i_pow = i_pow *  FieldElement::from(*index as u64); // i^j for next round
+        i_pow = i_pow * FieldElement::from(*index as u64); // i^j for next round
     }
 
     //Use the verification value to recompute t1 without knowledge of r_i and s_i
-    let t1 = GT::ate_pairing(h_blind, &(f_i*s)) * GT::ate_pairing(&(h_blind*-c), c1) * GT::ate_pairing(&rhs, &(&groupkey.y1_pub_tilde*c));
-
+    let t1 = GT::ate_pairing(h_blind, &(f_i * s))
+        * GT::ate_pairing(&(h_blind * -c), c1)
+        * GT::ate_pairing(&rhs, &(&groupkey.y1_pub_tilde * c));
 
     // Recompute Hash based on own calculated values
     let mut hash_input = vec![];
@@ -240,38 +258,48 @@ pub fn verify_enc_share_correctness(
     *c == c_check
 }
 
-
-
-
-
 /**
  * Executes part 1 of the member-side join of the PS16 scheme.
  * Member generates sk and provides ZKP.
  */
-pub fn join_mem1(id:usize, n:G1, grpkey: &Grpkey, threshold: usize,opener_pubkeys: &[G2]) -> (G1, G1, (FieldElement, FieldElement), (FieldElement, FieldElement), FieldElement, Vec<EncShare>, Vec<G1>) {
+pub type JoinMem1Output = (
+    G1,
+    G1,
+    (FieldElement, FieldElement),
+    (FieldElement, FieldElement),
+    FieldElement,
+    Vec<EncShare>,
+    Vec<G1>,
+);
+
+pub fn join_mem1(
+    id: usize,
+    n: G1,
+    grpkey: &Grpkey,
+    threshold: usize,
+    opener_pubkeys: &[G2],
+) -> JoinMem1Output {
     let sk = FieldElement::random();
     let g_sk = &grpkey.g * &sk;
     let h = &grpkey.g * h0(&id);
 
-    let (enc_shares, commits) = create_enc_shares(&id,&grpkey,threshold, opener_pubkeys,&sk);
+    let (enc_shares, commits) = create_enc_shares(&id, grpkey, threshold, opener_pubkeys, &sk);
 
     let h_sk = &h * &sk;
-    let pi1 = spk_dlog::sign(&g_sk,&grpkey.g,&n.to_bytes(false),&sk);
-    let pi2 = spk_dlog::sign(&h_sk,&h,&n.to_bytes(false),&sk);
+    let pi1 = spk_dlog::sign(&g_sk, &grpkey.g, &n.to_bytes(false), &sk);
+    let pi2 = spk_dlog::sign(&h_sk, &h, &n.to_bytes(false), &sk);
 
-
-    (g_sk,h_sk,pi1,pi2,sk,enc_shares,commits)
+    (g_sk, h_sk, pi1, pi2, sk, enc_shares, commits)
 }
 
 /**
  * Executes part 2 of the member-side join of the PS16 scheme.
  * A member combines sk and the partial key
  */
-pub fn join_mem2(sk: &FieldElement, partial_memkey: &Memkey) -> Memkey{
-    let mut result =partial_memkey.clone();
-    result.sk=sk.clone();
+pub fn join_mem2(sk: &FieldElement, partial_memkey: &Memkey) -> Memkey {
+    let mut result = partial_memkey.clone();
+    result.sk = sk.clone();
     result
-
 }
 
 /**
@@ -280,7 +308,6 @@ pub fn join_mem2(sk: &FieldElement, partial_memkey: &Memkey) -> Memkey{
  */
 pub fn join_mgr1() -> G1 {
     G1::random()
-
 }
 
 /**
@@ -288,7 +315,36 @@ pub fn join_mgr1() -> G1 {
  * Manager validates Member data and indirectly signs sk if valid
  * Implements the not information theoretical implementation of the aggregate function
  */
-pub fn join_mgr2(id: usize, gml: &mut HashMap<usize,String>, name: String,mgrkey: &Mgrkey, grpkey: &Grpkey, n:&G1, g_sk:&G1, h_sk:&G1, opener_pubkeys: &[G2], commits: &[G1],pi1:(FieldElement, FieldElement),pi2:(FieldElement, FieldElement),enc_shares:&[EncShare]) -> Result<Memkey,String>{
+pub struct JoinMgr2Args<'a> {
+    pub gml: &'a mut HashMap<usize, String>,
+    pub name: String,
+    pub mgrkey: &'a Mgrkey,
+    pub grpkey: &'a Grpkey,
+    pub n: &'a G1,
+    pub g_sk: &'a G1,
+    pub h_sk: &'a G1,
+    pub opener_pubkeys: &'a [G2],
+    pub commits: &'a [G1],
+    pub pi1: (FieldElement, FieldElement),
+    pub pi2: (FieldElement, FieldElement),
+    pub enc_shares: &'a [EncShare],
+}
+
+pub fn join_mgr2(id: usize, args: JoinMgr2Args) -> Result<Memkey, String> {
+    let JoinMgr2Args {
+        gml,
+        name,
+        mgrkey,
+        grpkey,
+        n,
+        g_sk,
+        h_sk,
+        opener_pubkeys,
+        commits,
+        pi1,
+        pi2,
+        enc_shares,
+    } = args;
     //Check if ID is already in gml
     if gml.contains_key(&id) {
         return Err(String::from("ID already in use"));
@@ -296,27 +352,26 @@ pub fn join_mgr2(id: usize, gml: &mut HashMap<usize,String>, name: String,mgrkey
 
     let h = &grpkey.g * h0(&id);
 
-    if spk_dlog::verify(&g_sk,&grpkey.g,pi1,&n.to_bytes(false)) == false {
+    if !spk_dlog::verify(g_sk, &grpkey.g, pi1, &n.to_bytes(false)) {
         return Err(String::from("error"));
     }
 
-    if spk_dlog::verify(&h_sk,&h,pi2,&n.to_bytes(false)) == false {
+    if !spk_dlog::verify(h_sk, &h, pi2, &n.to_bytes(false)) {
         return Err(String::from("error"));
     }
 
-    for (i,enc_share) in enc_shares.iter().enumerate() {
-        if verify_enc_share_correctness(enc_share, grpkey, &opener_pubkeys[i],commits) == false {
+    for (i, enc_share) in enc_shares.iter().enumerate() {
+        if !verify_enc_share_correctness(enc_share, grpkey, &opener_pubkeys[i], commits) {
             return Err(String::from("Could not verify share"));
         }
     }
 
-    
     let sigma1 = h;
-    let sigma2 = h_sk  * &mgrkey.y1+(&sigma1 * &mgrkey.x);
-    let e1 = GT::ate_pairing(&sigma1,&grpkey.y1_pub_tilde);
-    gml.insert(id,name);
-    Ok(Memkey{
-        sk:FieldElement::new(),
+    let sigma2 = h_sk * &mgrkey.y1 + (&sigma1 * &mgrkey.x);
+    let e1 = GT::ate_pairing(&sigma1, &grpkey.y1_pub_tilde);
+    gml.insert(id, name);
+    Ok(Memkey {
+        sk: FieldElement::new(),
         sigma1: Some(sigma1),
         sigma2: Some(sigma2),
         e1: Some(e1),
@@ -326,12 +381,21 @@ pub fn join_mgr2(id: usize, gml: &mut HashMap<usize,String>, name: String,mgrkey
 /**
  * Signs a message using the member key and provide a ZKP of Knowledge sk.
  **/
-pub fn sign<T: Serialize>(memkey: &Memkey, grpkey: &Grpkey, msg: &T) -> Result<Signature, ThressigError>{
-
+pub fn sign<T: Serialize>(
+    memkey: &Memkey,
+    grpkey: &Grpkey,
+    msg: &T,
+) -> Result<Signature, ThressigError> {
     let msg = bincode::serialize(msg).map_err(|_| SerializationError)?;
-    let sigma1= &memkey.clone().sigma1.ok_or(MemkeySetError{val:"sigma1".to_string()})?;
-    let sigma2= &memkey.clone().sigma2.ok_or(MemkeySetError{val:"sigma2".to_string()})?;
-    let e1= &memkey.clone().e1.ok_or(MemkeySetError{val:"e1".to_string()})?;
+    let sigma1 = &memkey.clone().sigma1.ok_or(MemkeySetError {
+        val: "sigma1".to_string(),
+    })?;
+    let sigma2 = &memkey.clone().sigma2.ok_or(MemkeySetError {
+        val: "sigma2".to_string(),
+    })?;
+    let e1 = &memkey.clone().e1.ok_or(MemkeySetError {
+        val: "e1".to_string(),
+    })?;
 
     /* Randomize sigma1 and sigma2 */
     let t = FieldElement::random();
@@ -348,11 +412,11 @@ pub fn sign<T: Serialize>(memkey: &Memkey, grpkey: &Grpkey, msg: &T) -> Result<S
     msg_to_send.extend(e.to_bytes());
     msg_to_send.extend(msg);
 
-    /* c = hash(ipk,ps16_sig->sigma1,ps16_sig->sigma2,e,m) */ 
+    /* c = hash(ipk,ps16_sig->sigma1,ps16_sig->sigma2,e,m) */
     let c = FieldElement::from_msg_hash(&msg_to_send);
     let s = (&c * &memkey.sk) + &k1;
 
-    Ok(Signature{
+    Ok(Signature {
         sigma1,
         sigma2,
         c,
@@ -363,39 +427,48 @@ pub fn sign<T: Serialize>(memkey: &Memkey, grpkey: &Grpkey, msg: &T) -> Result<S
 /**
  * Verifier checks signature and ZKP of sk.
 **/
-pub fn verify<T: Serialize+ ?Sized>(sig: &Signature, grpkey: &Grpkey, msg: &T) -> Result<(), ThressigError>{
+pub fn verify<T: Serialize + ?Sized>(
+    sig: &Signature,
+    grpkey: &Grpkey,
+    msg: &T,
+) -> Result<(), ThressigError> {
     let msg = bincode::serialize(msg).map_err(|_| SerializationError)?;
 
     /* e1 = e(sigma1^-1,X) */
-    let e1 = GT::ate_pairing(&(&sig.sigma1).neg(),&grpkey.x_pub_tilde);
+    let e1 = GT::ate_pairing(&(&sig.sigma1).neg(), &grpkey.x_pub_tilde);
     /* e2 = e(sigma2,gg) */
-    let e2 = GT::ate_pairing(&sig.sigma2,&grpkey.g_tilde);
+    let e2 = GT::ate_pairing(&sig.sigma2, &grpkey.g_tilde);
     /* e3 = e(sigma1^s1,Y1) */
-    let e3 = GT::ate_pairing(&(&sig.sigma1*&sig.s),&grpkey.y1_pub_tilde);
+    let e3 = GT::ate_pairing(&(&sig.sigma1 * &sig.s), &grpkey.y1_pub_tilde);
     /* r_pub = (e1*e2)^-c*e3 */
-    let r_pub = (e1 * e2).pow(&sig.c).inverse()*e3;
+    let r_pub = (e1 * e2).pow(&sig.c).inverse() * e3;
 
     let mut msg_to_send: Vec<u8> = Vec::new();
     msg_to_send.extend(grpkey.to_bytes());
-    msg_to_send.extend((&sig.sigma1).to_bytes(false));
-    msg_to_send.extend((&sig.sigma2).to_bytes(false));
+    msg_to_send.extend(sig.sigma1.to_bytes(false));
+    msg_to_send.extend(sig.sigma2.to_bytes(false));
     msg_to_send.extend(r_pub.to_bytes());
     msg_to_send.extend(msg);
 
     /* c = Hash(sigma1,sigma2,R,m) */
     let c = FieldElement::from_msg_hash(&msg_to_send);
 
-
-    if sig.c == c{
+    if sig.c == c {
         Ok(())
     } else {
         Err(SignatureInvalid)
     }
-
 }
 
-pub fn create_open_pairing(sig: &Signature,enc_share: EncShare,open_sk: &FieldElement) -> EncSharePairing{
-    EncSharePairing{index: enc_share.index, pairing: GT::ate_pairing(&sig.sigma1, &(&enc_share.c1-(&enc_share.c0*open_sk)))}
+pub fn create_open_pairing(
+    sig: &Signature,
+    enc_share: EncShare,
+    open_sk: &FieldElement,
+) -> EncSharePairing {
+    EncSharePairing {
+        index: enc_share.index,
+        pairing: GT::ate_pairing(&sig.sigma1, &(&enc_share.c1 - (&enc_share.c0 * open_sk))),
+    }
 }
 
 /// Compute Lagrange coefficients for interpolation at 0
@@ -412,9 +485,9 @@ pub fn compute_lagrange_coefficients_at_zero(shares: &[usize]) -> Vec<FieldEleme
             }
             let xm_fe = FieldElement::from(*xm as u64);
             let xj_fe = FieldElement::from(*xj as u64);
-            
-            num = num * (&xm_fe).neg();               // num *= -xm
-            den = den * (&xj_fe - &xm_fe);           // den *= (xj - xm)
+
+            num = num * (&xm_fe).neg(); // num *= -xm
+            den = den * (&xj_fe - &xm_fe); // den *= (xj - xm)
         }
 
         let lambda_j = num * den.inverse(); // λ_j
@@ -427,9 +500,14 @@ pub fn compute_lagrange_coefficients_at_zero(shares: &[usize]) -> Vec<FieldEleme
 /**
  * Manager opens signature by comparing signature with stored gml values.
 **/
-pub fn open<K>(sig: &Signature, grpkey: &Grpkey, gml: &HashSet<K>, all_sj: &HashMap<usize, Vec<(K, GT)>>) -> Vec<K>
-    where
-        K: Eq+Clone,
+pub fn open<K>(
+    sig: &Signature,
+    grpkey: &Grpkey,
+    gml: &HashSet<K>,
+    all_sj: &HashMap<usize, Vec<(K, GT)>>,
+) -> Vec<K>
+where
+    K: Eq + Clone,
 {
     let mut res = Vec::new();
     let mut opener_ids: Vec<_> = all_sj.keys().copied().collect();
@@ -438,7 +516,7 @@ pub fn open<K>(sig: &Signature, grpkey: &Grpkey, gml: &HashSet<K>, all_sj: &Hash
         let mut t_idj = Vec::new();
         let mut missing = false;
         for j in &opener_ids {
-            if let Some(sj_entries) = all_sj.get(&(*j)) {
+            if let Some(sj_entries) = all_sj.get(j) {
                 if let Some((_, t)) = sj_entries.iter().find(|(uid, _)| uid == id) {
                     t_idj.push(t.clone());
                 } else {
@@ -454,23 +532,20 @@ pub fn open<K>(sig: &Signature, grpkey: &Grpkey, gml: &HashSet<K>, all_sj: &Hash
             continue;
         }
 
-
         // Compute the pairing left-hand side
-        let pairing_left = GT::ate_pairing(&sig.sigma1, &(&grpkey.x_pub_tilde));
+        let pairing_left = GT::ate_pairing(&sig.sigma1, &grpkey.x_pub_tilde);
 
         let w_js = compute_lagrange_coefficients_at_zero(&opener_ids);
 
         let mut t_combined = GT::one();
         for (t, w) in t_idj.iter().zip(w_js.iter()) {
-            t_combined = t_combined *  t.pow(w);
+            t_combined = t_combined * t.pow(w);
         }
-        
 
         let pairing_right = GT::ate_pairing(&sig.sigma2, &grpkey.g_tilde);
         if pairing_left * t_combined == pairing_right {
             res.push(id.clone());
         }
-
     }
 
     res
@@ -479,14 +554,12 @@ pub fn open<K>(sig: &Signature, grpkey: &Grpkey, gml: &HashSet<K>, all_sj: &Hash
 #[derive(Debug, Error)]
 pub enum ThressigError {
     #[error("Memkey is not set. Missing value: {val}")]
-    MemkeySetError{val:String},
+    MemkeySetError { val: String },
     #[error("Could not serialize Value")]
     SerializationError,
     #[error("Signature is invalid")]
     SignatureInvalid,
-
 }
-
 
 /*
 pub fn prove_correct_encryption(
@@ -537,7 +610,6 @@ pub fn prove_correct_encryption(
 
     ( a0, a1, z )
 }*/
-
 
 /*
 pub fn verify_correct_encryption(
