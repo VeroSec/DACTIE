@@ -140,7 +140,6 @@ services:
       -p 21011
       --metrics-addr 0.0.0.0:9898
       --advertise-addr /ip4/10.244.192.117/tcp/21011'
-      -i peer1
     environment:
       - RUST_LOG=info
     env_file:
@@ -169,7 +168,6 @@ services:
       -p 21012
       --metrics-addr 0.0.0.0:9898
       --advertise-addr /ip4/10.244.192.118/tcp/21012'
-      -i peer2
     environment:
       - RUST_LOG=info
     env_file:
@@ -198,7 +196,6 @@ services:
       -p 21013
       --metrics-addr 0.0.0.0:9898
       --advertise-addr /ip4/10.244.192.119/tcp/21013'
-      -i peer3
     environment:
       - RUST_LOG=info
     env_file:
@@ -226,7 +223,6 @@ services:
       -p 21014
       --metrics-addr 0.0.0.0:9899
       --advertise-addr /ip4/10.244.192.119/tcp/21014'
-      -i peer4
     environment:
       - RUST_LOG=info
       - BENCH_PUBLISH=true

@@ -69,6 +69,16 @@ async fn main() -> Result<(), Box<dyn Error>> {
         (storage, key_material)
     };
 
+    log::info!(
+        "Archives registered: {}, init phase: {}",
+        storage.get_archive_peer_ids().len(),
+        if storage.get_archive_init_mode() {
+            "open"
+        } else {
+            "CLOSED"
+        }
+    );
+
     let (notification_tx, notification_rx) = mpsc::unbounded_channel();
     let (instruction_tx, instruction_rx) = mpsc::unbounded_channel();
     let (group_commit_tx, group_commit_rx) = mpsc::unbounded_channel();

@@ -1,5 +1,6 @@
 use crate::mybehaviour::MyBehaviourError::PubSubBehaviourError;
 use async_trait::async_trait;
+use dactie_utils::net::is_unroutable_addr;
 use dactie_utils::key_store;
 use libp2p::gossipsub::{IdentTopic, MessageAcceptance};
 use libp2p::identity::{Keypair, ParseError};
@@ -779,11 +780,10 @@ impl MyBehaviour {
         {
             if protocols.contains(&PROTOCOL_NAME) {
                 for addr in listen_addrs {
-                    // Filter out loopback addresses to avoid poisoning the DHT with unroutable addrs
-                    let addr_str = addr.to_string();
-                    if addr_str.starts_with("/ip4/127.0.0.1/") {
+                    // Skip addresses no remote host can dial (loopback, Docker bridges).
+                    if is_unroutable_addr(&addr) {
                         log::debug!(
-                            "Ignoring loopback addr from identify for {}: {}",
+                            "Ignoring unroutable addr from identify for {}: {}",
                             peer_id,
                             addr
                         );

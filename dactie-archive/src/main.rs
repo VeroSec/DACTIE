@@ -71,17 +71,34 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let (group_commit_tx, _) = mpsc::unbounded_channel();
 
     //Get Group Key Material from Authorization Authority or File
-    let key_material = if !km_path.exists() {
-        let instruction = Instruction::RegisterIdentity {
+    //Registration is driven by the group key, not by the file: the file is written before
+    //the authority answers, so its mere presence does not mean registration succeeded.
+    let register = |identity: String| -> Result<(), Box<dyn Error>> {
+        log::info!(
+            "Registering identity '{}' with authority {}",
+            identity,
+            args.aa_id
+        );
+        instruction_tx.send(Instruction::RegisterIdentity {
             peer_id: args.aa_id,
-            identity: args.identity,
-        };
-        instruction_tx.send(instruction)?;
+            identity,
+        })?;
+        Ok(())
+    };
+    let key_material = if km_path.exists() {
+        let key_material = StoredKeyMaterial::from_file(km_path.clone())?;
+        if key_material.get_grpkey().is_none() {
+            log::warn!("Key material has no group key, re-registering with the authority");
+            register(args.identity.clone())?;
+        } else {
+            log::info!("Group key present, skipping registration");
+        }
+        key_material
+    } else {
+        register(args.identity.clone())?;
         let key_material = StoredKeyMaterial::new(None, None, None, None);
         key_material.to_file(km_path)?;
         key_material
-    } else {
-        StoredKeyMaterial::from_file(km_path)?
     };
 
     // Connect to the database
