@@ -16,8 +16,8 @@ use libp2p::futures::StreamExt;
 use libp2p::swarm::NetworkBehaviour;
 use libp2p::PeerId;
 use libp2p::Swarm;
-use openmls::group::GroupId;
 use libp2p_metrics as lp2p_metrics;
+use openmls::group::GroupId;
 
 ///
 /// The `AbstSwarm` is a convenience wrapper around the `Swarm` for a `NetworkBehaviour`.

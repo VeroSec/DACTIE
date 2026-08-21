@@ -782,7 +782,11 @@ impl MyBehaviour {
                     // Filter out loopback addresses to avoid poisoning the DHT with unroutable addrs
                     let addr_str = addr.to_string();
                     if addr_str.starts_with("/ip4/127.0.0.1/") {
-                        log::debug!("Ignoring loopback addr from identify for {}: {}", peer_id, addr);
+                        log::debug!(
+                            "Ignoring loopback addr from identify for {}: {}",
+                            peer_id,
+                            addr
+                        );
                         continue;
                     }
                     log::debug!("Adding received IdentifyInfo matching protocol to the DHT. Peer: {}, addr: {}", peer_id, addr);
@@ -973,14 +977,12 @@ impl MyBehaviour {
                 // Reduce noise for expected transient errors, still log with context
                 match peer_id {
                     None => log::warn!("Outgoing connection error (no peer id): {}", error),
-                    Some(peer_id) => log::error!("Could not connect to peer '{}': {}", peer_id, error),
+                    Some(peer_id) => {
+                        log::error!("Could not connect to peer '{}': {}", peer_id, error)
+                    }
                 }
-            },
-            SwarmEvent::ConnectionClosed {
-                peer_id,
-                cause,
-                ..
-            } => {
+            }
+            SwarmEvent::ConnectionClosed { peer_id, cause, .. } => {
                 if let Some(connerror) = cause {
                     log::error!(
                         "Connection to peer {} closed because of an error: {}",

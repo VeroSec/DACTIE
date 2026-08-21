@@ -1,17 +1,17 @@
+use axum::{routing::get, Router};
 use clap::{arg, Parser};
 use libp2p::Multiaddr;
+use libp2p_metrics::Metrics as Lp2pMetrics;
+use prometheus_client::registry::Registry;
 use std::error::Error;
+use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::process::exit;
 use std::str::FromStr;
+use std::sync::atomic::AtomicU64;
+use sysinfo::{CpuRefreshKind, System};
 use tokio::signal::unix::{signal, SignalKind};
 use tokio::sync::mpsc;
-use axum::{routing::get, Router};
-use libp2p_metrics::Metrics as Lp2pMetrics;
-use prometheus_client::registry::Registry;
-use std::net::SocketAddr;
-use sysinfo::{System, CpuRefreshKind};
-use std::sync::atomic::AtomicU64;
 
 use myclient::MyClient;
 
@@ -56,6 +56,12 @@ struct Args {
     #[arg(long)]
     advertise_addr: Option<Multiaddr>,
 
+    /// Serve Prometheus metrics on this address, e.g. 127.0.0.1:9898.
+    /// Omitted by default: no registry is built and no socket is opened.
+    /// The endpoint is unauthenticated, so bind it to loopback unless the
+    /// network it is exposed on is trusted.
+    #[arg(long)]
+    metrics_addr: Option<SocketAddr>,
 }
 
 #[tokio::main]
@@ -131,73 +137,86 @@ async fn main() -> Result<(), Box<dyn Error>> {
         }
     }
 
-    // Initialize Prometheus metrics registry and libp2p metrics recorder.
-    // Expose metrics on 0.0.0.0:9898 in OpenMetrics format.
-    let mut registry = Registry::default();
-    let lp2p_metrics = Lp2pMetrics::new(&mut registry);
+    // Prometheus metrics are opt-in via --metrics-addr. Without the flag no
+    // registry is built, no recorder is attached to the swarm, and no socket
+    // is opened.
+    if let Some(metrics_addr) = args.metrics_addr {
+        let mut registry = Registry::default();
+        let lp2p_metrics = Lp2pMetrics::new(&mut registry);
 
-    // Spawn metrics HTTP endpoint
-    let metrics_app = {
-        use prometheus_client::encoding::text::encode;
-        use std::sync::{Arc, Mutex};
-        let registry = Arc::new(Mutex::new(registry));
-        // Background task: sample CPU utilization and export as gauge
-        // We export it at libp2p_cpu_process_percent
-        {
-            use prometheus_client::metrics::gauge::Gauge;
-            let mut reg = registry.lock().unwrap();
-            // Use an f64 gauge to capture fractional CPU percentages
-            let cpu_gauge: Gauge<f64, AtomicU64> = Gauge::default();
-            let cpu_gauge_handle = cpu_gauge.clone();
-            // Register without a unit (Unit::Percent does not exist in 0.22.2)
-            reg
-                .sub_registry_with_prefix("libp2p")
-                .register(
+        // Spawn metrics HTTP endpoint
+        let metrics_app = {
+            use prometheus_client::encoding::text::encode;
+            use std::sync::{Arc, Mutex};
+            let registry = Arc::new(Mutex::new(registry));
+            // Background task: sample CPU utilization and export as gauge
+            // We export it at libp2p_cpu_process_percent
+            {
+                use prometheus_client::metrics::gauge::Gauge;
+                let mut reg = registry.lock().unwrap();
+                // Use an f64 gauge to capture fractional CPU percentages
+                let cpu_gauge: Gauge<f64, AtomicU64> = Gauge::default();
+                let cpu_gauge_handle = cpu_gauge.clone();
+                // Register without a unit (Unit::Percent does not exist in 0.22.2)
+                reg.sub_registry_with_prefix("libp2p").register(
                     "cpu_process_percent",
                     "Approximate CPU utilization of this process (percent)",
                     cpu_gauge,
                 );
-            drop(reg);
+                drop(reg);
 
-            tokio::spawn({
-                let mut sys = System::new();
-                let cpu_gauge_handle = cpu_gauge_handle.clone();
-                async move {
-                    loop {
-                        sys.refresh_cpu_specifics(CpuRefreshKind::everything());
-                        let global = sys.global_cpu_info();
-                        let val = global.cpu_usage() as f64; // percent
-                        cpu_gauge_handle.set(val);
-                        // Sleep ~1s between samples
-                        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                tokio::spawn({
+                    let mut sys = System::new();
+                    let cpu_gauge_handle = cpu_gauge_handle.clone();
+                    async move {
+                        loop {
+                            sys.refresh_cpu_specifics(CpuRefreshKind::everything());
+                            let global = sys.global_cpu_info();
+                            let val = global.cpu_usage() as f64; // percent
+                            cpu_gauge_handle.set(val);
+                            // Sleep ~1s between samples
+                            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                        }
+                    }
+                });
+            }
+            Router::new().route(
+                "/metrics",
+                get(move || {
+                    let registry = registry.clone();
+                    async move {
+                        let mut output = String::new();
+                        let reg = registry.lock().unwrap();
+                        encode(&mut output, &reg).unwrap();
+                        axum::response::Response::builder()
+                            .header("Content-Type", "text/plain; version=0.0.4")
+                            .body(output)
+                            .unwrap()
+                    }
+                }),
+            )
+        };
+        tokio::spawn(async move {
+            match tokio::net::TcpListener::bind(metrics_addr).await {
+                Ok(listener) => {
+                    log::info!(
+                        "Metrics endpoint listening on http://{}/metrics",
+                        metrics_addr
+                    );
+                    if let Err(e) = axum::serve(listener, metrics_app.into_make_service()).await {
+                        log::error!("Metrics server stopped: {}", e);
                     }
                 }
-            });
-        }
-        Router::new().route(
-            "/metrics",
-            get(move || {
-                let registry = registry.clone();
-                async move {
-                    let mut output = String::new();
-                    let reg = registry.lock().unwrap();
-                    encode(&mut output, &reg).unwrap();
-                    axum::response::Response::builder()
-                        .header("Content-Type", "text/plain; version=0.0.4")
-                        .body(output)
-                        .unwrap()
-                }
-            }),
-        )
-    };
-    let metrics_addr: SocketAddr = "0.0.0.0:9898".parse()?;
-    tokio::spawn(async move {
-        axum::serve(tokio::net::TcpListener::bind(metrics_addr).await.unwrap(), metrics_app.into_make_service())
-            .await
-            .expect("metrics server");
-    });
+                // Previously an unwrap: a second peer sharing the host network
+                // namespace lost the port and its metrics task died silently.
+                Err(e) => log::error!("Could not bind metrics endpoint on {}: {}", metrics_addr, e),
+            }
+        });
 
-    let abstswarm = abstswarm_builder.with_metrics(lp2p_metrics).build()?;
+        abstswarm_builder = abstswarm_builder.with_metrics(lp2p_metrics);
+    }
+
+    let abstswarm = abstswarm_builder.build()?;
 
     let client = MyClient::new(instruction_tx, notification_rx, key_material.get_peer_id());
 

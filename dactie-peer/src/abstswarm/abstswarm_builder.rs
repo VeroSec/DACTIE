@@ -26,7 +26,6 @@ pub(crate) struct AbstSwarmBuilder<TBehaviour> {
     metrics: Option<lp2p_metrics::Metrics>,
     // Addresses to advertise to remote peers as dialable
     external_addresses: Vec<Multiaddr>,
-
 }
 
 impl<TBehaviour> AbstSwarmBuilder<TBehaviour>
