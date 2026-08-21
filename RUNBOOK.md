@@ -40,7 +40,12 @@ do **not** self-heal — see [Older builds](#older-builds) at the end.
    does not resurrect an explicitly stopped container.
 4. **Detach from `attach` with Ctrl-P Ctrl-Q.** Ctrl-C sends SIGINT; the binaries handle
    only SIGTERM, so Ctrl-C kills the process.
-5. **`end_init_archive` is irreversible.** It sets `archive_init_mode = false` and
+5. **A truncated `storage.json` is fatal and not self-healing.** The authority
+   fails to parse it at startup and, under `restart: unless-stopped`, crash-loops
+   silently. Check with
+   `python3 -c "import json;json.load(open('key_material/key_material_0/storage.json'))"`.
+   Recovery is Phase 2 plus a fresh Phase 3/4, since the authority identity is lost.
+6. **`end_init_archive` is irreversible.** It sets `archive_init_mode = false` and
    persists it. No archive can join afterwards; adding one means a full rerun.
 
 Two former traps are now fixed in code and need no procedure:
@@ -57,7 +62,7 @@ Two former traps are now fixed in code and need no procedure:
 **All four servers**, in parallel.
 
 ```bash
-cd /opt/vero/dactie
+cd /path/to/dactie
 sudo docker compose --profile node116 --profile node117 --profile node118 --profile node119 down --remove-orphans
 docker ps -a | grep dactie      # expect no output
 ```
@@ -67,7 +72,7 @@ docker ps -a | grep dactie      # expect no output
 **All four servers**, in parallel.
 
 ```bash
-cd /opt/vero/dactie
+cd /path/to/dactie
 git checkout hardening-docker-runs
 sudo ./build.sh --no-cache --pull
 ```
@@ -78,7 +83,7 @@ sudo ./build.sh --no-cache --pull
 skip it to keep existing identities.
 
 ```bash
-cd /opt/vero/dactie
+cd /path/to/dactie
 sudo rm -f  ./key_material/key_material_[0-9]*/key_material.json \
             ./key_material/key_material_[0-9]*/storage.json
 sudo rm -rf ./key_material/key_material_[0-9]*/group_saves
@@ -92,7 +97,7 @@ identities out of the DHT.
 **Server1 (.116) alone.**
 
 ```bash
-cd /opt/vero/dactie
+cd /path/to/dactie
 sudo docker compose --profile node116 up -d authority_node
 sleep 5
 sudo docker compose --profile node116 logs authority_node \
@@ -118,7 +123,7 @@ Copy the `Local PeerId` value.
 **All four servers**, after Phase 1.
 
 ```bash
-cd /opt/vero/dactie
+cd /path/to/dactie
 export AA=<paste_Local_PeerId_from_Phase_3>
 echo "BOOT_PEER_ID=$AA" | sudo tee ./key_material/boot_id.env
 ```
@@ -186,11 +191,20 @@ sudo docker attach dactie-authority_node-1
 end_init_archive
 ```
 
-Success:
+Success requires **both** lines:
 ```
 INFO  Enough Archives registered, ending init phase
 INFO  Creating common group with archives...
 ```
+
+> **STOP if only the first line appears.** The authority is wedged: it stops
+> accepting connections, so every later phase fails with misleading peer-side
+> errors (`Timeout has been reached`, then `MLS Error: CommonGroup Not Set`).
+> Confirm with `sudo ss -tlnp | grep 10001` — a non-zero `Recv-Q` means
+> connections are arriving and never being accepted. Recovery is a full rerun
+> from Phase 2, because `storage.json` is left truncated. This was a reentrant
+> lock in `Storage::return_memkey` and is fixed on this branch; seeing it means
+> a node is running an older image.
 
 Failure now reports the count, so you know which problem you have:
 ```
@@ -198,6 +212,18 @@ ERROR Not enough archives registered (1 of 2 required), ...
 ```
 
 Detach with **Ctrl-P Ctrl-Q**.
+
+Scripting this needs a real terminal — `docker attach` refuses a pipe against a
+TTY-enabled container (`cannot attach stdin to a TTY-enabled container because
+stdin is not a terminal`). Allocate a pty and hold stdin open past the command:
+
+```bash
+sudo sh -c '{ printf "end_init_archive\r\n"; sleep 20; } | \
+  timeout 12 script -qfec "docker attach --sig-proxy=false dactie-authority_node-1" /dev/null'
+```
+
+`--sig-proxy=false` keeps the timeout from signalling the container, and the
+`sleep` prevents EOF reaching its stdin.
 
 ## Phase 8 — Peers and smoke test
 
@@ -227,7 +253,18 @@ broad Test hello-from-peer2
 sudo docker compose --profile node119 up -d --force-recreate peer_3 peer_4
 ```
 
-`peer1` should print the message. Substitute the literal ID for `<AA>` — container stdin
+`peer1` should print the message.
+
+Confirm the BENCH publisher is actually compiled in — it lives behind the
+`dactie-peer/bench` feature, which `build.sh` passes as a build arg. If this line
+is missing from `peer_4`, the image predates that change and no benchmark traffic
+will be produced at all:
+
+```bash
+sudo docker compose --profile node119 logs peer_4 | grep BENCH_PUBLISH
+# INFO  BENCH_PUBLISH enabled: rate=40 msg/s topic='Test' extra_bytes=0
+```
+ Substitute the literal ID for `<AA>` — container stdin
 does not expand shell variables. `peer_4` runs with `BENCH_PUBLISH=true`, `BENCH_RATE=40`,
 `BENCH_TOPIC=Test`, so it self-publishes without input.
 

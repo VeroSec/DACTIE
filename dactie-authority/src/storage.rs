@@ -297,6 +297,11 @@ impl Storage {
         )
         .map_err(|reason| CreateMemkeyError { reason })?;
 
+        // to_file() serializes every field of Storage, including gml. std::sync::Mutex
+        // is not reentrant, so the guard must be released first or serialization
+        // deadlocks against it, leaving a half-written file on disk.
+        drop(gml_guard);
+
         self.to_file()?;
         Ok((id, part_memkey.to_bytes()))
     }
@@ -305,10 +310,27 @@ impl Storage {
     Functions to save storage to a file.
     **/
     pub(crate) fn to_file(&self) -> Result<(), MyStorageError> {
-        let file = File::create(self.path_buf.clone()).map_err(|e| FileAccessError {
+        // Serialize to a sibling temp file and rename over the target. File::create
+        // truncates immediately, so writing in place turns any mid-write failure into
+        // an unparseable storage.json that the authority cannot start from.
+        let mut tmp_path = self.path_buf.clone();
+        let mut name = tmp_path
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "storage.json".to_string());
+        name.push_str(".tmp");
+        tmp_path.set_file_name(name);
+
+        let file = File::create(&tmp_path).map_err(|e| FileAccessError {
             reason: e.to_string(),
         })?;
-        serde_json::to_writer_pretty(file, self).map_err(|e| SerializationError {
+        serde_json::to_writer_pretty(&file, self).map_err(|e| SerializationError {
+            reason: e.to_string(),
+        })?;
+        file.sync_all().map_err(|e| FileAccessError {
+            reason: e.to_string(),
+        })?;
+        std::fs::rename(&tmp_path, &self.path_buf).map_err(|e| FileAccessError {
             reason: e.to_string(),
         })?;
         Ok(())
