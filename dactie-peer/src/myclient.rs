@@ -36,11 +36,15 @@ impl MyClient {
     pub(crate) async fn run(mut self) -> anyhow::Result<()> {
         log::info!("Start network client event loop.");
 
-        // Optional benchmark publisher: controlled via env vars
+        // Optional synthetic load generator, compiled in only with --features bench.
+        // Its traffic takes the normal path, so it is encrypted on the wire like any
+        // other broadcast; the receiving peer must be subscribed to the topic.
+        // Runtime env vars:
         // BENCH_PUBLISH=true|1 to enable publishing from this peer
         // BENCH_RATE=40 messages per second (default 40)
         // BENCH_TOPIC=Test topic to publish to (default "Test")
         // BENCH_PAYLOAD_BYTES=0 additional payload size (default 0)
+        #[cfg(feature = "bench")]
         if std::env::var("BENCH_PUBLISH").map(|v| v == "1" || v.eq_ignore_ascii_case("true")).unwrap_or(false) {
             let instruction_tx = self.instruction_tx.clone();
             let peer_id_str = self.peer_id.to_string();

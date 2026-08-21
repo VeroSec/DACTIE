@@ -669,18 +669,7 @@ impl MyBehaviour {
                 };
 
                 match message_body {
-                    MessageBody::Broadcast { topic, data } => {
-                        // Forward plain broadcasts as-is (used for benchmarking and public messages)
-                        let message_body = MessageBody::Broadcast { topic, data };
-                        Self::notify(
-                            notification_tx,
-                            Notification::Data {
-                                propagation_source: peer_id,
-                                message_body,
-                                signature: signature.to_bytes(),
-                            },
-                        )
-                    }
+                    MessageBody::Broadcast { .. } => {} // Peers should only receive encrypted messages
                     MessageBody::GroupEnc {
                         group_id,
                         enc_data: data,
