@@ -60,7 +60,7 @@ To publish a message to a topic, the `broad` command can be used.
 Private Groups support all MLS functionality. Peers can create groups, add new members, remove members and update their key material.
 For all commands that add new peers to a group the keypackage of the other peer is required, and should be requested with `req_kps`.
 
-Since at the time of writing this thesis no decentralized version of MLS was available, we used the work around of P2Panda. Only Group Owners can create commits.
+At the time of this work no decentralized version of MLS was available, we used the work around of P2Panda. Only Group Owners can create commits.
 Therefore, the group owners can not be removed from a group.
 
 But it can delete a group for all members with `delete_group_for_all`.
