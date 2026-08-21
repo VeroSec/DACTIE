@@ -19,5 +19,8 @@ env_logger = "0.11.3"
 anyhow = "1.0.86"
 dactie-utils = {path = "../dactie-utils" }
 hex = "0.4.3"
-
-
+libp2p-metrics = { git = "https://github.com/libp2p/rust-libp2p", rev = "32e917f", default-features = false, features = ["gossipsub", "identify", "kad"] }
+prometheus-client = "=0.22.2"
+axum = { version = "0.7", default-features = false, features = ["http1", "tokio"] }
+once_cell = "1.19"
+sysinfo = { version = "0.30", default-features = false }

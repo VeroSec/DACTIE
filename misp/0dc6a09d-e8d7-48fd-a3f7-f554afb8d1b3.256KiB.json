@@ -5668,7 +5668,10 @@
                         "uuid": "b12ef9e2-ff92-4507-ae65-1859df925729",
                         "comment": "Malware payload",
                         "value": "1e73dcc941fb0cd2fc3f4d05cda708eb8db3c03c4de23a2e13918877b81bb1c8",
-                        "object_relation": "sha256",
-                        "Tag": [
-                            {
-                                "na
+                        "object_relation": "sha256"
+                    }
+                ]
+            }
+        ]
+    }
+}

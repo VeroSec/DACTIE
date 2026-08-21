@@ -10,6 +10,7 @@ use std::error::Error;
 use std::path::PathBuf;
 use std::process::exit;
 use std::str::FromStr;
+use std::time::Duration;
 use tokio::signal::unix::{signal, SignalKind};
 use tokio::sync::mpsc;
 
@@ -31,12 +32,16 @@ struct Args {
     #[arg(short, long)]
     url: String,
 
+    /// Explicit external address to advertise (e.g. /ip4/10.244.192.117/tcp/20011)
+    #[arg(long)]
+    advertise_addr: Option<Multiaddr>,
+
     /// Authorization Authority ID
     #[arg(short, long)]
     aa_id: PeerId,
 
     /// Address of a Authorization Node
-    #[arg(short='B', long, default_value_t = Multiaddr::from_str("/ip4/127.0.0.1/tcp/5005").unwrap())]
+    #[arg(short='B', long, default_value_t = Multiaddr::from_str("/ip4/127.0.0.1/tcp/20011").unwrap())]
     aa_addr: Multiaddr,
 
     /// Identity of Archive
@@ -80,10 +85,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
     };
 
     // Connect to the database
+    log::info!("Connecting to Postgres at {}", args.url);
     let pool = PgPoolOptions::new()
         .max_connections(5)
+        .acquire_timeout(Duration::from_secs(5))
         .connect(&args.url)
         .await?;
+    log::info!("Postgres connection established");
 
     let load_file_path = PathBuf::from_str(&args.km_dir)?;
 
@@ -108,6 +116,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
     if let Some(port) = args.port {
         abstswarm_builder =
             abstswarm_builder.listen_address(format!("/ip4/0.0.0.0/tcp/{port}").parse()?);
+    }
+
+    if let Some(addr) = args.advertise_addr.clone() {
+        if !addr.to_string().starts_with("/ip4/127.0.0.1/") {
+            abstswarm_builder = abstswarm_builder.add_external_address(addr);
+        }
     }
 
     let abstswarm = abstswarm_builder.build()?;

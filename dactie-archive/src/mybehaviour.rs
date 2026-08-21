@@ -520,7 +520,13 @@ impl MyBehaviour {
         {
             if protocols.contains(&PROTOCOL_NAME) {
                 for addr in listen_addrs {
-                    log::debug!("Adding received IdentifyInfo matching protocol  to the DHT. Peer: {}, addr: {}", peer_id, addr);
+                    // Filter out loopback addresses which are not dialable across hosts
+                    let addr_str = addr.to_string();
+                    if addr_str.starts_with("/ip4/127.0.0.1/") {
+                        log::debug!("Ignoring loopback addr from identify for {}: {}", peer_id, addr);
+                        continue;
+                    }
+                    log::debug!("Adding received IdentifyInfo matching protocol to the DHT. Peer: {}, addr: {}", peer_id, addr);
                     self.kademlia.add_address(&peer_id, addr);
                 }
             }
@@ -745,19 +751,23 @@ impl MyBehaviour {
                 peer_id,
                 error,
             } => match peer_id {
-                None => log::error!("Could not connect: {}", error),
+                None => log::warn!("Outgoing connection error (no peer id): {}", error),
                 Some(peer_id) => log::error!("Could not connect to peer '{}': {}", peer_id, error),
             },
             SwarmEvent::ConnectionClosed {
                 peer_id,
-                cause: Some(connerror),
+                cause,
                 ..
             } => {
-                log::error!(
-                    "Connection to peer {} closed because of an error: {}",
-                    peer_id,
-                    connerror
-                );
+                if let Some(connerror) = cause {
+                    log::error!(
+                        "Connection to peer {} closed because of an error: {}",
+                        peer_id,
+                        connerror
+                    );
+                } else {
+                    log::debug!("Connection to peer {} closed normally", peer_id);
+                }
             }
             _ => log::trace!("Unhandled Swarm event: {event:?}"),
         }

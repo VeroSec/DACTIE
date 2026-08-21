@@ -1,6 +1,7 @@
 services:
+  # Postgres for archive_node1 on 10.244.192.117
   db:
-    image: postgres:latest
+    image: postgres:16
     container_name: postgres_db
     environment:
       POSTGRES_USER: archive
@@ -8,14 +9,15 @@ services:
       POSTGRES_DB: archivedb
     volumes:
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
-    networks:
-      my_network:
-        ipv4_address: 172.16.238.100
+      - db_data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
+    restart: unless-stopped
+    profiles: ["node117"]
 
+  # Postgres for archive_node2 on 10.244.192.118
   db2:
-    image: postgres:latest
+    image: postgres:16
     container_name: postgres_db2
     environment:
       POSTGRES_USER: archive
@@ -23,109 +25,212 @@ services:
       POSTGRES_DB: archivedb
     volumes:
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
-    networks:
-      my_network:
-        ipv4_address: 172.16.238.102
+      - db2_data:/var/lib/postgresql/data
     ports:
       - "5433:5432"
+    restart: unless-stopped
+    profiles: ["node118"]
 
   adminer:
-    image: adminer:latest
+    image: adminer:4
     container_name: adminer
-    restart: always
-    networks:
-      my_network:
-        ipv4_address: 172.16.238.101
+    restart: unless-stopped
     ports:
-      - 8080:8080
+      - "8080:8080"
+    profiles: ["node117"]
 
+  # Authority lives on host .116 and listens on 10001
   authority_node:
     image: dactie-authority
-    networks:
-      my_network:
-        ipv4_address: 172.16.238.10
+    build:
+      context: .
+      dockerfile: ./dactie-authority/Dockerfile
+    network_mode: "host"
     tty: true
     stdin_open: true
+    restart: unless-stopped
     volumes:
-      - ./key_material/key_material_0:/usr/src/dactie/key_material/
-    command: sh -c '/usr/src/dactie/target/release/dactie-authority -K /usr/src/dactie/key_material'
+      - ./key_material/key_material_0:/usr/src/dactie/key_material:rw
+    command: >-
+      sh -c '/usr/src/dactie/target/release/dactie-authority
+      -K /usr/src/dactie/key_material/
+      -p 10001
+      --advertise-addr /ip4/10.244.192.116/tcp/10001'
     environment:
       - RUST_LOG=info
+    profiles: ["node116"]
 
+  # Archive on 10.244.192.117 with DSN to local db
   archive_node1:
     image: dactie-archive
-    networks:
-      my_network:
-        ipv4_address: 172.16.238.11
+    build:
+      context: .
+      dockerfile: ./dactie-archive/Dockerfile
+    network_mode: "host"
     tty: true
     stdin_open: true
+    restart: unless-stopped
     volumes:
-      - ./key_material/key_material_1:/usr/src/dactie/key_material/
-    command: sh -c '/usr/src/dactie/target/release/dactie-archive -K /usr/src/dactie/key_material/ -u "postgres://archive:archivepw@172.16.238.100/archivedb" -i archive1 -a "$${BOOT_PEER_ID}" -B /ip4/172.16.238.10/tcp/10001'
+      - ./key_material/key_material_1:/usr/src/dactie/key_material:rw
+    command: >-
+      sh -c '/usr/src/dactie/target/release/dactie-archive
+      -K /usr/src/dactie/key_material/
+      -u "postgres://archive:archivepw@127.0.0.1:5432/archivedb"
+      -i archive1
+      -a "$${BOOT_PEER_ID}"
+      -B /ip4/10.244.192.116/tcp/10001
+      -p 20011
+      --advertise-addr /ip4/10.244.192.117/tcp/20011'
     env_file:
       - key_material/boot_id.env
     environment:
       - RUST_LOG=debug
     depends_on:
       - db
-      - authority_node
+    profiles: ["node117"]
 
+  # Archive on 10.244.192.118 with DSN to its local db2
   archive_node2:
     image: dactie-archive
-    networks:
-      my_network:
-        ipv4_address: 172.16.238.12
+    build:
+      context: .
+      dockerfile: ./dactie-archive/Dockerfile
+    network_mode: "host"
     tty: true
     stdin_open: true
+    restart: unless-stopped
     volumes:
-      - ./key_material/key_material_2:/usr/src/dactie/key_material/
-    command: sh -c '/usr/src/dactie/target/release/dactie-archive -K /usr/src/dactie/key_material/ -u "postgres://archive:archivepw@172.16.238.102/archivedb" -i archive2 -a "$${BOOT_PEER_ID}" -B /ip4/172.16.238.10/tcp/10001'
+      - ./key_material/key_material_2:/usr/src/dactie/key_material:rw
+    command: >-
+      sh -c '/usr/src/dactie/target/release/dactie-archive
+      -K /usr/src/dactie/key_material/
+      -u "postgres://archive:archivepw@127.0.0.1:5433/archivedb"
+      -i archive2
+      -a "$${BOOT_PEER_ID}"
+      -B /ip4/10.244.192.116/tcp/10001
+      -p 20012
+      --advertise-addr /ip4/10.244.192.118/tcp/20012'
     env_file:
       - key_material/boot_id.env
     environment:
       - RUST_LOG=debug
     depends_on:
       - db2
-      - authority_node
+    profiles: ["node118"]
 
+  # Peer on 10.244.192.117
   peer_1:
     image: dactie-peer
-    networks:
-      my_network:
-        ipv4_address: 172.16.238.13
+    build:
+      context: .
+      dockerfile: ./dactie-peer/Dockerfile
+    network_mode: "host"
     tty: true
     stdin_open: true
+    restart: unless-stopped
     volumes:
-      - ./key_material/key_material_3:/usr/src/dactie/key_material/
-    command: sh -c '/usr/src/dactie/target/release/dactie-peer -K /usr/src/dactie/key_material -b "$${BOOT_PEER_ID}" -B "/ip4/172.16.238.10/tcp/10001"'
+      - ./key_material/key_material_3:/usr/src/dactie/key_material:rw
+    command: >-
+      sh -c '/usr/src/dactie/target/release/dactie-peer
+      -K /usr/src/dactie/key_material/
+      -b "$${BOOT_PEER_ID}"
+      -B "/ip4/10.244.192.116/tcp/10001"
+      -p 21011
+      --advertise-addr /ip4/10.244.192.117/tcp/21011'
+      -i peer1
     environment:
       - RUST_LOG=info
     env_file:
       - key_material/boot_id.env
-    depends_on:
-      - authority_node
+    profiles: ["node117"]
 
+  # Peer on 10.244.192.118
   peer_2:
     image: dactie-peer
-    networks:
-      my_network:
-        ipv4_address: 172.16.238.14
+    build:
+      context: .
+      dockerfile: ./dactie-peer/Dockerfile
+    network_mode: "host"
     tty: true
     stdin_open: true
+    restart: unless-stopped
     volumes:
-      - ./key_material/key_material_4:/usr/src/dactie/key_material/
-    command: sh -c '/usr/src/dactie/target/release/dactie-peer -K /usr/src/dactie/key_material -b "$${BOOT_PEER_ID}" -B "/ip4/172.16.238.10/tcp/10001"'
+      - ./key_material/key_material_4:/usr/src/dactie/key_material:rw
+    command: >-
+      sh -c '/usr/src/dactie/target/release/dactie-peer
+      -K /usr/src/dactie/key_material/
+      -b "$${BOOT_PEER_ID}"
+      -B "/ip4/10.244.192.116/tcp/10001"
+      -p 21012
+      --advertise-addr /ip4/10.244.192.118/tcp/21012'
+      -i peer2
     environment:
       - RUST_LOG=info
     env_file:
       - key_material/boot_id.env
-    depends_on:
-      - authority_node
+    profiles: ["node118"]
+
+  # Peers on 10.244.192.119
+  peer_3:
+    image: dactie-peer
+    build:
+      context: .
+      dockerfile: ./dactie-peer/Dockerfile
+    network_mode: "host"
+    tty: true
+    stdin_open: true
+    restart: unless-stopped
+    volumes:
+      - ./key_material/key_material_5:/usr/src/dactie/key_material:rw
+    command: >-
+      sh -c '/usr/src/dactie/target/release/dactie-peer
+      -K /usr/src/dactie/key_material/
+      -b "$${BOOT_PEER_ID}"
+      -B "/ip4/10.244.192.116/tcp/10001"
+      -p 21013
+      --advertise-addr /ip4/10.244.192.119/tcp/21013'
+      -i peer3
+    environment:
+      - RUST_LOG=info
+    env_file:
+      - key_material/boot_id.env
+    profiles: ["node119"]
+
+  peer_4:
+    image: dactie-peer
+    build:
+      context: .
+      dockerfile: ./dactie-peer/Dockerfile
+    network_mode: "host"
+    tty: true
+    stdin_open: true
+    restart: unless-stopped
+    volumes:
+      - ./key_material/key_material_6:/usr/src/dactie/key_material:rw
+    command: >-
+      sh -c '/usr/src/dactie/target/release/dactie-peer
+      -K /usr/src/dactie/key_material/
+      -b "$${BOOT_PEER_ID}"
+      -B "/ip4/10.244.192.116/tcp/10001"
+      -p 21014
+      --advertise-addr /ip4/10.244.192.119/tcp/21014'
+      -i peer4
+    environment:
+      - RUST_LOG=info
+      - BENCH_PUBLISH=true
+      - BENCH_RATE=40
+      - BENCH_TOPIC=Test
+    env_file:
+      - key_material/boot_id.env
+    profiles: ["node119"]
+
+volumes:
+  db_data:
+  db2_data:
 
 networks:
   my_network:
     driver: bridge
     ipam:
       config:
-        - subnet: 172.16.238.0/24
-
+        - subnet: 10.244.192.0/24

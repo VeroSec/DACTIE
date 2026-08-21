@@ -17,6 +17,7 @@ use libp2p::swarm::NetworkBehaviour;
 use libp2p::PeerId;
 use libp2p::Swarm;
 use openmls::group::GroupId;
+use libp2p_metrics as lp2p_metrics;
 
 ///
 /// The `AbstSwarm` is a convenience wrapper around the `Swarm` for a `NetworkBehaviour`.
@@ -45,6 +46,7 @@ where
     group_commit_rx: mpsc::UnboundedReceiver<GroupId>,
     swarm: Swarm<TBehaviour>,
     my_open_mls: Arc<MyOpenMls>,
+    metrics: Option<lp2p_metrics::Metrics>,
 }
 
 impl<TBehaviour> AbstSwarm<TBehaviour>
@@ -57,6 +59,7 @@ where
         group_commit_rx: mpsc::UnboundedReceiver<GroupId>,
         swarm: Swarm<TBehaviour>,
         my_open_mls: MyOpenMls,
+        metrics: Option<lp2p_metrics::Metrics>,
     ) -> Self {
         AbstSwarm {
             instruction_rx,
@@ -64,6 +67,7 @@ where
             swarm,
             my_open_mls: Arc::new(my_open_mls),
             group_commit_rx,
+            metrics,
         }
     }
 
@@ -81,7 +85,13 @@ where
                         }
                     });
                 },
-                event = self.swarm.select_next_some() => self.swarm.behaviour_mut().handle_event(&self.notification_tx,&self.my_open_mls, event).await,
+                event = self.swarm.select_next_some() => {
+                    // Record swarm-level event metrics (counts, protocol stats)
+                    if let Some(metrics) = &self.metrics {
+                        lp2p_metrics::Recorder::record(metrics, &event);
+                    }
+                    self.swarm.behaviour_mut().handle_event(&self.notification_tx,&self.my_open_mls, event).await
+                },
                 Some(instruction) = self.instruction_rx.recv() =>  self.swarm.behaviour_mut().handle_instruction(&self.notification_tx, &self.my_open_mls,instruction).await,
                 else => {
                     log::warn!("Both swarm and instruction receiver closed. Ending event loop");

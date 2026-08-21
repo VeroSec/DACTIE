@@ -1,2 +1,5 @@
 /target
 /key_material
+# IDE settings — never publish (leaks local paths/usernames)
+.idea/
+*.swp

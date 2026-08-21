@@ -1192,6 +1192,15 @@ impl MyOpenMls {
     }
 
     pub fn get_channel(&self, topic: Vec<u8>) -> String {
+        // If topic is an ASCII number 0..9, map directly to that channel index.
+        if let Ok(s) = std::str::from_utf8(&topic) {
+            if let Ok(n) = s.parse::<usize>() {
+                if n < NUM_CHANNELS as usize {
+                    return format!("channel_{}", n);
+                }
+            }
+        }
+        // Otherwise hash to one of NUM_CHANNELS buckets.
         let mut hasher = DefaultHasher::new();
         topic.hash(&mut hasher);
         format!("channel_{}", hasher.finish() % NUM_CHANNELS)

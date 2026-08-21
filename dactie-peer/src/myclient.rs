@@ -5,6 +5,7 @@ use dactie_utils::shared_structs::{Instruction, MessageBody};
 use libp2p::PeerId;
 use tokio::io::{self, AsyncBufReadExt, BufReader, Lines, Stdin};
 use tokio::sync::mpsc;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 /// The `NetworkClient` ireads user input from standard input and transforms it
 /// into `Instruction`s. It then sends the `Instruction` on the mpsc channel that the `Network`
@@ -34,6 +35,48 @@ impl MyClient {
 
     pub(crate) async fn run(mut self) -> anyhow::Result<()> {
         log::info!("Start network client event loop.");
+
+        // Optional benchmark publisher: controlled via env vars
+        // BENCH_PUBLISH=true|1 to enable publishing from this peer
+        // BENCH_RATE=40 messages per second (default 40)
+        // BENCH_TOPIC=Test topic to publish to (default "Test")
+        // BENCH_PAYLOAD_BYTES=0 additional payload size (default 0)
+        if std::env::var("BENCH_PUBLISH").map(|v| v == "1" || v.eq_ignore_ascii_case("true")).unwrap_or(false) {
+            let instruction_tx = self.instruction_tx.clone();
+            let peer_id_str = self.peer_id.to_string();
+            let rate: u64 = std::env::var("BENCH_RATE").ok().and_then(|s| s.parse().ok()).unwrap_or(40);
+            let topic: String = std::env::var("BENCH_TOPIC").unwrap_or_else(|_| "Test".to_string());
+            let extra_bytes: usize = std::env::var("BENCH_PAYLOAD_BYTES").ok().and_then(|s| s.parse().ok()).unwrap_or(0);
+
+            // period = 1 / rate
+            let period = if rate == 0 { Duration::from_secs(1) } else { Duration::from_nanos(1_000_000_000u64 / rate) };
+            tokio::spawn(async move {
+                let mut seq: u64 = 0;
+                let mut ticker = tokio::time::interval(period);
+                // Avoid immediate burst from first tick
+                ticker.tick().await;
+                log::info!("BENCH_PUBLISH enabled: rate={} msg/s topic='{}' extra_bytes={}", rate, topic, extra_bytes);
+                loop {
+                    ticker.tick().await;
+                    let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or(Duration::from_millis(0));
+                    let now_ms = now.as_millis();
+                    // Format: BENCH|<epoch_ms>|<seq>|<sender_peer_id>|<padding>
+                    let mut msg = format!("BENCH|{}|{}|{}|", now_ms, seq, peer_id_str);
+                    if extra_bytes > 0 {
+                        // ensure deterministic payload size
+                        let padding = "x".repeat(extra_bytes);
+                        msg.push_str(&padding);
+                    }
+                    seq = seq.wrapping_add(1);
+
+                    let instruction = Instruction::Send { message: MessageBody::Broadcast { topic: topic.clone(), data: msg.into_bytes() } };
+                    if let Err(e) = instruction_tx.send(instruction) {
+                        log::error!("BENCH_PUBLISH failed to send instruction: {}", e);
+                        break;
+                    }
+                }
+            });
+        }
         loop {
             tokio::select! {
                 Ok(Some(line)) = self.stdin.next_line() => {
@@ -198,10 +241,35 @@ impl MyClient {
                 ..
             } => match message_body {
                 MessageBody::Broadcast { topic, data } => {
-                    println!("Got Broadcastmessage: \n'{}'\nTopic: '{topic}'\nPropagating Peer: {peer_id}\nSignature:\n{}",String::from_utf8_lossy(&data),  hex::encode(&signature));
+                    let s = String::from_utf8_lossy(&data);
+                    if s.starts_with("BENCH|") {
+                        // Parse BENCH|<epoch_ms>|<seq>|<sender_peer_id>|...
+                        let mut parts = s.split('|');
+                        let _ = parts.next();
+                        let ts_ms = parts.next().and_then(|v| v.parse::<u128>().ok()).unwrap_or(0);
+                        let seq = parts.next().and_then(|v| v.parse::<u64>().ok()).unwrap_or(0);
+                        let sender = parts.next().unwrap_or("");
+                        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or(Duration::from_millis(0)).as_millis();
+                        let latency_ms = now.saturating_sub(ts_ms);
+                        println!("BENCH_RX topic={topic} from={sender} via={peer_id} seq={seq} latency_ms={} sig={}", latency_ms, hex::encode(&signature));
+                    } else {
+                        println!("Got Broadcastmessage: \n'{}'\nTopic: '{topic}'\nPropagating Peer: {peer_id}\nSignature:\n{}", s, hex::encode(&signature));
+                    }
                 }
                 MessageBody::Group { group_number, data } => {
-                    println!("Got Groupmessage: \n'{}'\nGroup number: '{group_number}'\nPropagating Peer: {peer_id}\nSignature:\n{}",String::from_utf8_lossy(&data),  hex::encode(&signature));
+                    let s = String::from_utf8_lossy(&data);
+                    if s.starts_with("BENCH|") {
+                        let mut parts = s.split('|');
+                        let _ = parts.next();
+                        let ts_ms = parts.next().and_then(|v| v.parse::<u128>().ok()).unwrap_or(0);
+                        let seq = parts.next().and_then(|v| v.parse::<u64>().ok()).unwrap_or(0);
+                        let sender = parts.next().unwrap_or("");
+                        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or(Duration::from_millis(0)).as_millis();
+                        let latency_ms = now.saturating_sub(ts_ms);
+                        println!("BENCH_RX group={} from={sender} via={peer_id} seq={seq} latency_ms={} sig={}", group_number, latency_ms, hex::encode(&signature));
+                    } else {
+                        println!("Got Groupmessage: \n'{}'\nGroup number: '{group_number}'\nPropagating Peer: {peer_id}\nSignature:\n{}", s, hex::encode(&signature));
+                    }
                 }
                 MessageBody::GroupEnc { .. } | MessageBody::BroadcastEnc { .. } => {
                     log::error!("Client received notification with Encrypted Messages")

@@ -203,6 +203,8 @@ impl MyBehaviour {
 
         let to_send =
             bincode::serialize(&message).map_err(|e| SerializationError(e.to_string()))?;
+        let payload_bytes = to_send.len();
+        log::info!("Publishing gossipsub payload: {} bytes", payload_bytes);
         if let Err(error) = self
             .gossipsub
             .publish(IdentTopic::new(channel.clone()), to_send)
@@ -630,6 +632,8 @@ impl MyBehaviour {
                 message_id: id,
                 message,
             } => {
+                // Log raw gossipsub payload size (on-application payload pre-libp2p overhead)
+                log::info!("Received gossipsub payload: {} bytes", message.data.len());
                 let message: Message = bincode::deserialize(&message.data)
                     .map_err(|e| SerializationError(e.to_string()))?;
                 let (message_body, signature) = match my_open_mls.verify(message) {
@@ -665,6 +669,18 @@ impl MyBehaviour {
                 };
 
                 match message_body {
+                    MessageBody::Broadcast { topic, data } => {
+                        // Forward plain broadcasts as-is (used for benchmarking and public messages)
+                        let message_body = MessageBody::Broadcast { topic, data };
+                        Self::notify(
+                            notification_tx,
+                            Notification::Data {
+                                propagation_source: peer_id,
+                                message_body,
+                                signature: signature.to_bytes(),
+                            },
+                        )
+                    }
                     MessageBody::GroupEnc {
                         group_id,
                         enc_data: data,
@@ -687,7 +703,6 @@ impl MyBehaviour {
                         }
                     }
 
-                    MessageBody::Broadcast { .. } => {} // Peers should only receive encrypted messages
                     MessageBody::BroadcastEnc { topic, data, nonce } => {
                         // Handle public message
 
@@ -702,6 +717,8 @@ impl MyBehaviour {
                                     signature: signature.to_bytes(),
                                 },
                             )
+                        } else {
+                            log::info!("Dropping BroadcastEnc on topic '{}' from {}: not subscribed at MLS layer (run `sub {}` to receive)", topic, peer_id, topic);
                         }
                     }
                     MessageBody::Group { .. } => {} // Peers should only receive encrypted messages // Handle private message
@@ -773,7 +790,13 @@ impl MyBehaviour {
         {
             if protocols.contains(&PROTOCOL_NAME) {
                 for addr in listen_addrs {
-                    log::debug!("Adding received IdentifyInfo matching protocol  to the DHT. Peer: {}, addr: {}", peer_id, addr);
+                    // Filter out loopback addresses to avoid poisoning the DHT with unroutable addrs
+                    let addr_str = addr.to_string();
+                    if addr_str.starts_with("/ip4/127.0.0.1/") {
+                        log::debug!("Ignoring loopback addr from identify for {}: {}", peer_id, addr);
+                        continue;
+                    }
+                    log::debug!("Adding received IdentifyInfo matching protocol to the DHT. Peer: {}, addr: {}", peer_id, addr);
                     self.kademlia.add_address(&peer_id, addr);
                 }
             }
@@ -957,20 +980,27 @@ impl MyBehaviour {
                 connection_id: _connection_id,
                 peer_id,
                 error,
-            } => match peer_id {
-                None => log::error!("Could not connect: {}", error),
-                Some(peer_id) => log::error!("Could not connect to peer '{}': {}", peer_id, error),
+            } => {
+                // Reduce noise for expected transient errors, still log with context
+                match peer_id {
+                    None => log::warn!("Outgoing connection error (no peer id): {}", error),
+                    Some(peer_id) => log::error!("Could not connect to peer '{}': {}", peer_id, error),
+                }
             },
             SwarmEvent::ConnectionClosed {
                 peer_id,
-                cause: Some(connerror),
+                cause,
                 ..
             } => {
-                log::error!(
-                    "Connection to peer {} closed because of an error: {}",
-                    peer_id,
-                    connerror
-                );
+                if let Some(connerror) = cause {
+                    log::error!(
+                        "Connection to peer {} closed because of an error: {}",
+                        peer_id,
+                        connerror
+                    );
+                } else {
+                    log::debug!("Connection to peer {} closed normally", peer_id);
+                }
             }
             _ => log::trace!("Unhandled Swarm event: {event:?}"),
         }
