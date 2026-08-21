@@ -8,3 +8,7 @@
 # Kept privately for reference only — must never be redistributed in the
 # published artifact, which ships under Apache-2.0.
 dataSources/
+
+# Paper submission and rebuttal drafts — never commit
+ACSAC_Submission*.pdf
+rebut.md
