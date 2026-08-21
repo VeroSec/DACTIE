@@ -128,3 +128,24 @@ fn test_correct_encryption_proof() {
 
     assert!(is_valid, "Encryption proof failed to verify");
 }
+
+#[test]
+fn test_signature_bincode_roundtrip() {
+    // The compact encoding on Signature is a wire-format change, so a value
+    // must survive a bincode round trip byte-for-byte identical.
+    let sig = Signature {
+        sigma1: G1::random(),
+        sigma2: G1::random(),
+        c: FieldElement::random(),
+        s: FieldElement::random(),
+    };
+
+    let bytes = bincode::serialize(&sig).expect("serialize");
+    let back: Signature = bincode::deserialize(&bytes).expect("deserialize");
+
+    assert_eq!(sig.sigma1, back.sigma1, "sigma1 did not survive the round trip");
+    assert_eq!(sig.sigma2, back.sigma2, "sigma2 did not survive the round trip");
+    assert_eq!(sig.c, back.c, "c did not survive the round trip");
+    assert_eq!(sig.s, back.s, "s did not survive the round trip");
+    assert_eq!(sig, back);
+}

@@ -50,7 +50,6 @@ impl MyClient {
             .unwrap_or(false)
         {
             let instruction_tx = self.instruction_tx.clone();
-            let peer_id_str = self.peer_id.to_string();
             let rate: u64 = std::env::var("BENCH_RATE")
                 .ok()
                 .and_then(|s| s.parse().ok())
@@ -84,8 +83,10 @@ impl MyClient {
                         .duration_since(UNIX_EPOCH)
                         .unwrap_or(Duration::from_millis(0));
                     let now_ms = now.as_millis();
-                    // Format: BENCH|<epoch_ms>|<seq>|<sender_peer_id>|<padding>
-                    let mut msg = format!("BENCH|{}|{}|{}|", now_ms, seq, peer_id_str);
+                    // Format: B|<epoch_ms>|<seq>|<padding>. The originating peer is
+                    // deliberately not in the payload: broadcasting it would reveal
+                    // the sender to every recipient.
+                    let mut msg = format!("B|{}|{}|", now_ms, seq);
                     if extra_bytes > 0 {
                         // ensure deterministic payload size
                         let padding = "x".repeat(extra_bytes);
@@ -271,8 +272,8 @@ impl MyClient {
             } => match message_body {
                 MessageBody::Broadcast { topic, data } => {
                     let s = String::from_utf8_lossy(&data);
-                    if s.starts_with("BENCH|") {
-                        // Parse BENCH|<epoch_ms>|<seq>|<sender_peer_id>|...
+                    if s.starts_with("B|") {
+                        // Parse B|<epoch_ms>|<seq>|...
                         let mut parts = s.split('|');
                         let _ = parts.next();
                         let ts_ms = parts
@@ -283,20 +284,19 @@ impl MyClient {
                             .next()
                             .and_then(|v| v.parse::<u64>().ok())
                             .unwrap_or(0);
-                        let sender = parts.next().unwrap_or("");
                         let now = SystemTime::now()
                             .duration_since(UNIX_EPOCH)
                             .unwrap_or(Duration::from_millis(0))
                             .as_millis();
                         let latency_ms = now.saturating_sub(ts_ms);
-                        println!("BENCH_RX topic={topic} from={sender} via={peer_id} seq={seq} latency_ms={} sig={}", latency_ms, hex::encode(&signature));
+                        println!("BENCH_RX topic={topic} via={peer_id} seq={seq} latency_ms={} sig={}", latency_ms, hex::encode(&signature));
                     } else {
                         println!("Got Broadcastmessage: \n'{}'\nTopic: '{topic}'\nPropagating Peer: {peer_id}\nSignature:\n{}", s, hex::encode(&signature));
                     }
                 }
                 MessageBody::Group { group_number, data } => {
                     let s = String::from_utf8_lossy(&data);
-                    if s.starts_with("BENCH|") {
+                    if s.starts_with("B|") {
                         let mut parts = s.split('|');
                         let _ = parts.next();
                         let ts_ms = parts
@@ -307,13 +307,12 @@ impl MyClient {
                             .next()
                             .and_then(|v| v.parse::<u64>().ok())
                             .unwrap_or(0);
-                        let sender = parts.next().unwrap_or("");
                         let now = SystemTime::now()
                             .duration_since(UNIX_EPOCH)
                             .unwrap_or(Duration::from_millis(0))
                             .as_millis();
                         let latency_ms = now.saturating_sub(ts_ms);
-                        println!("BENCH_RX group={} from={sender} via={peer_id} seq={seq} latency_ms={} sig={}", group_number, latency_ms, hex::encode(&signature));
+                        println!("BENCH_RX group={} via={peer_id} seq={seq} latency_ms={} sig={}", group_number, latency_ms, hex::encode(&signature));
                     } else {
                         println!("Got Groupmessage: \n'{}'\nGroup number: '{group_number}'\nPropagating Peer: {peer_id}\nSignature:\n{}", s, hex::encode(&signature));
                     }

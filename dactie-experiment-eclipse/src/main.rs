@@ -4,7 +4,7 @@ mod peer;
 mod shared_structs;
 
 use crate::experiment::experiment_prop_peer_id;
-use clap::{arg, Parser};
+use clap::Parser;
 use shared_structs::*;
 use std::error::Error;
 use std::fs::{File, OpenOptions};

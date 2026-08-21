@@ -2,7 +2,7 @@ use crate::abstswarm::abstswarm_builder::AbstSwarmBuilder;
 use crate::mybehaviour::MyBehaviour;
 use crate::myclient::MyClient;
 use crate::storage::Storage;
-use clap::{arg, Parser};
+use clap::Parser;
 use dactie_utils::key_store::StoredKeyMaterial;
 use dactie_utils::mls_wrapper::MyOpenMls;
 use std::error::Error;

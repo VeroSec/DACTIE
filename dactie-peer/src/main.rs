@@ -1,5 +1,5 @@
 use axum::{routing::get, Router};
-use clap::{arg, Parser};
+use clap::Parser;
 use libp2p::Multiaddr;
 use libp2p_metrics::Metrics as Lp2pMetrics;
 use prometheus_client::registry::Registry;

@@ -3,7 +3,7 @@ mod peer;
 
 use crate::experiment::experiment_prop_peer_id;
 use crate::peer::PubInterval;
-use clap::{arg, Parser};
+use clap::Parser;
 use std::error::Error;
 use std::fs::{File, OpenOptions};
 use std::io::Write;

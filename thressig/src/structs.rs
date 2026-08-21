@@ -1,5 +1,6 @@
 use amcl_wrapper::extension_field_gt::GT;
 use amcl_wrapper::field_elem::FieldElement;
+use amcl_wrapper::group_elem::GroupElement;
 use amcl_wrapper::group_elem_g1::G1;
 use amcl_wrapper::group_elem_g2::G2;
 use base64::{engine::general_purpose, Engine as _};
@@ -7,6 +8,33 @@ use bincode;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::str::FromStr;
+
+// amcl_wrapper 0.4.0 serializes G1 and FieldElement as hex strings via to_hex(),
+// which triples their size on the wire. These adapters use the compact byte form
+// instead. Changing them changes the wire format: every peer must agree.
+mod g1_compressed {
+    use super::*;
+    use serde::de::Error as DeError;
+    pub fn serialize<S: serde::Serializer>(g: &G1, s: S) -> Result<S::Ok, S::Error> {
+        s.serialize_bytes(&g.to_bytes(true))
+    }
+    pub fn deserialize<'de, D: serde::Deserializer<'de>>(d: D) -> Result<G1, D::Error> {
+        let v: Vec<u8> = Vec::deserialize(d)?;
+        G1::from_bytes(&v).map_err(|e| D::Error::custom(format!("G1: {:?}", e)))
+    }
+}
+
+mod fr_bytes {
+    use super::*;
+    use serde::de::Error as DeError;
+    pub fn serialize<S: serde::Serializer>(f: &FieldElement, s: S) -> Result<S::Ok, S::Error> {
+        s.serialize_bytes(&f.to_bytes())
+    }
+    pub fn deserialize<'de, D: serde::Deserializer<'de>>(d: D) -> Result<FieldElement, D::Error> {
+        let v: Vec<u8> = Vec::deserialize(d)?;
+        FieldElement::from_bytes(&v).map_err(|e| D::Error::custom(format!("Fr: {:?}", e)))
+    }
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Grpkey {
@@ -35,9 +63,13 @@ pub struct Memkey {
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct Signature {
+    #[serde(with = "g1_compressed")]
     pub sigma1: G1,
+    #[serde(with = "g1_compressed")]
     pub sigma2: G1,
+    #[serde(with = "fr_bytes")]
     pub c: FieldElement,
+    #[serde(with = "fr_bytes")]
     pub s: FieldElement,
 }
 
