@@ -83,7 +83,7 @@ impl MyBehaviour {
         };
 
         let gossipsub_config = gossipsub::ConfigBuilder::default()
-            .heartbeat_interval(Duration::from_secs(10)) // This is set to aid debugging by not cluttering the log space
+            .heartbeat_interval(Duration::from_secs(1)) // This is set to aid debugging by not cluttering the log space
             .validation_mode(gossipsub::ValidationMode::Permissive) //Allows anonymous peers
             .validate_messages() //Used to manually verify group signatures for each message
             .message_id_fn(message_id_fn) // content-address messages. No two messages of the same content will be propagated.
