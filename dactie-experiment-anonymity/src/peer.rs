@@ -30,18 +30,34 @@ pub(crate) struct MeshConfig {
     pub(crate) n: usize,
     pub(crate) low: usize,
     pub(crate) high: usize,
+    pub(crate) outbound_min: usize,
 }
 
 impl MeshConfig {
-    /// Build a band from a target degree and optional explicit bounds, keeping
-    /// gossipsub's `low <= n <= high` invariant so `ConfigBuilder` cannot fail.
+    /// Build a band from a target degree and optional explicit bounds.
+    ///
+    /// gossipsub rejects a config unless both
+    ///
+    ///   mesh_outbound_min <= mesh_n_low <= mesh_n <= mesh_n_high
+    ///   mesh_outbound_min * 2 <= mesh_n
+    ///
+    /// hold. `mesh_outbound_min` defaults to 2, so leaving it alone makes any D
+    /// below 4 fail with MeshParametersInvalid at swarm construction - which
+    /// matters here because D is swept from the command line. Deriving it from
+    /// the band keeps every D constructible.
     pub(crate) fn new(n: usize, low: Option<usize>, high: Option<usize>) -> Self {
         let n = n.max(1);
         let low = low
             .unwrap_or_else(|| n.saturating_sub(2).max(1))
             .clamp(1, n);
         let high = high.unwrap_or(n * 2).max(n);
-        MeshConfig { n, low, high }
+        let outbound_min = (n / 2).min(low).min(2);
+        MeshConfig {
+            n,
+            low,
+            high,
+            outbound_min,
+        }
     }
 }
 
@@ -146,6 +162,32 @@ impl Peer {
         })
     }
 
+    /// The gossipsub config for a mesh band. Separate from `create_swarm` so the
+    /// parameter constraints can be checked without standing up a swarm.
+    fn gossipsub_config(
+        mesh: MeshConfig,
+    ) -> Result<gossipsub::Config, gossipsub::ConfigBuilderError> {
+        // To content-address message, we can take the hash of message and use it as an ID.
+        let message_id_fn = |message: &gossipsub::Message| {
+            let mut s = DefaultHasher::new();
+            message.data.hash(&mut s);
+            gossipsub::MessageId::from(s.finish().to_string())
+        };
+
+        gossipsub::ConfigBuilder::default()
+            .heartbeat_interval(Duration::from_secs(1)) // This is set to aid debugging by not cluttering the log space
+            .validation_mode(gossipsub::ValidationMode::Permissive) // This sets the kind of message validation. The default is Strict (enforce message signing)
+            .message_id_fn(message_id_fn) // content-address messages. No two messages of the same content will be propagated.
+            .flood_publish(false)
+            // D is the quantity the anonymity bound is stated over, so the whole
+            // band is configurable rather than fixed.
+            .mesh_n_low(mesh.low)
+            .mesh_n(mesh.n)
+            .mesh_n_high(mesh.high)
+            .mesh_outbound_min(mesh.outbound_min)
+            .build()
+    }
+
     fn create_swarm(
         bootstrap_peer: Option<(PeerId, Multiaddr)>,
         mesh: MeshConfig,
@@ -158,24 +200,7 @@ impl Peer {
                 yamux::Config::default,
             )?
             .with_behaviour(|key| {
-                // To content-address message, we can take the hash of message and use it as an ID.
-                let message_id_fn = |message: &gossipsub::Message| {
-                    let mut s = DefaultHasher::new();
-                    message.data.hash(&mut s);
-                    gossipsub::MessageId::from(s.finish().to_string())
-                };
-
-                let gossipsub_config = gossipsub::ConfigBuilder::default()
-                    .heartbeat_interval(Duration::from_secs(1)) // This is set to aid debugging by not cluttering the log space
-                    .validation_mode(gossipsub::ValidationMode::Permissive) // This sets the kind of message validation. The default is Strict (enforce message signing)
-                    .message_id_fn(message_id_fn) // content-address messages. No two messages of the same content will be propagated.
-                    .flood_publish(false)
-                    // D is the quantity the anonymity bound is stated over, so
-                    // the whole band is configurable rather than fixed.
-                    .mesh_n_low(mesh.low)
-                    .mesh_n(mesh.n)
-                    .mesh_n_high(mesh.high)
-                    .build()
+                let gossipsub_config = Self::gossipsub_config(mesh)
                     .map_err(io::Error::other)
                     .unwrap(); // Temporary hack because `build` does not return a proper `std::error::Error`.
 
@@ -329,4 +354,54 @@ fn generate_random_string(len: usize) -> String {
         .take(len)
         .collect();
     s
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Every D the command line can ask for must produce a config gossipsub
+    /// accepts. D=2 previously failed with MeshParametersInvalid, because
+    /// mesh_outbound_min defaults to 2 and the band left it untouched.
+    #[test]
+    fn every_mesh_degree_builds() {
+        for n in 1..=64usize {
+            let mesh = MeshConfig::new(n, None, None);
+            assert!(
+                Peer::gossipsub_config(mesh).is_ok(),
+                "D={n} rejected: {mesh:?}"
+            );
+        }
+    }
+
+    /// A pinned band, which is what a bound-validation run uses, must build too.
+    #[test]
+    fn a_pinned_band_builds() {
+        for n in 1..=64usize {
+            let mesh = MeshConfig::new(n, Some(n), Some(n));
+            assert_eq!(mesh.low, n);
+            assert_eq!(mesh.high, n);
+            assert!(
+                Peer::gossipsub_config(mesh).is_ok(),
+                "pinned D={n} rejected: {mesh:?}"
+            );
+        }
+    }
+
+    /// The invariants gossipsub checks, asserted directly so a regression names
+    /// the broken relation rather than surfacing as a panic in swarm setup.
+    #[test]
+    fn band_satisfies_gossipsub_invariants() {
+        for n in 1..=64usize {
+            for low in [None, Some(1), Some(n), Some(n * 2)] {
+                for high in [None, Some(n), Some(n + 1)] {
+                    let m = MeshConfig::new(n, low, high);
+                    assert!(m.outbound_min <= m.low, "{m:?}");
+                    assert!(m.low <= m.n, "{m:?}");
+                    assert!(m.n <= m.high, "{m:?}");
+                    assert!(m.outbound_min * 2 <= m.n, "{m:?}");
+                }
+            }
+        }
+    }
 }
