@@ -183,6 +183,64 @@ impl MyClient {
                 }
             });
         }
+        // Optional archive-query driver, compiled in only with --features bench.
+        // Issues update_groups against an archive at a fixed rate so query latency
+        // can be measured the same way publish latency is.
+        // BENCH_ARCHIVE_QUERY=true|1  enable
+        // BENCH_ARCHIVE_PEER=<peer_id> archive to query (required)
+        // BENCH_ARCHIVE_RATE=1        queries per second (default 1)
+        #[cfg(feature = "bench")]
+        if std::env::var("BENCH_ARCHIVE_QUERY")
+            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+            .unwrap_or(false)
+        {
+            match std::env::var("BENCH_ARCHIVE_PEER")
+                .ok()
+                .and_then(|v| PeerId::from_str(&v).ok())
+            {
+                None => log::error!(
+                    "BENCH_ARCHIVE_QUERY set but BENCH_ARCHIVE_PEER is missing or not a PeerId"
+                ),
+                Some(archive) => {
+                    let instruction_tx = self.instruction_tx.clone();
+                    let my_open_mls = self.my_open_mls.clone();
+                    let rate: u64 = std::env::var("BENCH_ARCHIVE_RATE")
+                        .ok()
+                        .and_then(|s| s.parse().ok())
+                        .unwrap_or(1);
+                    let period = if rate == 0 {
+                        Duration::from_secs(1)
+                    } else {
+                        Duration::from_nanos(1_000_000_000u64 / rate)
+                    };
+                    tokio::spawn(async move {
+                        // Same reason as the publisher: a peer with no common group
+                        // has no groups to ask about, so the query is meaningless.
+                        let mut poll = tokio::time::interval(Duration::from_millis(500));
+                        while my_open_mls.get_common_group_id().is_err() {
+                            poll.tick().await;
+                        }
+                        log::info!(
+                            "BENCH_ARCHIVE_QUERY enabled: {} query/s against {}",
+                            rate,
+                            archive
+                        );
+                        let mut ticker = tokio::time::interval(period);
+                        ticker.tick().await;
+                        loop {
+                            ticker.tick().await;
+                            if let Err(e) =
+                                instruction_tx.send(Instruction::UpdateGroups { peer_id: archive })
+                            {
+                                log::error!("BENCH_ARCHIVE_QUERY failed to send: {}", e);
+                                break;
+                            }
+                        }
+                    });
+                }
+            }
+        }
+
         loop {
             tokio::select! {
                 Ok(Some(line)) = self.stdin.next_line() => {

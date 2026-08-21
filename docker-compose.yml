@@ -231,6 +231,10 @@ services:
       - BENCH_RATE=${BENCH_RATE:-40}
       - BENCH_TOPIC=Test
       - BENCH_PAYLOAD_FILE=${BENCH_PAYLOAD_FILE:-}
+      # Archive-query latency driver; off unless BENCH_ARCHIVE_PEER is supplied.
+      - BENCH_ARCHIVE_QUERY=${BENCH_ARCHIVE_QUERY:-false}
+      - BENCH_ARCHIVE_PEER=${BENCH_ARCHIVE_PEER:-}
+      - BENCH_ARCHIVE_RATE=${BENCH_ARCHIVE_RATE:-1}
     env_file:
       - key_material/boot_id.env
     profiles: ["node119"]

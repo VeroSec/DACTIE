@@ -33,6 +33,32 @@ use dactie_utils::mls_wrapper::MyOpenMLSError::{
 use dactie_utils::mls_wrapper::{MyOpenMLSError, MyOpenMls};
 use dactie_utils::shared_structs::*;
 
+/// Outstanding archive queries, keyed by request id, for round-trip timing.
+///
+/// This lives outside MyBehaviour because the NetworkBehaviour derive admits only
+/// behaviour fields. Bench builds only: a normal peer does not measure itself.
+#[cfg(feature = "bench")]
+pub(crate) mod archive_query_timing {
+    use libp2p::request_response::OutboundRequestId;
+    use std::collections::HashMap;
+    use std::sync::{Mutex, OnceLock};
+    use std::time::Instant;
+
+    fn table() -> &'static Mutex<HashMap<OutboundRequestId, Instant>> {
+        static T: OnceLock<Mutex<HashMap<OutboundRequestId, Instant>>> = OnceLock::new();
+        T.get_or_init(|| Mutex::new(HashMap::new()))
+    }
+
+    pub(crate) fn started(id: OutboundRequestId) {
+        table().lock().unwrap().insert(id, Instant::now());
+    }
+
+    /// Consumes the entry: a response is only measured once.
+    pub(crate) fn finished(id: &OutboundRequestId) -> Option<std::time::Duration> {
+        table().lock().unwrap().remove(id).map(|t| t.elapsed())
+    }
+}
+
 #[derive(NetworkBehaviour)]
 #[behaviour(out_event = "MyBehaviourEvent")]
 pub(crate) struct MyBehaviour {
@@ -373,13 +399,15 @@ impl MyBehaviour {
                 .ok_or(GroupNotAvailable(
                     "Could not find group mentioned in update req".to_string(),
                 ))?;
-            self.request_response.send_request(
+            let _req_id = self.request_response.send_request(
                 &peer_id,
                 my_open_mls.sign(RequestMessage::Update {
                     group_id: group_id.to_vec(),
                     epoch,
                 })?,
             );
+            #[cfg(feature = "bench")]
+            archive_query_timing::started(_req_id);
         }
         Ok(())
     }
@@ -875,7 +903,11 @@ impl MyBehaviour {
                     }
                 }
                 //It is not checked if a response belongs to a send request, this could cause security issues
-                request_response::Message::Response { response, .. } => {
+                request_response::Message::Response {
+                    response,
+                    request_id: _request_id,
+                    ..
+                } => {
                     match response.body {
                         ResponseMessage::KeyPackage(ref val) => {
                             //Only Verify KPs
@@ -910,6 +942,16 @@ impl MyBehaviour {
                                 "Got an update for group ´{group_id:?}´ with {} messages",
                                 messages.len()
                             );
+                            #[cfg(feature = "bench")]
+                            if let Some(rtt) = archive_query_timing::finished(&_request_id) {
+                                // Round trip as the querying peer sees it: request
+                                // out, archive's Postgres lookup, response back.
+                                println!(
+                                    "ARCHIVE_QUERY_RX messages={} latency_ms={}",
+                                    messages.len(),
+                                    rtt.as_millis()
+                                );
+                            }
                             self.handle_update(my_open_mls, group_id, messages)?;
                         }
                         ResponseMessage::IdentityVerified {
