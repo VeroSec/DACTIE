@@ -67,6 +67,12 @@ impl MyBehaviour {
             .validate_messages() // Allows validation of group signatures
             .message_id_fn(message_id_fn) // content-address messages. No two messages of the same content will be propagated.
             .flood_publish(false) //Flood Pub Deactivate to provide Source Anonymity
+            // Real CTI events are far larger than gossipsub's 65536-byte default,
+            // which a 64KiB MISP event already exceeds once the group signature
+            // and framing are added. Raised so the evaluation can carry actual
+            // MISP payloads; every peer must agree on this or large events are
+            // dropped on receipt.
+            .max_transmit_size(8 * 1024 * 1024)
             .build()
             .map_err(io::Error::other)
             .unwrap(); // Temporary hack because `build` does not return a proper `std::error::Error`.

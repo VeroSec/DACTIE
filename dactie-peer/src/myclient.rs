@@ -52,6 +52,8 @@ impl MyClient {
         // BENCH_RATE=40 messages per second (default 40)
         // BENCH_TOPIC=Test topic to publish to (default "Test")
         // BENCH_PAYLOAD_BYTES=0 additional payload size (default 0)
+        // BENCH_PAYLOAD_FILE=<path> send this file's contents as the body instead
+        //   of synthetic padding, so the run carries a real CTI event
         // BENCH_READY_TIMEOUT=300 seconds to wait for registration (default 300)
         #[cfg(feature = "bench")]
         if std::env::var("BENCH_PUBLISH")
@@ -65,6 +67,26 @@ impl MyClient {
                 .and_then(|s| s.parse().ok())
                 .unwrap_or(40);
             let topic: String = std::env::var("BENCH_TOPIC").unwrap_or_else(|_| "Test".to_string());
+            // Read once, not per message: re-reading at 40 msg/s would measure
+            // the filesystem rather than the network.
+            let payload_file = std::env::var("BENCH_PAYLOAD_FILE").ok().filter(|p| !p.is_empty());
+            let file_body: Option<Vec<u8>> = match &payload_file {
+                Some(path) => match std::fs::read(path) {
+                    Ok(bytes) => {
+                        log::info!(
+                            "BENCH_PAYLOAD_FILE {} loaded: {} bytes",
+                            path,
+                            bytes.len()
+                        );
+                        Some(bytes)
+                    }
+                    Err(e) => {
+                        log::error!("BENCH_PAYLOAD_FILE {} unreadable: {}", path, e);
+                        return Ok(());
+                    }
+                },
+                None => None,
+            };
             let extra_bytes: usize = std::env::var("BENCH_PAYLOAD_BYTES")
                 .ok()
                 .and_then(|s| s.parse().ok())
@@ -134,18 +156,24 @@ impl MyClient {
                     // Format: B|<epoch_ms>|<seq>|<padding>. The originating peer is
                     // deliberately not in the payload: broadcasting it would reveal
                     // the sender to every recipient.
-                    let mut msg = format!("B|{}|{}|", now_ms, seq);
-                    if extra_bytes > 0 {
-                        // ensure deterministic payload size
-                        let padding = "x".repeat(extra_bytes);
-                        msg.push_str(&padding);
+                    let mut msg = format!("B|{}|{}|", now_ms, seq).into_bytes();
+                    match &file_body {
+                        // The receiver parses only the three header fields, so a
+                        // body containing '|' is harmless.
+                        Some(body) => msg.extend_from_slice(body),
+                        None => {
+                            if extra_bytes > 0 {
+                                // ensure deterministic payload size
+                                msg.extend(std::iter::repeat(b'x').take(extra_bytes));
+                            }
+                        }
                     }
                     seq = seq.wrapping_add(1);
 
                     let instruction = Instruction::Send {
                         message: MessageBody::Broadcast {
                             topic: topic.clone(),
-                            data: msg.into_bytes(),
+                            data: msg,
                         },
                     };
                     if let Err(e) = instruction_tx.send(instruction) {
