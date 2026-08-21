@@ -1,6 +1,8 @@
 use std::str::FromStr;
 
 use crate::abstswarm::Notification;
+use dactie_utils::mls_wrapper::MyOpenMls;
+use std::sync::Arc;
 use dactie_utils::shared_structs::{Instruction, MessageBody};
 use libp2p::PeerId;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -16,6 +18,10 @@ pub(crate) struct MyClient {
     instruction_tx: mpsc::UnboundedSender<Instruction>,
     notification_rx: mpsc::UnboundedReceiver<Notification>,
     stdin: Lines<BufReader<Stdin>>,
+    /// Shared with the swarm. Only read, to tell whether this peer has joined the
+    /// common group yet; publishing before then cannot succeed.
+    #[cfg_attr(not(feature = "bench"), allow(dead_code))]
+    my_open_mls: Arc<MyOpenMls>,
     peer_id: PeerId,
 }
 
@@ -24,12 +30,14 @@ impl MyClient {
         instruction_tx: mpsc::UnboundedSender<Instruction>,
         notification_rx: mpsc::UnboundedReceiver<Notification>,
         peer_id: PeerId,
+        my_open_mls: Arc<MyOpenMls>,
     ) -> MyClient {
         MyClient {
             instruction_tx,
             notification_rx,
             stdin: BufReader::new(io::stdin()).lines(),
             peer_id,
+            my_open_mls,
         }
     }
 
@@ -44,12 +52,14 @@ impl MyClient {
         // BENCH_RATE=40 messages per second (default 40)
         // BENCH_TOPIC=Test topic to publish to (default "Test")
         // BENCH_PAYLOAD_BYTES=0 additional payload size (default 0)
+        // BENCH_READY_TIMEOUT=300 seconds to wait for registration (default 300)
         #[cfg(feature = "bench")]
         if std::env::var("BENCH_PUBLISH")
             .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
             .unwrap_or(false)
         {
             let instruction_tx = self.instruction_tx.clone();
+            let my_open_mls = self.my_open_mls.clone();
             let rate: u64 = std::env::var("BENCH_RATE")
                 .ok()
                 .and_then(|s| s.parse().ok())
@@ -66,16 +76,54 @@ impl MyClient {
             } else {
                 Duration::from_nanos(1_000_000_000u64 / rate)
             };
+            let ready_timeout: u64 = std::env::var("BENCH_READY_TIMEOUT")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(300);
+
             tokio::spawn(async move {
                 let mut seq: u64 = 0;
                 let mut ticker = tokio::time::interval(period);
                 // Avoid immediate burst from first tick
                 ticker.tick().await;
+
+                // Publishing before this peer has joined the common group cannot
+                // succeed: send_to_topic encrypts against it, so every attempt
+                // fails with CommonGroup Not Set. Wait for registration rather
+                // than emitting an error burst that pollutes the measurement.
+                let waited = {
+                    let started = SystemTime::now();
+                    let mut poll = tokio::time::interval(Duration::from_millis(500));
+                    let mut announced = false;
+                    loop {
+                        if my_open_mls.get_common_group_id().is_ok() {
+                            break started.elapsed().unwrap_or(Duration::from_millis(0));
+                        }
+                        let elapsed = started.elapsed().unwrap_or(Duration::from_millis(0));
+                        if elapsed >= Duration::from_secs(ready_timeout) {
+                            log::error!(
+                                "BENCH_PUBLISH giving up: no common group after {}s. \
+                                 Register this peer with `register_identity <authority> <name>`.",
+                                ready_timeout
+                            );
+                            return;
+                        }
+                        if !announced {
+                            log::info!(
+                                "BENCH_PUBLISH waiting for registration before publishing..."
+                            );
+                            announced = true;
+                        }
+                        poll.tick().await;
+                    }
+                };
+
                 log::info!(
-                    "BENCH_PUBLISH enabled: rate={} msg/s topic='{}' extra_bytes={}",
+                    "BENCH_PUBLISH enabled: rate={} msg/s topic='{}' extra_bytes={} (ready after {:.1}s)",
                     rate,
                     topic,
-                    extra_bytes
+                    extra_bytes,
+                    waited.as_secs_f64()
                 );
                 loop {
                     ticker.tick().await;

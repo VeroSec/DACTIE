@@ -58,14 +58,14 @@ where
         notification_tx: mpsc::UnboundedSender<Notification>,
         group_commit_rx: mpsc::UnboundedReceiver<GroupId>,
         swarm: Swarm<TBehaviour>,
-        my_open_mls: MyOpenMls,
+        my_open_mls: Arc<MyOpenMls>,
         metrics: Option<lp2p_metrics::Metrics>,
     ) -> Self {
         AbstSwarm {
             instruction_rx,
             notification_tx,
             swarm,
-            my_open_mls: Arc::new(my_open_mls),
+            my_open_mls,
             group_commit_rx,
             metrics,
         }

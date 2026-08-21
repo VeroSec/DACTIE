@@ -100,13 +100,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let load_file_path = PathBuf::from_str(&args.km_dir)?;
 
-    let myopenmls = MyOpenMls::new(
+    let myopenmls = std::sync::Arc::new(MyOpenMls::new(
         key_material.clone(),
         group_commit_tx,
         instruction_tx.clone(),
         load_file_path,
         args.authority_peer_id.unwrap(),
-    )?;
+    )?);
 
     let behaviour = MyBehaviour::new(
         &key_material.get_keypair(),
@@ -119,7 +119,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         instruction_rx,
         notification_tx,
         behaviour,
-        myopenmls,
+        myopenmls.clone(),
         group_commit_rx,
     )?;
 
@@ -218,7 +218,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let abstswarm = abstswarm_builder.build()?;
 
-    let client = MyClient::new(instruction_tx, notification_rx, key_material.get_peer_id());
+    let client = MyClient::new(
+        instruction_tx,
+        notification_rx,
+        key_material.get_peer_id(),
+        myopenmls,
+    );
 
     // Start network event loop
     tokio::spawn(abstswarm.run());

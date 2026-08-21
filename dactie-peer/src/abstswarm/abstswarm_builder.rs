@@ -1,4 +1,5 @@
 use std::convert::Infallible;
+use std::sync::Arc;
 use std::io;
 use std::time::Duration;
 
@@ -21,7 +22,7 @@ pub(crate) struct AbstSwarmBuilder<TBehaviour> {
     notification_tx: mpsc::UnboundedSender<Notification>,
     listen_address: Multiaddr,
     behaviour: TBehaviour,
-    my_open_mls: MyOpenMls,
+    my_open_mls: Arc<MyOpenMls>,
     group_commit_rx: mpsc::UnboundedReceiver<GroupId>,
     metrics: Option<lp2p_metrics::Metrics>,
     // Addresses to advertise to remote peers as dialable
@@ -37,7 +38,7 @@ where
         instruction_rx: mpsc::UnboundedReceiver<Instruction>,
         notification_tx: mpsc::UnboundedSender<Notification>,
         behaviour: TBehaviour,
-        my_open_mls: MyOpenMls,
+        my_open_mls: Arc<MyOpenMls>,
         group_commit_rx: mpsc::UnboundedReceiver<GroupId>,
     ) -> Result<AbstSwarmBuilder<TBehaviour>, AbstSwarmBuilderError> {
         Ok(AbstSwarmBuilder {
