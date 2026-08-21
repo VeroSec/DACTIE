@@ -10,7 +10,7 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 use std::str::FromStr;
 use tokio::sync::broadcast;
 use tokio::sync::mpsc::UnboundedSender;
-use tokio::time::{self, Duration, Interval};
+use tokio::time::{self, Duration, Instant, Interval};
 use tokio::{io, select};
 
 pub(crate) struct Peer {
@@ -19,9 +19,17 @@ pub(crate) struct Peer {
     control_channel: broadcast::Receiver<ControlSignal>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct PeerOut {
-    pub(crate) prop_id: PeerId, //PeerId of the propagation_source
+    /// Which peer made this observation. A colluding subset can only pool what
+    /// its own members saw, so without this the data cannot be partitioned.
+    pub(crate) observer: PeerId,
+    /// PeerId of the propagation_source: who relayed the message to `observer`.
+    /// This is the relaying neighbour, not the originator.
+    pub(crate) prop_id: PeerId,
+    /// When the observation was made. Converted to a publish-relative Duration
+    /// by the experiment, which is the only place that knows the publish time.
+    pub(crate) at: Instant,
 }
 
 #[derive(Clone, Debug)]
@@ -83,8 +91,9 @@ impl Peer {
     pub(crate) fn new_bootstrap_peer(
         control_channel: broadcast::Receiver<ControlSignal>,
         response_channel: UnboundedSender<PeerOut>,
+        mesh_n: usize,
     ) -> Result<Peer, Box<dyn Error>> {
-        let swarm = Self::create_swarm(None)?;
+        let swarm = Self::create_swarm(None, mesh_n)?;
 
         Ok(Peer {
             swarm,
@@ -97,8 +106,12 @@ impl Peer {
         boot_peer_id: PeerId,
         control_channel: broadcast::Receiver<ControlSignal>,
         response_channel: UnboundedSender<PeerOut>,
+        mesh_n: usize,
     ) -> Result<Peer, Box<dyn Error>> {
-        let swarm = Self::create_swarm(Some((boot_peer_id, "/ip4/127.0.0.1/tcp/10001".parse()?)))?;
+        let swarm = Self::create_swarm(
+            Some((boot_peer_id, "/ip4/127.0.0.1/tcp/10001".parse()?)),
+            mesh_n,
+        )?;
 
         Ok(Peer {
             swarm,
@@ -109,6 +122,7 @@ impl Peer {
 
     fn create_swarm(
         bootstrap_peer: Option<(PeerId, Multiaddr)>,
+        mesh_n: usize,
     ) -> Result<Swarm<MyBehaviour>, Box<dyn Error>> {
         let mut swarm = libp2p::SwarmBuilder::with_new_identity()
             .with_tokio()
@@ -130,9 +144,11 @@ impl Peer {
                     .validation_mode(gossipsub::ValidationMode::Permissive) // This sets the kind of message validation. The default is Strict (enforce message signing)
                     .message_id_fn(message_id_fn) // content-address messages. No two messages of the same content will be propagated.
                     .flood_publish(false)
-                    .mesh_n_low(10)
-                    .mesh_n(12)
-                    .mesh_n_high(24)
+                    // D is the quantity the anonymity bound is stated over, so it
+                    // is swept rather than fixed. The low/high band tracks it.
+                    .mesh_n_low(mesh_n.saturating_sub(2).max(1))
+                    .mesh_n(mesh_n)
+                    .mesh_n_high(mesh_n * 2)
                     .build()
                     .map_err(io::Error::other)
                     .unwrap(); // Temporary hack because `build` does not return a proper `std::error::Error`.
@@ -257,8 +273,13 @@ impl Peer {
                 ..
             })) => {
                 if String::from_utf8_lossy(&message.data[..4]) == "Stop" {
+                    let observer = *self.swarm.local_peer_id();
                     self.response_channel
-                        .send(PeerOut { prop_id: peer_id })
+                        .send(PeerOut {
+                            observer,
+                            prop_id: peer_id,
+                            at: Instant::now(),
+                        })
                         .unwrap();
                 }
             }
