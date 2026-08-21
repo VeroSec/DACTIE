@@ -226,8 +226,11 @@ services:
     environment:
       - RUST_LOG=info
       - BENCH_PUBLISH=true
-      - BENCH_RATE=40
+      # Left unset by default so the sweep can override them per run without
+      # editing this file: `BENCH_RATE=5 BENCH_PAYLOAD_FILE=... docker compose up`.
+      - BENCH_RATE=${BENCH_RATE:-40}
       - BENCH_TOPIC=Test
+      - BENCH_PAYLOAD_FILE=${BENCH_PAYLOAD_FILE:-}
     env_file:
       - key_material/boot_id.env
     profiles: ["node119"]
