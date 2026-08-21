@@ -12,3 +12,6 @@ dataSources/
 # Paper submission and rebuttal drafts — never commit
 ACSAC_Submission*.pdf
 rebut.md
+
+# Master's thesis PDFs and slides — private provenance, never publish
+Thesis/
