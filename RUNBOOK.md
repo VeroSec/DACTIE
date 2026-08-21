@@ -251,9 +251,41 @@ broad Test hello-from-peer2
 **Server4 (.119):**
 ```bash
 sudo docker compose --profile node119 up -d --force-recreate peer_3 peer_4
+sudo docker attach dactie-peer_3-1
+```
+```
+register_identity <AA> peer3
+sub Test
+```
+```bash
+sudo docker attach dactie-peer_4-1
+```
+```
+register_identity <AA> peer4
+sub Test
 ```
 
+**peer_3 and peer_4 must be registered too.** They are not optional extras: a peer
+that has not registered has no common group, so `peer_4` starts its BENCH publisher
+immediately and every publish fails with `MLS Error: CommonGroup Not Set`. The
+publisher does not wait for registration, so those errors appear before you have a
+chance to register — they stop once registration completes, and the run is only
+valid from that point on.
+
 `peer1` should print the message.
+
+Once all four peers are registered, confirm the benchmark is actually moving
+traffic rather than erroring:
+
+```bash
+sudo docker compose --profile node119 logs peer_4 | grep -c "Publishing gossipsub payload"
+sudo docker compose --profile node119 logs peer_3 | grep -c BENCH_RX
+```
+
+Both counts should climb. A `BENCH_RX` line reads
+`topic=Test via=<relay> seq=<n> latency_ms=<ms>` — `via` is the relaying
+neighbour, not the originator, which is deliberate: the probe payload carries no
+sender id.
 
 Confirm the BENCH publisher is actually compiled in — it lives behind the
 `dactie-peer/bench` feature, which `build.sh` passes as a build arg. If this line
