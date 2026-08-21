@@ -3,3 +3,8 @@
 # IDE settings — never publish (leaks local paths/usernames)
 .idea/
 *.swp
+
+# Third-party paper + extracted figures (Thakkar et al., IEEE 2018).
+# Kept privately for reference only — must never be redistributed in the
+# published artifact, which ships under Apache-2.0.
+dataSources/
