@@ -1,5 +1,5 @@
 use crate::adversary::Observation;
-use crate::peer::{ControlSignal, Peer, PubInterval};
+use crate::peer::{ControlSignal, MeshConfig, Peer, PubInterval};
 use futures::future::join_all;
 use libp2p::PeerId;
 use std::collections::HashSet;
@@ -26,14 +26,14 @@ pub(crate) async fn experiment_prop_peer_id(
     peer_n: usize,
     time_before_stop: Duration,
     pub_interval: PubInterval,
-    mesh_n: usize,
+    mesh: MeshConfig,
 ) -> Result<RunOutcome, Box<dyn Error>> {
     let mut peers = Vec::new();
     let mut all_peers = Vec::new();
     let (control_tx, control_rx) = broadcast::channel::<ControlSignal>(peer_n);
     let (response_tx, mut response_rx) = mpsc::unbounded_channel();
 
-    let mut boot_peer = Peer::new_bootstrap_peer(control_rx, response_tx.clone(), mesh_n)?;
+    let mut boot_peer = Peer::new_bootstrap_peer(control_rx, response_tx.clone(), mesh)?;
 
     let boot_peer_id = boot_peer.get_peer_id();
     all_peers.push(boot_peer_id);
@@ -54,7 +54,7 @@ pub(crate) async fn experiment_prop_peer_id(
             boot_peer_id,
             control_tx.subscribe(),
             response_tx.clone(),
-            mesh_n,
+            mesh,
         )?;
         all_peers.push(peer.get_peer_id());
         pub_interval_clone = pub_interval.clone();
@@ -70,7 +70,7 @@ pub(crate) async fn experiment_prop_peer_id(
         boot_peer_id,
         control_tx.subscribe(),
         response_tx.clone(),
-        mesh_n,
+        mesh,
     )?;
 
     let stop_peer_addr = stop_peer.get_peer_id();

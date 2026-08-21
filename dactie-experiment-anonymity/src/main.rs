@@ -2,14 +2,17 @@ mod adversary;
 mod experiment;
 mod peer;
 
-use crate::adversary::{run_attack, Estimator};
+use crate::adversary::{clamp_coalition_size, coalition_size_for, run_attack, Estimator};
 use crate::experiment::experiment_prop_peer_id;
-use crate::peer::PubInterval;
+use crate::peer::{MeshConfig, PubInterval};
+use clap::Parser;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
-use clap::Parser;
+use std::collections::hash_map::DefaultHasher;
+use std::collections::BTreeSet;
 use std::error::Error;
 use std::fs::{File, OpenOptions};
+use std::hash::{Hash, Hasher};
 use std::io::Write;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -51,9 +54,28 @@ struct Args {
     #[clap(short = 'D', long, default_value_t = 12)]
     mesh_n: usize,
 
-    /// Colluding fractions f to evaluate the source-anonymity attack at.
+    /// Lower edge of the mesh band. Defaults to D-2.
+    #[clap(long)]
+    mesh_n_low: Option<usize>,
+
+    /// Upper edge of the mesh band. Defaults to 2*D, which is what gossipsub is
+    /// allowed to drift to between heartbeats. Pin this near D for runs that
+    /// validate the bound, so the measured degree is the D the bound is over.
+    #[clap(long)]
+    mesh_n_high: Option<usize>,
+
+    /// Colluding fractions f to evaluate the source-anonymity attack at. Each is
+    /// converted to a coalition size of ceil(f * N), capped at the N-1 peers that
+    /// are not the source.
     #[clap(long, value_delimiter = ',', default_values_t = [0.05f64, 0.1, 0.2, 0.5])]
     adversary_fractions: Vec<f64>,
+
+    /// Absolute coalition sizes to evaluate, independent of N. The bound is
+    /// stated over the coalition size, and c=1 is the single-attacker case the
+    /// published equation describes - which no fraction can reach at large N.
+    /// Merged with the sizes the fractions resolve to; duplicates run once.
+    #[clap(long, value_delimiter = ',', default_values_t = [1usize])]
+    coalition_sizes: Vec<usize>,
 
     /// Colluding subsets sampled per run per fraction. The attack is pure
     /// post-processing, so statistical power here is cheap.
@@ -109,7 +131,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .create(true)
         .truncate(true)
         .open(adv)?;
-    writeln!(&adv_file, "total_peers,mesh_n,run,f,estimator,success_rate")?;
+    writeln!(
+        &adv_file,
+        "total_peers,mesh_n,mesh_n_low,mesh_n_high,run,coalition_size,f_effective,estimator,success_rate"
+    )?;
 
     start_experiment_series(StartExperimentSeriesArgs {
         min_n: args.n_peers_min,
@@ -121,8 +146,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
         file,
         avg_file: file_avg,
         adv_file,
-        mesh_n: args.mesh_n,
+        mesh: MeshConfig::new(args.mesh_n, args.mesh_n_low, args.mesh_n_high),
         adversary_fractions: args.adversary_fractions,
+        coalition_sizes: args.coalition_sizes,
         adversary_trials: args.adversary_trials,
         adversary_seed: args.adversary_seed,
     })
@@ -145,8 +171,9 @@ struct StartExperimentSeriesArgs {
     file: File,
     avg_file: File,
     adv_file: File,
-    mesh_n: usize,
+    mesh: MeshConfig,
     adversary_fractions: Vec<f64>,
+    coalition_sizes: Vec<usize>,
     adversary_trials: usize,
     adversary_seed: u64,
 }
@@ -169,7 +196,7 @@ async fn start_experiment_series(args: StartExperimentSeriesArgs) -> Result<(), 
                 n_peers,
                 Duration::from_secs(args.time),
                 interval,
-                args.mesh_n,
+                args.mesh,
             )
             .await?;
             let (correct_receiver, other_peer, test) = (
@@ -197,29 +224,44 @@ async fn start_experiment_series(args: StartExperimentSeriesArgs) -> Result<(), 
             )?;
 
             // Replay the recorded observations against colluding subsets. No
-            // network re-run: the same trace is attacked at every fraction.
-            for f in &args.adversary_fractions {
-                let mut rng = StdRng::seed_from_u64(
-                    args.adversary_seed
-                        .wrapping_add(n_peers as u64)
-                        .wrapping_mul(31)
-                        .wrapping_add(run as u64),
-                );
+            // network re-run: the same trace is attacked at every size. A set
+            // so that two fractions resolving to the same c do not run twice.
+            let sizes: BTreeSet<usize> = args
+                .adversary_fractions
+                .iter()
+                .map(|f| coalition_size_for(*f, n_peers))
+                .chain(
+                    args.coalition_sizes
+                        .iter()
+                        .map(|c| clamp_coalition_size(*c, n_peers)),
+                )
+                .collect();
+
+            for c in sizes {
+                // The stream must depend on the coalition size too, or every
+                // size restarts the same one and the curves are not independent.
+                let mut hasher = DefaultHasher::new();
+                (args.adversary_seed, n_peers, run, c).hash(&mut hasher);
+                let mut rng = StdRng::seed_from_u64(hasher.finish());
+
                 let rates = run_attack(
                     &outcome.observations,
                     outcome.source,
                     &outcome.all_peers,
-                    *f,
+                    c,
                     args.adversary_trials,
                     &mut rng,
                 );
+                let f_effective = c as f64 / n_peers as f64;
                 for estimator in Estimator::ALL {
                     let rate = rates[&estimator];
-                    println!("  attack f={f} {estimator}: {rate:.4}");
+                    println!("  attack c={c} (f={f_effective:.4}) {estimator}: {rate:.4}");
                     writeln!(
                         &args.adv_file,
-                        "{n_peers},{mesh},{run},{f},{estimator},{rate}",
-                        mesh = args.mesh_n
+                        "{n_peers},{n},{low},{high},{run},{c},{f_effective},{estimator},{rate}",
+                        n = args.mesh.n,
+                        low = args.mesh.low,
+                        high = args.mesh.high,
                     )?;
                 }
             }

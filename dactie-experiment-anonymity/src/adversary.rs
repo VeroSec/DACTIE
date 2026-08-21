@@ -1,16 +1,20 @@
 //! Post-hoc source-anonymity attack over recorded gossipsub observations.
 //!
-//! Threat model: a fraction `f` of peers is honest-but-curious and pools what it
+//! Threat model: a coalition of `c` peers is honest-but-curious and pools what it
 //! sees. Each colluding peer knows only who relayed the measurement message to it
 //! and when. It does not know the topology. The goal is to name the originator.
 //!
 //! The attack is pure post-processing of one recorded run, so thousands of
 //! colluding subsets can be sampled per experiment without re-running the network.
+//!
+//! The bound in the paper is stated over the coalition size, so `c` is the knob
+//! the attack is parameterised by. `coalition_size_for` converts a fraction to
+//! one; at `c = 1` the bound reduces to the published single-attacker form.
 
 use libp2p::PeerId;
 use rand::seq::SliceRandom;
 use rand::Rng;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::time::Duration;
 
@@ -62,8 +66,30 @@ impl fmt::Display for Estimator {
     }
 }
 
+/// The coalition size a fraction `f` of an `n`-peer network corresponds to.
+///
+/// The pool a coalition is drawn from excludes the source, so it holds `n - 1`
+/// peers and that, not `n`, is the ceiling. Bounded below by 1: a coalition of
+/// nobody has nothing to pool.
+pub(crate) fn coalition_size_for(f: f64, n: usize) -> usize {
+    clamp_coalition_size((f * n as f64).ceil() as usize, n)
+}
+
+/// Hold an absolute coalition size inside what the pool can supply.
+///
+/// Use this rather than routing a size through `coalition_size_for`: c/n*n does
+/// not round-trip through `ceil` for most (c, n), so c=7 of 25 would come back
+/// as 8.
+pub(crate) fn clamp_coalition_size(c: usize, n: usize) -> usize {
+    c.clamp(1, n.saturating_sub(1).max(1))
+}
+
 /// Run one estimator against a single colluding coalition's observations.
-/// Returns `None` when the coalition saw nothing, which counts as a failure.
+///
+/// Returns `None` when the estimator has nothing to go on, which counts as a
+/// failure. `Random` is the exception: a random guesser needs no observations,
+/// so it always answers and lands on exactly 1/|N|. That is what makes it the
+/// baseline, so do not "fix" it to depend on `seen`.
 fn guess<R: Rng>(
     estimator: Estimator,
     seen: &[&Observation],
@@ -78,10 +104,18 @@ fn guess<R: Rng>(
             distinct.dedup();
             distinct.choose(rng).copied()
         }
-        Estimator::FirstSpy => seen
-            .iter()
-            .min_by_key(|o| o.at)
-            .map(|o| o.prop_id),
+        Estimator::FirstSpy => {
+            let earliest = seen.iter().map(|o| o.at).min()?;
+            // Ties break uniformly, as they do for plurality. Observations
+            // arrive over an unordered channel, so picking the first minimum
+            // would resolve a tie by channel order rather than by chance.
+            let first: Vec<PeerId> = seen
+                .iter()
+                .filter(|o| o.at == earliest)
+                .map(|o| o.prop_id)
+                .collect();
+            first.choose(rng).copied()
+        }
         Estimator::Plurality => {
             let mut counts: HashMap<PeerId, usize> = HashMap::new();
             for o in seen {
@@ -100,31 +134,34 @@ fn guess<R: Rng>(
     }
 }
 
-/// Sample colluding subsets of size `ceil(f * |all_peers|)` and score every
-/// estimator against the true source. Returns success rate per estimator.
+/// Sample colluding subsets of size `coalition_size` and score every estimator
+/// against the true source. Returns success rate per estimator.
 pub(crate) fn run_attack<R: Rng>(
     observations: &[Observation],
     source: PeerId,
     all_peers: &[PeerId],
-    f: f64,
+    coalition_size: usize,
     trials: usize,
     rng: &mut R,
 ) -> HashMap<Estimator, f64> {
-    let n = all_peers.len();
-    let coalition_size = ((f * n as f64).ceil() as usize).clamp(1, n);
+    // A coalition is drawn from peers other than the source: the source
+    // trivially knows it is the source, so including it inflates every rate.
+    let pool: Vec<PeerId> = all_peers.iter().copied().filter(|p| *p != source).collect();
+    let coalition_size = coalition_size.clamp(1, pool.len().max(1));
 
-    // The source cannot be a candidate for itself being unmasked by definition of
-    // the guess, but it IS in the candidate pool an attacker would consider.
+    // The source is not a candidate for membership in the coalition, but it IS
+    // in the candidate pool an attacker would name a guess from.
     let candidates: Vec<PeerId> = all_peers.to_vec();
 
     let mut hits: HashMap<Estimator, usize> = Estimator::ALL.iter().map(|e| (*e, 0)).collect();
+    let mut shuffled = pool;
 
     for _ in 0..trials {
-        // A coalition is drawn from peers other than the source: the source
-        // trivially knows it is the source, so including it inflates every rate.
-        let mut pool: Vec<PeerId> = all_peers.iter().copied().filter(|p| *p != source).collect();
-        pool.shuffle(rng);
-        let coalition: Vec<PeerId> = pool.into_iter().take(coalition_size).collect();
+        shuffled.shuffle(rng);
+        // Membership is tested once per observation per trial, so a set keeps
+        // this O(1) rather than linear in the coalition. At N=850 and f=0.5 the
+        // linear form costs on the order of 1e9 comparisons across a sweep.
+        let coalition: HashSet<PeerId> = shuffled.iter().copied().take(coalition_size).collect();
 
         let seen: Vec<&Observation> = observations
             .iter()
@@ -152,10 +189,8 @@ mod tests {
     use rand::SeedableRng;
 
     fn pid(seed: u8) -> PeerId {
-        PeerId::from_multihash(
-            libp2p::multihash::Multihash::wrap(0x0, &[seed; 32]).unwrap(),
-        )
-        .unwrap()
+        PeerId::from_multihash(libp2p::multihash::Multihash::wrap(0x0, &[seed; 32]).unwrap())
+            .unwrap()
     }
 
     /// If every colluder was relayed to directly by the source and the earliest
@@ -173,7 +208,7 @@ mod tests {
             .collect();
 
         let mut rng = StdRng::seed_from_u64(7);
-        let res = run_attack(&observations, source, &peers, 1.0, 200, &mut rng);
+        let res = run_attack(&observations, source, &peers, 5, 200, &mut rng);
         assert_eq!(res[&Estimator::FirstSpy], 1.0);
         assert_eq!(res[&Estimator::Plurality], 1.0);
     }
@@ -194,7 +229,7 @@ mod tests {
             .collect();
 
         let mut rng = StdRng::seed_from_u64(7);
-        let res = run_attack(&observations, source, &peers, 1.0, 200, &mut rng);
+        let res = run_attack(&observations, source, &peers, 5, 200, &mut rng);
         assert_eq!(res[&Estimator::FirstSpy], 0.0);
         assert_eq!(res[&Estimator::ObservedSet], 0.0);
     }
@@ -211,7 +246,7 @@ mod tests {
         }];
 
         let mut rng = StdRng::seed_from_u64(11);
-        let res = run_attack(&observations, source, &peers, 0.5, 20_000, &mut rng);
+        let res = run_attack(&observations, source, &peers, 5, 20_000, &mut rng);
         let expected = 1.0 / peers.len() as f64;
         assert!(
             (res[&Estimator::Random] - expected).abs() < 0.02,
@@ -219,5 +254,60 @@ mod tests {
             res[&Estimator::Random],
             expected
         );
+    }
+
+    /// Two observations share the earliest arrival, one of them from the source.
+    /// Uniform tie-breaking must split them rather than letting the order the
+    /// observations happen to sit in decide.
+    #[test]
+    fn first_spy_breaks_ties_uniformly() {
+        let source = pid(1);
+        let other = pid(2);
+        let peers: Vec<PeerId> = (1..=6).map(pid).collect();
+        let observations = vec![
+            Observation {
+                observer: pid(3),
+                prop_id: other,
+                at: Duration::from_millis(10),
+            },
+            Observation {
+                observer: pid(4),
+                prop_id: source,
+                at: Duration::from_millis(10),
+            },
+        ];
+
+        let mut rng = StdRng::seed_from_u64(3);
+        let res = run_attack(&observations, source, &peers, 5, 20_000, &mut rng);
+        assert!(
+            (res[&Estimator::FirstSpy] - 0.5).abs() < 0.02,
+            "first-spy tie split {} not near 0.5",
+            res[&Estimator::FirstSpy]
+        );
+    }
+
+    /// The coalition is drawn from the n-1 peers that are not the source, so a
+    /// fraction of 1.0 must ask for n-1 and not n.
+    #[test]
+    fn coalition_size_is_capped_by_the_pool_not_the_network() {
+        assert_eq!(coalition_size_for(1.0, 12), 11);
+        assert_eq!(coalition_size_for(0.05, 12), 1);
+        assert_eq!(coalition_size_for(0.05, 850), 43);
+        assert_eq!(coalition_size_for(0.001, 850), 1);
+        // A fraction small enough to round to nothing still yields one peer.
+        assert_eq!(coalition_size_for(0.0, 40), 1);
+    }
+
+    /// An absolute size must survive unchanged, which routing it through a
+    /// fraction would not guarantee: ceil(7 / 25 * 25) is 8.
+    #[test]
+    fn absolute_coalition_sizes_are_not_perturbed() {
+        for n in 2..=200usize {
+            for c in 1..n {
+                assert_eq!(clamp_coalition_size(c, n), c, "c={c} n={n}");
+            }
+        }
+        assert_eq!(clamp_coalition_size(999, 12), 11);
+        assert_eq!(clamp_coalition_size(0, 12), 1);
     }
 }

@@ -19,6 +19,32 @@ pub(crate) struct Peer {
     control_channel: broadcast::Receiver<ControlSignal>,
 }
 
+/// The gossipsub mesh band a run is configured with.
+///
+/// D is the quantity the anonymity bound is stated over, so `n` is swept rather
+/// than fixed. `low` and `high` are the band gossipsub is allowed to drift
+/// within between heartbeats; for bound-validation runs pin `high` close to `n`,
+/// since a mesh that drifts to 2*D is no longer the D the bound is stated over.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct MeshConfig {
+    pub(crate) n: usize,
+    pub(crate) low: usize,
+    pub(crate) high: usize,
+}
+
+impl MeshConfig {
+    /// Build a band from a target degree and optional explicit bounds, keeping
+    /// gossipsub's `low <= n <= high` invariant so `ConfigBuilder` cannot fail.
+    pub(crate) fn new(n: usize, low: Option<usize>, high: Option<usize>) -> Self {
+        let n = n.max(1);
+        let low = low
+            .unwrap_or_else(|| n.saturating_sub(2).max(1))
+            .clamp(1, n);
+        let high = high.unwrap_or(n * 2).max(n);
+        MeshConfig { n, low, high }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct PeerOut {
     /// Which peer made this observation. A colluding subset can only pool what
@@ -91,9 +117,9 @@ impl Peer {
     pub(crate) fn new_bootstrap_peer(
         control_channel: broadcast::Receiver<ControlSignal>,
         response_channel: UnboundedSender<PeerOut>,
-        mesh_n: usize,
+        mesh: MeshConfig,
     ) -> Result<Peer, Box<dyn Error>> {
-        let swarm = Self::create_swarm(None, mesh_n)?;
+        let swarm = Self::create_swarm(None, mesh)?;
 
         Ok(Peer {
             swarm,
@@ -106,11 +132,11 @@ impl Peer {
         boot_peer_id: PeerId,
         control_channel: broadcast::Receiver<ControlSignal>,
         response_channel: UnboundedSender<PeerOut>,
-        mesh_n: usize,
+        mesh: MeshConfig,
     ) -> Result<Peer, Box<dyn Error>> {
         let swarm = Self::create_swarm(
             Some((boot_peer_id, "/ip4/127.0.0.1/tcp/10001".parse()?)),
-            mesh_n,
+            mesh,
         )?;
 
         Ok(Peer {
@@ -122,7 +148,7 @@ impl Peer {
 
     fn create_swarm(
         bootstrap_peer: Option<(PeerId, Multiaddr)>,
-        mesh_n: usize,
+        mesh: MeshConfig,
     ) -> Result<Swarm<MyBehaviour>, Box<dyn Error>> {
         let mut swarm = libp2p::SwarmBuilder::with_new_identity()
             .with_tokio()
@@ -144,11 +170,11 @@ impl Peer {
                     .validation_mode(gossipsub::ValidationMode::Permissive) // This sets the kind of message validation. The default is Strict (enforce message signing)
                     .message_id_fn(message_id_fn) // content-address messages. No two messages of the same content will be propagated.
                     .flood_publish(false)
-                    // D is the quantity the anonymity bound is stated over, so it
-                    // is swept rather than fixed. The low/high band tracks it.
-                    .mesh_n_low(mesh_n.saturating_sub(2).max(1))
-                    .mesh_n(mesh_n)
-                    .mesh_n_high(mesh_n * 2)
+                    // D is the quantity the anonymity bound is stated over, so
+                    // the whole band is configurable rather than fixed.
+                    .mesh_n_low(mesh.low)
+                    .mesh_n(mesh.n)
+                    .mesh_n_high(mesh.high)
                     .build()
                     .map_err(io::Error::other)
                     .unwrap(); // Temporary hack because `build` does not return a proper `std::error::Error`.
