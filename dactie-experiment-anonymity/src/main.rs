@@ -108,13 +108,16 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let mut x = args.out_path.clone();
     let mut avg = args.out_path.clone();
+    // D belongs in the name. The adversary file already carries it, but these
+    // two did not, so a sweep over D truncated each previous configuration's
+    // per-run data on the next iteration and only the last D survived.
     x.push(format!(
-        "experiment_{}_{}_{}_{:?}.csv",
-        args.n_peers_min, args.n_peers_max, args.time, args.interval
+        "experiment_{}_{}_{}_D{}_{:?}.csv",
+        args.n_peers_min, args.n_peers_max, args.time, args.mesh_n, args.interval
     ));
     avg.push(format!(
-        "experiment_avg_{}_{}_{}_{:?}.csv",
-        args.n_peers_min, args.n_peers_max, args.time, args.interval
+        "experiment_avg_{}_{}_{}_D{}_{:?}.csv",
+        args.n_peers_min, args.n_peers_max, args.time, args.mesh_n, args.interval
     ));
 
     let file = OpenOptions::new()
