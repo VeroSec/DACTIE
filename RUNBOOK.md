@@ -313,6 +313,22 @@ Adminer: `http://10.244.192.117:8080` — user `archive`, password `archivepw`, 
 - `Dial error: Unexpected peer ID` — a stale Kademlia entry for an identity wiped after
   the authority had already met it. Following Phase 2 prevents these; existing ones decay
   as Kademlia evicts them.
+- `Error: BuildError(... AddrInUse ... "Address already in use")` in a burst at startup,
+  right after `up -d --force-recreate` — the replacement process binds before the old one
+  has released the port. Every service here uses `network_mode: host`, so there is one
+  port namespace and no handover. `restart: unless-stopped` retries until the port frees;
+  it self-heals, and a restart count in the single digits is expected rather than a fault.
+  Confirm it settled instead of assuming either way:
+
+  ```bash
+  sudo docker inspect -f '{{.RestartCount}} {{.State.Status}}' dactie-authority_node-1
+  sudo docker compose --profile node116 logs --since 30s authority_node | grep -c AddrInUse
+  ```
+
+  A restart count that keeps climbing, or `AddrInUse` still arriving in the last 30
+  seconds, is a genuine conflict: something outside compose holds the port. It is worth
+  distinguishing, because the crash-loop from a corrupt `storage.json` (rule 5) looks
+  identical from the outside and is not self-healing.
 
 `Connection refused` against `172.17.0.1` / `172.18.0.1` should no longer appear —
 `dactie_utils::net::is_unroutable_addr` now keeps Docker bridge addresses out of the DHT.
