@@ -85,6 +85,20 @@ struct Args {
     /// Seed for coalition sampling, so a reported figure can be reproduced.
     #[clap(long, default_value_t = 0)]
     adversary_seed: u64,
+
+    /// Fraction of peers that must receive the measurement message for a run to
+    /// count as valid. Every peer but the source should get it, so anything
+    /// below 1.0 means the mesh did not carry the message across the network
+    /// and the run measures propagation failure rather than anonymity.
+    #[clap(long, default_value_t = 0.99)]
+    min_delivery: f32,
+
+    /// Abort the series after this many consecutive runs below --min-delivery.
+    /// A sweep that has stopped propagating will not recover by moving to a
+    /// larger network, so failing fast beats discovering it hours later. Set 0
+    /// to never abort.
+    #[clap(long, default_value_t = 3)]
+    abort_after_low_delivery: usize,
 }
 
 #[tokio::main]
@@ -115,10 +129,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .truncate(true)
         .open(avg)?;
 
-    writeln!(&file, "total_peers,correct_receiver,other_peer,no_p_peers")?;
+    // delivery_ratio is appended, so anything reading the first four fields
+    // positionally keeps working.
+    writeln!(
+        &file,
+        "total_peers,correct_receiver,other_peer,no_p_peers,delivery_ratio"
+    )?;
     writeln!(
         &file_avg,
-        "total_peers,correct_receiver,other_peer,no_p_peers"
+        "total_peers,correct_receiver,other_peer,no_p_peers,delivery_ratio"
     )?;
 
     let mut adv = args.out_path.clone();
@@ -133,7 +152,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .open(adv)?;
     writeln!(
         &adv_file,
-        "total_peers,mesh_n,mesh_n_low,mesh_n_high,run,coalition_size,f_effective,estimator,success_rate"
+        "total_peers,mesh_n,mesh_n_low,mesh_n_high,run,coalition_size,f_effective,estimator,success_rate,delivery_ratio"
     )?;
 
     start_experiment_series(StartExperimentSeriesArgs {
@@ -151,6 +170,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
         coalition_sizes: args.coalition_sizes,
         adversary_trials: args.adversary_trials,
         adversary_seed: args.adversary_seed,
+        min_delivery: args.min_delivery,
+        abort_after_low_delivery: args.abort_after_low_delivery,
     })
     .await?;
 
@@ -176,13 +197,20 @@ struct StartExperimentSeriesArgs {
     coalition_sizes: Vec<usize>,
     adversary_trials: usize,
     adversary_seed: u64,
+    min_delivery: f32,
+    abort_after_low_delivery: usize,
 }
 
 async fn start_experiment_series(args: StartExperimentSeriesArgs) -> Result<(), Box<dyn Error>> {
+    let mut consecutive_low_delivery = 0usize;
+    let mut total_low_delivery = 0usize;
+    let mut total_runs = 0usize;
+
     for n_peers in (args.min_n..=args.max_n).step_by(args.n_step_size) {
         let mut avg_correct_receiver = 0f32;
         let mut avg_other_peer = 0f32;
         let mut avg_no_p_peers = 0;
+        let mut avg_delivery = 0f32;
 
         for i in 0..args.repetitions {
             let run = i + 1;
@@ -218,9 +246,32 @@ async fn start_experiment_series(args: StartExperimentSeriesArgs) -> Result<(), 
             );
             println!("Number of Propagating Peers: {test}");
 
+            let delivery = outcome.delivery_ratio();
+            total_runs += 1;
+            println!(
+                "Delivery: {:.1}% of {} peers",
+                delivery * 100.0,
+                n_peers - 1
+            );
+            if delivery < args.min_delivery {
+                total_low_delivery += 1;
+                consecutive_low_delivery += 1;
+                eprintln!(
+                    "WARNING: only {:.1}% of peers received the message (threshold {:.1}%). \
+                     This run measures propagation failure, not anonymity: correct_receiver \
+                     starts counting IWANT responses from the publisher rather than its mesh, \
+                     and the attack samples colluders that hold no observation. Filter it out \
+                     on delivery_ratio.",
+                    delivery * 100.0,
+                    args.min_delivery * 100.0
+                );
+            } else {
+                consecutive_low_delivery = 0;
+            }
+
             writeln!(
                 &args.file,
-                "{n_peers},{correct_receiver},{other_peer},{test}"
+                "{n_peers},{correct_receiver},{other_peer},{test},{delivery}"
             )?;
 
             // Replay the recorded observations against colluding subsets. No
@@ -258,7 +309,7 @@ async fn start_experiment_series(args: StartExperimentSeriesArgs) -> Result<(), 
                     println!("  attack c={c} (f={f_effective:.4}) {estimator}: {rate:.4}");
                     writeln!(
                         &args.adv_file,
-                        "{n_peers},{n},{low},{high},{run},{c},{f_effective},{estimator},{rate}",
+                        "{n_peers},{n},{low},{high},{run},{c},{f_effective},{estimator},{rate},{delivery}",
                         n = args.mesh.n,
                         low = args.mesh.low,
                         high = args.mesh.high,
@@ -269,12 +320,29 @@ async fn start_experiment_series(args: StartExperimentSeriesArgs) -> Result<(), 
             avg_correct_receiver += correct_receiver;
             avg_other_peer += other_peer;
             avg_no_p_peers += test;
+            avg_delivery += delivery;
+
+            if args.abort_after_low_delivery > 0
+                && consecutive_low_delivery >= args.abort_after_low_delivery
+            {
+                return Err(format!(
+                    "aborting: {consecutive_low_delivery} consecutive runs below the \
+                     {:.1}% delivery threshold, most recently at n_peers={n_peers}. The mesh \
+                     is not carrying the message across a network this large. Lower \
+                     --n-peers-max, raise --time to give discovery longer, or widen the mesh \
+                     band; a larger network will not recover on its own. Pass \
+                     --abort-after-low-delivery 0 to continue anyway.",
+                    args.min_delivery * 100.0
+                )
+                .into());
+            }
 
             sleep(Duration::from_secs(10)).await
         }
         avg_correct_receiver /= args.repetitions as f32;
         avg_other_peer /= args.repetitions as f32;
         avg_no_p_peers /= args.repetitions;
+        avg_delivery /= args.repetitions as f32;
 
         println!("All Repetitions done!");
         println!("Average messages direct from Publisher: {avg_correct_receiver}");
@@ -287,8 +355,16 @@ async fn start_experiment_series(args: StartExperimentSeriesArgs) -> Result<(), 
 
         writeln!(
             &args.avg_file,
-            "{n_peers},{avg_correct_receiver},{avg_other_peer},{avg_no_p_peers}"
+            "{n_peers},{avg_correct_receiver},{avg_other_peer},{avg_no_p_peers},{avg_delivery}"
         )?;
+    }
+
+    if total_low_delivery > 0 {
+        eprintln!(
+            "WARNING: {total_low_delivery} of {total_runs} runs fell below the delivery \
+             threshold and are not valid anonymity measurements. Filter on delivery_ratio \
+             before plotting."
+        );
     }
 
     Ok(())

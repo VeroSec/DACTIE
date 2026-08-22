@@ -19,6 +19,27 @@ pub(crate) struct RunOutcome {
     pub(crate) all_peers: Vec<PeerId>,
 }
 
+impl RunOutcome {
+    /// Fraction of the peers that should have received the measurement message
+    /// and did. Every peer but the source is expected to, so a healthy run is
+    /// exactly 1.0.
+    ///
+    /// This is a validity check, not a result. A run that only reaches part of
+    /// the network is a different experiment: `correct_receiver` starts
+    /// counting peers the publisher answered an IWANT for rather than peers in
+    /// its mesh, so it can exceed D and push the measured value above a bound
+    /// derived from D. Meanwhile the attack samples colluders from all peers
+    /// while only the reached ones carry observations, so attacker success is
+    /// diluted. Both distortions are silent in the aggregates.
+    pub(crate) fn delivery_ratio(&self) -> f32 {
+        let expected = self.all_peers.len().saturating_sub(1);
+        if expected == 0 {
+            return 1.0;
+        }
+        (self.correct_receiver + self.other_peer) / expected as f32
+    }
+}
+
 //Creates n peers and lets them exchange messages on one topic. Each peer publishes in a random interval between 3 and 10 seconds messages.
 // After time before stop a single peer sends a measurement message. The other peers report the PeerID of the peer that propagated the message.
 //Returns (no peers where publishing peer == propagating peers, other peers, number of non duplicate propagating peers )
