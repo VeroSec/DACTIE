@@ -51,6 +51,25 @@ struct Args {
     /// Folder where the result should be saved
     #[clap(short, long, default_value = "/tmp/")]
     out_path: PathBuf,
+
+    /// Whether the victim floods the message to every subscriber instead of
+    /// only its mesh. This is the trade-off under test: flood publishing
+    /// defeats an eclipse but leaks the sender to every peer at once.
+    #[clap(long, action = clap::ArgAction::Set, default_value_t = false)]
+    flood_publish: bool,
+
+    /// Gossipsub mesh degree D, matching the anonymity experiment so the two
+    /// halves of the trade-off are measured at the same configuration.
+    #[clap(short = 'D', long, default_value_t = 12)]
+    mesh_n: usize,
+
+    /// Lower edge of the mesh band. Defaults to D-2.
+    #[clap(long)]
+    mesh_n_low: Option<usize>,
+
+    /// Upper edge of the mesh band. Defaults to 2*D.
+    #[clap(long)]
+    mesh_n_high: Option<usize>,
 }
 
 #[tokio::main]
@@ -60,13 +79,27 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let mut x = args.out_path.clone();
     let mut avg = args.out_path.clone();
+    // D and the flood setting go in the name: without them a second run at the
+    // other setting silently truncates the first.
     x.push(format!(
-        "experiment_{}_{}_{}_{:?}.csv",
-        args.n_peers_min, args.n_peers_max, args.stop_time, args.interval
+        "eclipse_{}_{}_{}_A{}_D{}_flood{}_{:?}.csv",
+        args.n_peers_min,
+        args.n_peers_max,
+        args.stop_time,
+        args.attack_n,
+        args.mesh_n,
+        args.flood_publish,
+        args.interval
     ));
     avg.push(format!(
-        "experiment_avg_{}_{}_{}_{:?}.csv",
-        args.n_peers_min, args.n_peers_max, args.stop_time, args.interval
+        "eclipse_avg_{}_{}_{}_A{}_D{}_flood{}_{:?}.csv",
+        args.n_peers_min,
+        args.n_peers_max,
+        args.stop_time,
+        args.attack_n,
+        args.mesh_n,
+        args.flood_publish,
+        args.interval
     ));
 
     let file = OpenOptions::new()
@@ -83,11 +116,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     writeln!(
         &file,
-        "total_peers,honest_peers,attacker_peers,received_messages"
+        "total_peers,honest_peers,attacker_peers,mesh_n,flood_publish,run,received_messages"
     )?;
     writeln!(
         &file_avg,
-        "total_peers,honest_peers,attacker_peers,received_messages"
+        "total_peers,honest_peers,attacker_peers,mesh_n,flood_publish,received_messages"
     )?;
 
     start_experiment_series(StartExperimentSeriesArgs {
@@ -101,6 +134,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
         interval: args.interval,
         file,
         avg_file: file_avg,
+        gossip: GossipConfig {
+            flood_publish: args.flood_publish,
+            mesh: MeshConfig::new(args.mesh_n, args.mesh_n_low, args.mesh_n_high),
+        },
     })
     .await?;
 
@@ -122,6 +159,7 @@ struct StartExperimentSeriesArgs {
     interval: PubInterval,
     file: File,
     avg_file: File,
+    gossip: GossipConfig,
 }
 
 async fn start_experiment_series(args: StartExperimentSeriesArgs) -> Result<(), Box<dyn Error>> {
@@ -142,6 +180,7 @@ async fn start_experiment_series(args: StartExperimentSeriesArgs) -> Result<(), 
                 Duration::from_secs(args.attack_time),
                 Duration::from_secs(args.stop_time),
                 interval,
+                args.gossip,
             )
             .await?;
 
@@ -150,8 +189,10 @@ async fn start_experiment_series(args: StartExperimentSeriesArgs) -> Result<(), 
             let total_peers = n_peers + args.attack_n;
             writeln!(
                 &args.file,
-                "{total_peers},{n_peers},{attack_n},{receivers}",
-                attack_n = args.attack_n
+                "{total_peers},{n_peers},{attack_n},{mesh_n},{flood},{run},{receivers}",
+                attack_n = args.attack_n,
+                mesh_n = args.gossip.mesh.n,
+                flood = args.gossip.flood_publish
             )?;
 
             avg_receivers += receivers;
@@ -166,8 +207,10 @@ async fn start_experiment_series(args: StartExperimentSeriesArgs) -> Result<(), 
         let total_peers = n_peers + args.attack_n;
         writeln!(
             &args.avg_file,
-            "{total_peers},{n_peers},{attack_n},{avg_receivers}",
-            attack_n = args.attack_n
+            "{total_peers},{n_peers},{attack_n},{mesh_n},{flood},{avg_receivers}",
+            attack_n = args.attack_n,
+            mesh_n = args.gossip.mesh.n,
+            flood = args.gossip.flood_publish
         )?;
     }
 

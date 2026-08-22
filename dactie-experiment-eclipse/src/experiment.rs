@@ -16,12 +16,13 @@ pub(crate) async fn experiment_prop_peer_id(
     time_before_attack: Duration,
     time_before_stop: Duration,
     pub_interval: PubInterval,
+    gossip: GossipConfig,
 ) -> Result<f32, Box<dyn Error>> {
     let mut peers = Vec::new();
     let (control_tx, control_rx) = broadcast::channel::<ControlSignal>(peer_n);
     let (response_tx, mut response_rx) = mpsc::unbounded_channel();
 
-    let mut boot_peer = peer::Peer::new_bootstrap_peer(control_rx, response_tx.clone())?;
+    let mut boot_peer = peer::Peer::new_bootstrap_peer(control_rx, response_tx.clone(), gossip)?;
 
     let boot_peer_id = boot_peer.get_peer_id();
 
@@ -37,7 +38,12 @@ pub(crate) async fn experiment_prop_peer_id(
     sleep(Duration::from_secs(2)).await;
 
     for _ in 0..peer_n - 2 {
-        let peer = peer::Peer::new_peer(boot_peer_id, control_tx.subscribe(), response_tx.clone())?;
+        let peer = peer::Peer::new_peer(
+            boot_peer_id,
+            control_tx.subscribe(),
+            response_tx.clone(),
+            gossip,
+        )?;
         pub_interval_clone = pub_interval.clone();
 
         // Run the peer in its own asynchronous task
@@ -47,8 +53,12 @@ pub(crate) async fn experiment_prop_peer_id(
         peers.push(peer_task);
     }
 
-    let mut stop_peer =
-        peer::Peer::new_peer(boot_peer_id, control_tx.subscribe(), response_tx.clone())?;
+    let mut stop_peer = peer::Peer::new_peer(
+        boot_peer_id,
+        control_tx.subscribe(),
+        response_tx.clone(),
+        gossip,
+    )?;
 
     let stop_peer_addr = stop_peer.get_peer_id();
 
@@ -58,6 +68,7 @@ pub(crate) async fn experiment_prop_peer_id(
             control_tx.subscribe(),
             response_tx.clone(),
             stop_peer_addr,
+            gossip,
         )?;
         pub_interval_clone = pub_interval.clone();
 

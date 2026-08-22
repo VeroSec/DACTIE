@@ -37,8 +37,12 @@ impl Peer {
         control_channel: broadcast::Receiver<ControlSignal>,
         _response_channel: UnboundedSender<PeerOut>,
         censor_peer: PeerId,
+        gossip: GossipConfig,
     ) -> Result<Peer, Box<dyn Error>> {
-        let swarm = Self::create_swarm(Some((boot_peer_id, "/ip4/127.0.0.1/tcp/10001".parse()?)))?;
+        let swarm = Self::create_swarm(
+            Some((boot_peer_id, "/ip4/127.0.0.1/tcp/10001".parse()?)),
+            gossip,
+        )?;
 
         Ok(Peer {
             swarm,
@@ -50,6 +54,7 @@ impl Peer {
 
     fn create_swarm(
         bootstrap_peer: Option<(PeerId, Multiaddr)>,
+        gossip: GossipConfig,
     ) -> Result<Swarm<MyBehaviour>, Box<dyn Error>> {
         let mut swarm = libp2p::SwarmBuilder::with_new_identity()
             .with_tokio()
@@ -70,7 +75,12 @@ impl Peer {
                     .heartbeat_interval(Duration::from_secs(1)) // This is set to aid debugging by not cluttering the log space
                     .validation_mode(gossipsub::ValidationMode::Permissive) // This sets the kind of message validation. The default is Strict (enforce message signing)
                     .message_id_fn(message_id_fn) // content-address messages. No two messages of the same content will be propagated.
-                    .flood_publish(false)
+                    // Under test: see GossipConfig.
+                    .flood_publish(gossip.flood_publish)
+                    .mesh_n_low(gossip.mesh.low)
+                    .mesh_n(gossip.mesh.n)
+                    .mesh_n_high(gossip.mesh.high)
+                    .mesh_outbound_min(gossip.mesh.outbound_min)
                     .validate_messages()
                     .build()
                     .map_err(io::Error::other)
