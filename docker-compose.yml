@@ -42,6 +42,11 @@ services:
   # Authority lives on host .116 and listens on 10001
   authority_node:
     image: dactie-authority
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
     build:
       context: .
       dockerfile: ./dactie-authority/Dockerfile
@@ -63,6 +68,11 @@ services:
   # Archive on 10.244.192.117 with DSN to local db
   archive_node1:
     image: dactie-archive
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
     build:
       context: .
       dockerfile: ./dactie-archive/Dockerfile
@@ -92,6 +102,11 @@ services:
   # Archive on 10.244.192.118 with DSN to its local db2
   archive_node2:
     image: dactie-archive
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
     build:
       context: .
       dockerfile: ./dactie-archive/Dockerfile
@@ -121,6 +136,11 @@ services:
   # Peer on 10.244.192.117
   peer_1:
     image: dactie-peer
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
     build:
       context: .
       dockerfile: ./dactie-peer/Dockerfile
@@ -149,6 +169,11 @@ services:
   # Peer on 10.244.192.118
   peer_2:
     image: dactie-peer
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
     build:
       context: .
       dockerfile: ./dactie-peer/Dockerfile
@@ -177,6 +202,11 @@ services:
   # Peers on 10.244.192.119
   peer_3:
     image: dactie-peer
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
     build:
       context: .
       dockerfile: ./dactie-peer/Dockerfile
@@ -204,6 +234,11 @@ services:
 
   peer_4:
     image: dactie-peer
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
     build:
       context: .
       dockerfile: ./dactie-peer/Dockerfile
