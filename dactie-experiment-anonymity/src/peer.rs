@@ -31,6 +31,14 @@ pub(crate) struct MeshConfig {
     pub(crate) low: usize,
     pub(crate) high: usize,
     pub(crate) outbound_min: usize,
+    /// Gossip emission, the second delivery path. Each heartbeat a peer sends
+    /// IHAVE to max(gossip_lazy, gossip_factor * non-mesh peers) peers it is not
+    /// meshed with, and anyone lacking the message asks for it with IWANT and
+    /// receives it from the announcer - the publisher included. Setting both to
+    /// zero disables gossip emission, which isolates how much of the measured
+    /// direct exposure comes from the mesh rather than from answering IWANTs.
+    pub(crate) gossip_factor: f64,
+    pub(crate) gossip_lazy: usize,
 }
 
 impl MeshConfig {
@@ -45,7 +53,13 @@ impl MeshConfig {
     /// below 4 fail with MeshParametersInvalid at swarm construction - which
     /// matters here because D is swept from the command line. Deriving it from
     /// the band keeps every D constructible.
-    pub(crate) fn new(n: usize, low: Option<usize>, high: Option<usize>) -> Self {
+    pub(crate) fn new(
+        n: usize,
+        low: Option<usize>,
+        high: Option<usize>,
+        gossip_factor: f64,
+        gossip_lazy: usize,
+    ) -> Self {
         let n = n.max(1);
         let low = low
             .unwrap_or_else(|| n.saturating_sub(2).max(1))
@@ -57,6 +71,8 @@ impl MeshConfig {
             low,
             high,
             outbound_min,
+            gossip_factor,
+            gossip_lazy,
         }
     }
 }
@@ -185,6 +201,8 @@ impl Peer {
             .mesh_n(mesh.n)
             .mesh_n_high(mesh.high)
             .mesh_outbound_min(mesh.outbound_min)
+            .gossip_factor(mesh.gossip_factor)
+            .gossip_lazy(mesh.gossip_lazy)
             .build()
     }
 
@@ -366,7 +384,7 @@ mod tests {
     #[test]
     fn every_mesh_degree_builds() {
         for n in 1..=64usize {
-            let mesh = MeshConfig::new(n, None, None);
+            let mesh = MeshConfig::new(n, None, None, 0.25, 6);
             assert!(
                 Peer::gossipsub_config(mesh).is_ok(),
                 "D={n} rejected: {mesh:?}"
@@ -378,7 +396,7 @@ mod tests {
     #[test]
     fn a_pinned_band_builds() {
         for n in 1..=64usize {
-            let mesh = MeshConfig::new(n, Some(n), Some(n));
+            let mesh = MeshConfig::new(n, Some(n), Some(n), 0.25, 6);
             assert_eq!(mesh.low, n);
             assert_eq!(mesh.high, n);
             assert!(
@@ -395,7 +413,7 @@ mod tests {
         for n in 1..=64usize {
             for low in [None, Some(1), Some(n), Some(n * 2)] {
                 for high in [None, Some(n), Some(n + 1)] {
-                    let m = MeshConfig::new(n, low, high);
+                    let m = MeshConfig::new(n, low, high, 0.25, 6);
                     assert!(m.outbound_min <= m.low, "{m:?}");
                     assert!(m.low <= m.n, "{m:?}");
                     assert!(m.n <= m.high, "{m:?}");

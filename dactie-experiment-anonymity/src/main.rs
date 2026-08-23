@@ -64,6 +64,19 @@ struct Args {
     #[clap(long)]
     mesh_n_high: Option<usize>,
 
+    /// Fraction of non-mesh peers each peer gossips IHAVE to per heartbeat, or
+    /// gossip_lazy peers, whichever is greater. libp2p defaults to 0.25.
+    /// Setting this and --gossip-lazy to zero disables gossip emission, which
+    /// separates direct exposure over the mesh from exposure via answering
+    /// IWANT requests.
+    #[clap(long, default_value_t = 0.25)]
+    gossip_factor: f64,
+
+    /// Floor on the number of peers gossiped to per heartbeat. libp2p
+    /// defaults to 6.
+    #[clap(long, default_value_t = 6)]
+    gossip_lazy: usize,
+
     /// Colluding fractions f to evaluate the source-anonymity attack at. Each is
     /// converted to a coalition size of ceil(f * N), capped at the N-1 peers that
     /// are not the source.
@@ -155,7 +168,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .open(adv)?;
     writeln!(
         &adv_file,
-        "total_peers,mesh_n,mesh_n_low,mesh_n_high,run,coalition_size,f_effective,estimator,success_rate,delivery_ratio,direct_receipts"
+        "total_peers,mesh_n,mesh_n_low,mesh_n_high,gossip_factor,gossip_lazy,run,coalition_size,f_effective,estimator,success_rate,delivery_ratio,direct_receipts"
     )?;
 
     start_experiment_series(StartExperimentSeriesArgs {
@@ -168,7 +181,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
         file,
         avg_file: file_avg,
         adv_file,
-        mesh: MeshConfig::new(args.mesh_n, args.mesh_n_low, args.mesh_n_high),
+        mesh: MeshConfig::new(
+            args.mesh_n,
+            args.mesh_n_low,
+            args.mesh_n_high,
+            args.gossip_factor,
+            args.gossip_lazy,
+        ),
         adversary_fractions: args.adversary_fractions,
         coalition_sizes: args.coalition_sizes,
         adversary_trials: args.adversary_trials,
@@ -334,8 +353,10 @@ async fn start_experiment_series(args: StartExperimentSeriesArgs) -> Result<(), 
                     println!("  attack c={c} (f={f_effective:.4}) {estimator}: {rate:.4}");
                     writeln!(
                         &args.adv_file,
-                        "{n_peers},{n},{low},{high},{run},{c},{f_effective},{estimator},{rate},{delivery},{correct_receiver}",
+                        "{n_peers},{n},{low},{high},{gf},{gl},{run},{c},{f_effective},{estimator},{rate},{delivery},{correct_receiver}",
                         n = args.mesh.n,
+                        gf = args.mesh.gossip_factor,
+                        gl = args.mesh.gossip_lazy,
                         low = args.mesh.low,
                         high = args.mesh.high,
                     )?;
