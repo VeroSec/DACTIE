@@ -11,6 +11,13 @@ use std::str::FromStr;
 pub(crate) struct GossipConfig {
     pub(crate) flood_publish: bool,
     pub(crate) mesh: MeshConfig,
+    /// TCP port the bootstrap peer listens on and everyone else dials.
+    ///
+    /// Configurable because it was a fixed 10001: consecutive invocations of
+    /// the binary raced on it, and a sweep that varied flood_publish had every
+    /// run after the first large one die with AddrInUse before the previous
+    /// run's peers had released the socket.
+    pub(crate) bootstrap_port: u16,
 }
 
 /// The gossipsub mesh band, mirroring the one in the anonymity experiment so

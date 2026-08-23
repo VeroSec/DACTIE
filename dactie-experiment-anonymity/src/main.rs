@@ -155,7 +155,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .open(adv)?;
     writeln!(
         &adv_file,
-        "total_peers,mesh_n,mesh_n_low,mesh_n_high,run,coalition_size,f_effective,estimator,success_rate,delivery_ratio"
+        "total_peers,mesh_n,mesh_n_low,mesh_n_high,run,coalition_size,f_effective,estimator,success_rate,delivery_ratio,direct_receipts"
     )?;
 
     start_experiment_series(StartExperimentSeriesArgs {
@@ -205,7 +205,7 @@ struct StartExperimentSeriesArgs {
 }
 
 async fn start_experiment_series(args: StartExperimentSeriesArgs) -> Result<(), Box<dyn Error>> {
-    let mut consecutive_low_delivery = 0usize;
+    let mut consecutive_invalid = 0usize;
     let mut total_low_delivery = 0usize;
     let mut total_runs = 0usize;
 
@@ -258,7 +258,6 @@ async fn start_experiment_series(args: StartExperimentSeriesArgs) -> Result<(), 
             );
             if delivery < args.min_delivery {
                 total_low_delivery += 1;
-                consecutive_low_delivery += 1;
                 eprintln!(
                     "WARNING: only {:.1}% of peers received the message (threshold {:.1}%). \
                      This run measures propagation failure, not anonymity: correct_receiver \
@@ -268,8 +267,31 @@ async fn start_experiment_series(args: StartExperimentSeriesArgs) -> Result<(), 
                     delivery * 100.0,
                     args.min_delivery * 100.0
                 );
+            }
+
+            // Complete delivery is necessary but not sufficient. The publisher
+            // also answers IWANT requests, and those deliveries name it as
+            // propagation_source just like a mesh link does. When the mesh is
+            // too slow, gossip carries the message instead and direct receipts
+            // climb well past the degree - observed at 2x to 7x mesh_n on runs
+            // that delivered to 100% of peers. P(E_dir) = D/(|Nc|-1) assumes
+            // direct receipt happens only over the mesh, so such a run exceeds
+            // any bound derived from D no matter how healthy delivery looks.
+            let direct_ok = correct_receiver <= args.mesh.high as f32;
+            if !direct_ok {
+                eprintln!(
+                    "WARNING: {correct_receiver} peers received directly from the publisher, \
+                     above the {} the mesh band permits. The publisher is serving IWANT \
+                     requests, so this run overstates direct exposure and is not a valid \
+                     test of a bound stated over D. Filter it out on direct_receipts.",
+                    args.mesh.high
+                );
+            }
+
+            if delivery < args.min_delivery || !direct_ok {
+                consecutive_invalid += 1;
             } else {
-                consecutive_low_delivery = 0;
+                consecutive_invalid = 0;
             }
 
             writeln!(
@@ -312,7 +334,7 @@ async fn start_experiment_series(args: StartExperimentSeriesArgs) -> Result<(), 
                     println!("  attack c={c} (f={f_effective:.4}) {estimator}: {rate:.4}");
                     writeln!(
                         &args.adv_file,
-                        "{n_peers},{n},{low},{high},{run},{c},{f_effective},{estimator},{rate},{delivery}",
+                        "{n_peers},{n},{low},{high},{run},{c},{f_effective},{estimator},{rate},{delivery},{correct_receiver}",
                         n = args.mesh.n,
                         low = args.mesh.low,
                         high = args.mesh.high,
@@ -326,11 +348,12 @@ async fn start_experiment_series(args: StartExperimentSeriesArgs) -> Result<(), 
             avg_delivery += delivery;
 
             if args.abort_after_low_delivery > 0
-                && consecutive_low_delivery >= args.abort_after_low_delivery
+                && consecutive_invalid >= args.abort_after_low_delivery
             {
                 return Err(format!(
-                    "aborting: {consecutive_low_delivery} consecutive runs below the \
-                     {:.1}% delivery threshold, most recently at n_peers={n_peers}. The mesh \
+                    "aborting: {consecutive_invalid} consecutive invalid runs (below the \
+                     {:.1}% delivery threshold, or more direct receipts than the mesh band \
+                     permits), most recently at n_peers={n_peers}. The mesh \
                      is not carrying the message across a network this large. Lower \
                      --n-peers-max, raise --time to give discovery longer, or widen the mesh \
                      band; a larger network will not recover on its own. Pass \

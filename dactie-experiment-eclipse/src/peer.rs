@@ -52,7 +52,10 @@ impl Peer {
         gossip: GossipConfig,
     ) -> Result<Peer, Box<dyn Error>> {
         let swarm = Self::create_swarm(
-            Some((boot_peer_id, "/ip4/127.0.0.1/tcp/10001".parse()?)),
+            Some((
+                boot_peer_id,
+                format!("/ip4/127.0.0.1/tcp/{}", gossip.bootstrap_port).parse()?,
+            )),
             gossip,
         )?;
 
@@ -134,7 +137,7 @@ impl Peer {
         swarm.behaviour_mut().kademlia.set_mode(Some(Mode::Server));
 
         if bootstrap_peer.is_none() {
-            swarm.listen_on("/ip4/0.0.0.0/tcp/10001".parse()?)?;
+            swarm.listen_on(format!("/ip4/0.0.0.0/tcp/{}", gossip.bootstrap_port).parse()?)?;
         } else {
             swarm.listen_on("/ip4/0.0.0.0/tcp/0".parse()?)?;
         }

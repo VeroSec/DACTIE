@@ -70,6 +70,12 @@ struct Args {
     /// Upper edge of the mesh band. Defaults to 2*D.
     #[clap(long)]
     mesh_n_high: Option<usize>,
+
+    /// TCP port the bootstrap peer binds. Give consecutive invocations
+    /// different ports: the previous run's peers may still hold the socket,
+    /// and the bind fails with AddrInUse before a single run has started.
+    #[clap(long, default_value_t = 10001)]
+    bootstrap_port: u16,
 }
 
 #[tokio::main]
@@ -137,6 +143,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         gossip: GossipConfig {
             flood_publish: args.flood_publish,
             mesh: MeshConfig::new(args.mesh_n, args.mesh_n_low, args.mesh_n_high),
+            bootstrap_port: args.bootstrap_port,
         },
     })
     .await?;
