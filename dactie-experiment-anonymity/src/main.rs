@@ -149,11 +149,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // positionally keeps working.
     writeln!(
         &file,
-        "total_peers,correct_receiver,other_peer,no_p_peers,delivery_ratio"
+        "total_peers,correct_receiver,other_peer,no_p_peers,delivery_ratio,latency_p50_us,latency_p95_us,latency_max_us"
     )?;
     writeln!(
         &file_avg,
-        "total_peers,correct_receiver,other_peer,no_p_peers,delivery_ratio"
+        "total_peers,correct_receiver,other_peer,no_p_peers,delivery_ratio,latency_p50_us,latency_p95_us,latency_max_us"
     )?;
 
     let mut adv = args.out_path.clone();
@@ -233,6 +233,11 @@ async fn start_experiment_series(args: StartExperimentSeriesArgs) -> Result<(), 
         let mut avg_other_peer = 0f32;
         let mut avg_no_p_peers = 0;
         let mut avg_delivery = 0f32;
+        // The worst case is carried as a max rather than a mean: averaging
+        // per-run maxima hides the tail this column exists to show.
+        let mut avg_lat_p50 = 0u128;
+        let mut avg_lat_p95 = 0u128;
+        let mut worst_lat = 0u128;
 
         for i in 0..args.repetitions {
             let run = i + 1;
@@ -269,12 +274,14 @@ async fn start_experiment_series(args: StartExperimentSeriesArgs) -> Result<(), 
             println!("Number of Propagating Peers: {test}");
 
             let delivery = outcome.delivery_ratio();
+            let (lat_p50, lat_p95, lat_max) = outcome.latency_us();
             total_runs += 1;
             println!(
                 "Delivery: {:.1}% of {} peers",
                 delivery * 100.0,
                 n_peers - 1
             );
+            println!("Latency: p50 {lat_p50} us, p95 {lat_p95} us, max {lat_max} us");
             if delivery < args.min_delivery {
                 total_low_delivery += 1;
                 eprintln!(
@@ -315,7 +322,7 @@ async fn start_experiment_series(args: StartExperimentSeriesArgs) -> Result<(), 
 
             writeln!(
                 &args.file,
-                "{n_peers},{correct_receiver},{other_peer},{test},{delivery}"
+                "{n_peers},{correct_receiver},{other_peer},{test},{delivery},{lat_p50},{lat_p95},{lat_max}"
             )?;
 
             // Replay the recorded observations against colluding subsets. No
@@ -367,6 +374,9 @@ async fn start_experiment_series(args: StartExperimentSeriesArgs) -> Result<(), 
             avg_other_peer += other_peer;
             avg_no_p_peers += test;
             avg_delivery += delivery;
+            avg_lat_p50 += lat_p50;
+            avg_lat_p95 += lat_p95;
+            worst_lat = worst_lat.max(lat_max);
 
             if args.abort_after_low_delivery > 0
                 && consecutive_invalid >= args.abort_after_low_delivery
@@ -390,6 +400,8 @@ async fn start_experiment_series(args: StartExperimentSeriesArgs) -> Result<(), 
         avg_other_peer /= args.repetitions as f32;
         avg_no_p_peers /= args.repetitions;
         avg_delivery /= args.repetitions as f32;
+        avg_lat_p50 /= args.repetitions as u128;
+        avg_lat_p95 /= args.repetitions as u128;
 
         println!("All Repetitions done!");
         println!("Average messages direct from Publisher: {avg_correct_receiver}");
@@ -399,10 +411,13 @@ async fn start_experiment_series(args: StartExperimentSeriesArgs) -> Result<(), 
             avg_correct_receiver / (avg_correct_receiver + avg_other_peer) * 100f32
         );
         println!("Average Number of Propagating Peers: {avg_no_p_peers}");
+        println!(
+            "Average latency: p50 {avg_lat_p50} us, p95 {avg_lat_p95} us, worst {worst_lat} us"
+        );
 
         writeln!(
             &args.avg_file,
-            "{n_peers},{avg_correct_receiver},{avg_other_peer},{avg_no_p_peers},{avg_delivery}"
+            "{n_peers},{avg_correct_receiver},{avg_other_peer},{avg_no_p_peers},{avg_delivery},{avg_lat_p50},{avg_lat_p95},{worst_lat}"
         )?;
     }
 

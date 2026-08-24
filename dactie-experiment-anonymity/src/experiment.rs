@@ -38,6 +38,36 @@ impl RunOutcome {
         }
         (self.correct_receiver + self.other_peer) / expected as f32
     }
+
+    /// Delivery latency over the peers that received the message, in
+    /// microseconds: (median, 95th percentile, worst).
+    ///
+    /// Microseconds rather than milliseconds because a healthy 250-peer run
+    /// completes in single-digit milliseconds - at ms resolution the median
+    /// carries one significant digit and two arms cannot be told apart.
+    ///
+    /// Every peer stamps its own arrival with `Instant::now()` and all peers
+    /// share this process's clock, so the values are directly comparable with
+    /// no skew correction. The stamp is taken when the peer's task handles the
+    /// gossipsub event, so it includes local scheduling delay. That is part of
+    /// what a peer really experiences, but it also means a saturated host
+    /// inflates these numbers for reasons that have nothing to do with the
+    /// protocol - compare arms only when both delivered completely.
+    ///
+    /// Zeros for a run nobody received.
+    pub(crate) fn latency_us(&self) -> (u128, u128, u128) {
+        if self.observations.is_empty() {
+            return (0, 0, 0);
+        }
+        let mut ms: Vec<u128> = self
+            .observations
+            .iter()
+            .map(|o| o.at.as_micros())
+            .collect();
+        ms.sort_unstable();
+        let pick = |q: f64| ms[(((ms.len() - 1) as f64) * q).round() as usize];
+        (pick(0.5), pick(0.95), ms[ms.len() - 1])
+    }
 }
 
 //Creates n peers and lets them exchange messages on one topic. Each peer publishes in a random interval between 3 and 10 seconds messages.
@@ -150,4 +180,54 @@ pub(crate) async fn experiment_prop_peer_id(
         source: stop_peer_addr,
         all_peers,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn outcome(latencies_us: &[u64]) -> RunOutcome {
+        let p = PeerId::random();
+        RunOutcome {
+            correct_receiver: 0.0,
+            other_peer: latencies_us.len() as f32,
+            distinct_prop_peers: 0,
+            observations: latencies_us
+                .iter()
+                .map(|us| Observation {
+                    observer: p,
+                    prop_id: p,
+                    at: Duration::from_micros(*us),
+                })
+                .collect(),
+            source: p,
+            all_peers: vec![p],
+        }
+    }
+
+    #[test]
+    fn latency_reports_median_tail_and_worst() {
+        // Odd length, so the median is exact and the quantiles are readable
+        // by inspection: of 1..=101 the middle value is 51 and the 95th
+        // percentile is 96.
+        let us: Vec<u64> = (1..=101).collect();
+        assert_eq!(outcome(&us).latency_us(), (51, 96, 101));
+    }
+
+    /// The tail is the point of the p95 column: one very late peer must not be
+    /// averaged away, and must not drag the median with it.
+    #[test]
+    fn one_straggler_moves_the_worst_case_not_the_median() {
+        let mut us: Vec<u64> = vec![10; 99];
+        us.push(9_000);
+        let (p50, _, max) = outcome(&us).latency_us();
+        assert_eq!((p50, max), (10, 9_000));
+    }
+
+    /// A run nobody received has no latency to report rather than a panic on
+    /// an empty slice.
+    #[test]
+    fn no_observations_reports_zero() {
+        assert_eq!(outcome(&[]).latency_us(), (0, 0, 0));
+    }
 }
