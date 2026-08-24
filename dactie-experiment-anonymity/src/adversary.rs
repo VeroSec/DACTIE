@@ -31,7 +31,9 @@ pub(crate) struct Observation {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum Estimator {
-    /// Guess uniformly at random from all candidate peers. Baseline: 1/|N|.
+    /// Guess uniformly at random from the peers the coalition cannot rule out.
+    /// Each colluding peer knows it did not publish, so the coalition excludes
+    /// its own c members and the baseline is 1/(|N| - c), not 1/|N|.
     Random,
     /// Guess uniformly among the distinct relays the coalition saw. Tests
     /// whether merely being adjacent to the source leaks it.
@@ -149,10 +151,6 @@ pub(crate) fn run_attack<R: Rng>(
     let pool: Vec<PeerId> = all_peers.iter().copied().filter(|p| *p != source).collect();
     let coalition_size = coalition_size.clamp(1, pool.len().max(1));
 
-    // The source is not a candidate for membership in the coalition, but it IS
-    // in the candidate pool an attacker would name a guess from.
-    let candidates: Vec<PeerId> = all_peers.to_vec();
-
     let mut hits: HashMap<Estimator, usize> = Estimator::ALL.iter().map(|e| (*e, 0)).collect();
     let mut shuffled = pool;
 
@@ -162,6 +160,15 @@ pub(crate) fn run_attack<R: Rng>(
         // this O(1) rather than linear in the coalition. At N=850 and f=0.5 the
         // linear form costs on the order of 1e9 comparisons across a sweep.
         let coalition: HashSet<PeerId> = shuffled.iter().copied().take(coalition_size).collect();
+
+        // A colluding peer knows it is not the source, so the coalition rules
+        // out its own members. The source itself is never in the coalition and
+        // therefore always remains a candidate.
+        let candidates: Vec<PeerId> = all_peers
+            .iter()
+            .copied()
+            .filter(|p| !coalition.contains(p))
+            .collect();
 
         let seen: Vec<&Observation> = observations
             .iter()
@@ -234,9 +241,10 @@ mod tests {
         assert_eq!(res[&Estimator::ObservedSet], 0.0);
     }
 
-    /// The random baseline should sit near 1/N regardless of what was observed.
+    /// The random baseline sits near 1/(N - c): a coalition rules out its own
+    /// members, and what it observed is irrelevant to a uniform guess.
     #[test]
-    fn random_baseline_tracks_one_over_n() {
+    fn random_baseline_tracks_one_over_n_minus_c() {
         let source = pid(1);
         let peers: Vec<PeerId> = (1..=10).map(pid).collect();
         let observations = vec![Observation {
@@ -246,8 +254,16 @@ mod tests {
         }];
 
         let mut rng = StdRng::seed_from_u64(11);
-        let res = run_attack(&observations, source, &peers, 5, 20_000, &mut rng);
-        let expected = 1.0 / peers.len() as f64;
+        let coalition_size = 5;
+        let res = run_attack(
+            &observations,
+            source,
+            &peers,
+            coalition_size,
+            20_000,
+            &mut rng,
+        );
+        let expected = 1.0 / (peers.len() - coalition_size) as f64;
         assert!(
             (res[&Estimator::Random] - expected).abs() < 0.02,
             "random baseline {} not near {}",
