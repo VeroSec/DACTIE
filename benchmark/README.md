@@ -35,19 +35,19 @@ verifies and opens to the right member.
 
 ## Results (2026-10-11)
 
-Intel Core Ultra 7 165U, 30 GiB RAM, release build, single thread, 3 archives, t = 3, 1 KiB payload.
-Signature size: 226 bytes.
+Release build, single thread, 3 archives, t = 3, 1 KiB payload. Signature size: 226 bytes.
 
-| Operation | n = 10 | n = 100 | n = 500 |
-| --- | --- | --- | --- |
-| sign | 1.86 ms | | |
-| verify | 4.97 ms | | |
-| full join | 36.5 ms | | |
-| archive partial open | 17.3 ms | 169 ms | 854 ms |
-| combine | 31.4 ms | 307 ms | 1.56 s |
+| Operation | server (AMD EPYC 7763) | laptop (Intel Core Ultra 7 165U) |
+| --- | --- | --- |
+| sign | 2.67 ms | 1.86 ms |
+| verify | 7.53 ms | 4.97 ms |
+| full join | 55.6 ms | 36.5 ms |
+| archive partial open, n = 10 / 100 / 500 | 25.5 ms / 254 ms / 1.26 s | 17.3 ms / 169 ms / 854 ms |
+| combine, n = 10 / 100 / 500 | 46.9 ms / 461 ms / 2.30 s | 31.4 ms / 307 ms / 1.56 s |
 
-Opening is linear in the group size: about 1.7 ms per member per archive, plus
-about 3.1 ms per member to combine.
+The paper reports the server numbers (same server as the anonymity experiments).
+Opening is linear in the group size: on the server about 2.5 ms per member per archive,
+plus about 4.6 ms per member to combine.
 
 For comparison, AttriChain (t = 3, i7-6300U, Solidity on a permissioned Ethereum
 instance) reports Sign ≈ 3.2 s, Trace 4.6 s and Collect 5.4 s; Huff and Li report
