@@ -62,6 +62,21 @@ struct Args {
     /// network it is exposed on is trusted.
     #[arg(long)]
     metrics_addr: Option<SocketAddr>,
+
+    /// Trusted archive, as a multiaddr ending in /p2p/<PeerId>; repeat for each archive.
+    /// The peer checks every archive key the authority hands out with the archive itself.
+    /// Without any, the authority's keys are used unverified.
+    #[arg(long = "archive")]
+    archives: Vec<Multiaddr>,
+}
+
+/// Splits `/ip4/.../tcp/.../p2p/<PeerId>` into the PeerId and the address to dial.
+fn split_p2p(addr: &Multiaddr) -> Result<(PeerId, Multiaddr), String> {
+    let mut base = addr.clone();
+    match base.pop() {
+        Some(libp2p::multiaddr::Protocol::P2p(peer_id)) => Ok((peer_id, base)),
+        _ => Err(format!("--archive {addr} must end in /p2p/<PeerId>")),
+    }
 }
 
 #[tokio::main]
@@ -108,10 +123,20 @@ async fn main() -> Result<(), Box<dyn Error>> {
         args.authority_peer_id.unwrap(),
     )?);
 
+    let archives = args
+        .archives
+        .iter()
+        .map(split_p2p)
+        .collect::<Result<Vec<_>, _>>()?;
+    mybehaviour::archive_keys::TRUSTED
+        .set(archives.iter().map(|(peer_id, _)| *peer_id).collect())
+        .expect("set once at startup");
+
     let behaviour = MyBehaviour::new(
         &key_material.get_keypair(),
         args.authority_peer_id,
         args.bootstrap_addr,
+        &archives,
     )?;
 
     let mut abstswarm_builder = AbstSwarmBuilder::new(
@@ -232,4 +257,25 @@ async fn main() -> Result<(), Box<dyn Error>> {
     tokio::spawn(client.run()).await??;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::split_p2p;
+    use libp2p::{Multiaddr, PeerId};
+
+    #[test]
+    fn split_p2p_separates_peer_id_from_dial_address() {
+        let peer_id = PeerId::random();
+        let addr: Multiaddr = format!("/ip4/10.0.0.1/tcp/20011/p2p/{peer_id}").parse().unwrap();
+        let (parsed, base) = split_p2p(&addr).unwrap();
+        assert_eq!(parsed, peer_id);
+        assert_eq!(base, "/ip4/10.0.0.1/tcp/20011".parse::<Multiaddr>().unwrap());
+    }
+
+    #[test]
+    fn split_p2p_rejects_an_address_without_peer_id() {
+        let addr: Multiaddr = "/ip4/10.0.0.1/tcp/20011".parse().unwrap();
+        assert!(split_p2p(&addr).is_err());
+    }
 }

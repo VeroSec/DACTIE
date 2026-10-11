@@ -85,13 +85,6 @@ impl Storage {
         self.archive_peers.lock().unwrap().clone()
     }
 
-    pub(crate) fn add_archive(&self, peer_id: PeerId) {
-        let mut vec = self.archive_peers.lock().unwrap();
-        if !vec.contains(&peer_id) {
-            vec.push(peer_id);
-        }
-    }
-
     pub(crate) fn end_init_archive(&self) {
         let mut mode = self.archive_init_mode.lock().unwrap();
         *mode = false;
@@ -99,6 +92,30 @@ impl Storage {
 
     pub(crate) fn get_opener_pubkeys(&self) -> Vec<G2> {
         self.opener_pubkeys.lock().unwrap().clone()
+    }
+
+    /// Archive keys paired with the archive's PeerId, in the order shares are sent out.
+    pub(crate) fn get_archive_keys(&self) -> Vec<(PeerId, G2)> {
+        let archives = self.archive_peers.lock().unwrap();
+        let keys = self.opener_pubkeys.lock().unwrap();
+        archives.iter().copied().zip(keys.iter().cloned()).collect()
+    }
+
+    /// Registers an archive and its key together, so the two lists cannot drift apart when
+    /// an archive registers twice.
+    pub(crate) fn add_archive_key(&self, peer_id: PeerId, opener_pubkey: G2) {
+        let mut archives = self.archive_peers.lock().unwrap();
+        let mut keys = self.opener_pubkeys.lock().unwrap();
+        match archives.iter().position(|p| *p == peer_id) {
+            Some(i) => {
+                log::warn!("Archive {peer_id} registered again, replacing its opener key");
+                keys[i] = opener_pubkey;
+            }
+            None => {
+                archives.push(peer_id);
+                keys.push(opener_pubkey);
+            }
+        }
     }
 
     pub(crate) fn verify_key_package(
@@ -137,10 +154,6 @@ impl Storage {
         }
         self.to_file()?;
         Ok(())
-    }
-
-    pub fn add_opener_pubkey(&self, opener_pubkey: G2) {
-        self.opener_pubkeys.lock().unwrap().push(opener_pubkey);
     }
 
     //Stores a Slice of EncSharePairings for further use

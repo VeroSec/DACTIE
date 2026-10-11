@@ -676,6 +676,22 @@ impl MyBehaviour {
                 request_response::Message::Request {
                     request, channel, ..
                 } => {
+                    // A joining peer has no group key yet, so it asks unsigned. The key is public;
+                    // answering over this connection authenticates it as this archive's key.
+                    if let RequestMessage::RequestOpenerKeys = request.body {
+                        self.request_response
+                            .send_response(
+                                channel,
+                                Response {
+                                    body: ResponseMessage::ArchiveOpenerKey {
+                                        elgamal_pk: my_open_mls.get_elgamal_pubkey()?,
+                                    },
+                                    signature: None,
+                                },
+                            )
+                            .map_err(|_| SendResponseError)?;
+                        return Ok(());
+                    }
                     //Verify Group Signature
                     let (request_body, _) = match my_open_mls.verify(request) {
                         Ok(message) => message,

@@ -427,7 +427,7 @@ impl MyBehaviour {
                                 let (n, group_key) = storage.return_new_n(peer, id, identity);
                                 //Archives can only be created in the init phase
                                 let res = if with_signature && !storage.get_archive_init_mode() {
-                                    let opener_pubkeys = storage.get_opener_pubkeys();
+                                    let opener_pubkeys = storage.get_archive_keys();
                                     ResponseMessage::IdentityVerified {
                                         id,
                                         n,
@@ -538,8 +538,7 @@ impl MyBehaviour {
                                 {
                                     storage.allow_peer(&keypackage, peer)?;
                                     my_open_mls.insert_foreign_kp(peer, keypackage);
-                                    storage.add_archive(peer);
-                                    storage.add_opener_pubkey(elgamal_pk);
+                                    storage.add_archive_key(peer, elgamal_pk);
                                     log::info!(
                                         "Archive '{}' registered ({} total)",
                                         peer,
@@ -660,7 +659,7 @@ impl MyBehaviour {
 
                         RequestMessage::RequestOpenerKeys => {
                             let res = ResponseMessage::OpenerKeys {
-                                opener_pubkeys: storage.get_opener_pubkeys(),
+                                opener_pubkeys: storage.get_archive_keys(),
                             };
                             self.request_response
                                 .send_response(channel, my_open_mls.sign(res)?)

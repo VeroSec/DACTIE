@@ -33,6 +33,41 @@ use dactie_utils::mls_wrapper::MyOpenMLSError::{
 use dactie_utils::mls_wrapper::{MyOpenMLSError, MyOpenMls};
 use dactie_utils::shared_structs::*;
 
+/// Archive keys handed out by the authority, held until each archive confirms its own key.
+///
+/// Lives outside MyBehaviour for the same reason as `archive_query_timing`.
+pub(crate) mod archive_keys {
+    use libp2p::PeerId;
+    use std::collections::HashSet;
+    use std::sync::{Mutex, OnceLock};
+
+    /// Archives this peer trusts, configured out of band (`--archive`). Empty: no verification.
+    pub(crate) static TRUSTED: OnceLock<Vec<PeerId>> = OnceLock::new();
+
+    /// The join waits here while the archives confirm their keys.
+    pub(crate) struct PendingJoin {
+        pub(crate) authority: PeerId,
+        pub(crate) id: usize,
+        pub(crate) n: thressig::G1,
+        pub(crate) group_key: Vec<u8>,
+    }
+
+    pub(crate) struct Pending {
+        pub(crate) keys: Vec<(PeerId, thressig::G2)>,
+        pub(crate) confirmed: HashSet<PeerId>,
+        pub(crate) join: Option<PendingJoin>,
+    }
+
+    pub(crate) fn pending() -> &'static Mutex<Option<Pending>> {
+        static P: OnceLock<Mutex<Option<Pending>>> = OnceLock::new();
+        P.get_or_init(|| Mutex::new(None))
+    }
+
+    pub(crate) fn trusted() -> &'static [PeerId] {
+        TRUSTED.get().map(Vec::as_slice).unwrap_or(&[])
+    }
+}
+
 /// Outstanding archive queries, keyed by request id, for round-trip timing.
 ///
 /// This lives outside MyBehaviour because the NetworkBehaviour derive admits only
@@ -79,6 +114,7 @@ impl MyBehaviour {
         keypair: &Keypair,
         boot_peer_id_option: Option<PeerId>,
         boot_peer_addr: Multiaddr,
+        archives: &[(PeerId, Multiaddr)],
     ) -> Result<MyBehaviour, MyBehaviourError> {
         // To content-address message, we can take the hash of message and use it as an ID.
         let message_id_fn = |message: &gossipsub::Message| {
@@ -128,6 +164,10 @@ impl MyBehaviour {
         if let Some(boot_peer_id) = boot_peer_id_option {
             // Add the bootnodes to the local routing table.
             kademlia.add_address(&boot_peer_id, boot_peer_addr);
+        }
+        // Trusted archives are dialed directly to confirm their keys.
+        for (archive, addr) in archives {
+            kademlia.add_address(archive, addr.clone());
         }
 
         let request_response = request_response::json::Behaviour::new(
@@ -833,6 +873,125 @@ impl MyBehaviour {
     }
 
     /// Key Package Requests, Identity Registration and Archive Updates
+    /// Accepts the authority's archive keys only after every trusted archive has confirmed its
+    /// own key, so a dishonest authority cannot hand out keys it holds and open signatures alone.
+    fn verify_archive_keys(
+        &mut self,
+        keys: Vec<(PeerId, thressig::G2)>,
+        join: Option<archive_keys::PendingJoin>,
+        my_open_mls: &MyOpenMls,
+    ) -> Result<(), AbstSwarmError> {
+        let trusted = archive_keys::trusted();
+        if trusted.is_empty() {
+            log::warn!(
+                "No trusted archives configured (--archive): accepting the authority's archive keys unverified"
+            );
+            return self.accept_archive_keys(keys, join, my_open_mls);
+        }
+        let mut listed = std::collections::HashSet::new();
+        for (archive, _) in &keys {
+            if !trusted.contains(archive) || !listed.insert(*archive) {
+                log::error!(
+                    "Authority listed archive {archive}, which is untrusted or listed twice; not using its keys"
+                );
+                return Ok(());
+            }
+        }
+        for (archive, _) in &keys {
+            self.request_response.send_request(
+                archive,
+                Request {
+                    body: RequestMessage::RequestOpenerKeys,
+                    signature: None,
+                },
+            );
+        }
+        *archive_keys::pending().lock().unwrap() = Some(archive_keys::Pending {
+            keys,
+            confirmed: std::collections::HashSet::new(),
+            join,
+        });
+        Ok(())
+    }
+
+    fn confirm_archive_key(
+        &mut self,
+        archive: PeerId,
+        elgamal_pk: thressig::G2,
+        my_open_mls: &MyOpenMls,
+    ) -> Result<(), AbstSwarmError> {
+        let ready = {
+            let mut guard = archive_keys::pending().lock().unwrap();
+            let Some(pending) = guard.as_mut() else {
+                return Ok(());
+            };
+            let matches = match pending.keys.iter().find(|(p, _)| *p == archive) {
+                Some((_, claimed)) => *claimed == elgamal_pk,
+                None => return Ok(()),
+            };
+            if !matches {
+                log::error!(
+                    "Archive {archive} reports a different key than the authority; not using the authority's keys"
+                );
+                *guard = None;
+                return Ok(());
+            }
+            pending.confirmed.insert(archive);
+            if pending.confirmed.len() < pending.keys.len() {
+                return Ok(());
+            }
+            guard.take()
+        };
+        if let Some(pending) = ready {
+            log::info!("All {} archive keys confirmed by the archives", pending.keys.len());
+            self.accept_archive_keys(pending.keys, pending.join, my_open_mls)?;
+        }
+        Ok(())
+    }
+
+    fn accept_archive_keys(
+        &mut self,
+        keys: Vec<(PeerId, thressig::G2)>,
+        join: Option<archive_keys::PendingJoin>,
+        my_open_mls: &MyOpenMls,
+    ) -> Result<(), AbstSwarmError> {
+        let keys: Vec<thressig::G2> = keys.into_iter().map(|(_, key)| key).collect();
+        my_open_mls.add_opener_pubkeys(&keys)?;
+        if let Some(join) = join {
+            self.send_join_key_material(join, my_open_mls)?;
+        }
+        Ok(())
+    }
+
+    fn send_join_key_material(
+        &mut self,
+        join: archive_keys::PendingJoin,
+        my_open_mls: &MyOpenMls,
+    ) -> Result<(), AbstSwarmError> {
+        let (g_sk, h_sk, pi1, pi2, enc_shares, commits) =
+            my_open_mls.generate_join_key_material(join.id, join.n, join.group_key)?;
+        my_open_mls.set_id(join.id)?;
+        let keypackage = my_open_mls.generate_key_package()?;
+        let keypackage =
+            bincode::serialize(&keypackage).map_err(|x| SerializationError(x.to_string()))?;
+        self.request_response.send_request(
+            &join.authority,
+            Request {
+                body: RequestMessage::JoinKeyMaterial {
+                    g_sk,
+                    h_sk,
+                    pi1,
+                    pi2,
+                    enc_shares,
+                    commits,
+                    keypackage,
+                },
+                signature: None,
+            },
+        );
+        Ok(())
+    }
+
     fn handle_request_response_event(
         &mut self,
         request_event: request_response::Event<Request, Response>,
@@ -962,36 +1121,16 @@ impl MyBehaviour {
                             opener_pubkeys,
                         } => {
                             log::info!("Identity was verified, proceeding with memkey creation.");
-                            let n = match n {
-                                Some(val) => val,
-                                None => return Ok(()),
+                            let (Some(n), Some(opener_pubkeys)) = (n, opener_pubkeys) else {
+                                return Ok(());
                             };
-                            let opener_pubkeys = match opener_pubkeys {
-                                Some(val) => val,
-                                None => return Ok(()),
+                            let join = archive_keys::PendingJoin {
+                                authority: peer,
+                                id,
+                                n,
+                                group_key,
                             };
-                            my_open_mls.add_opener_pubkeys(&opener_pubkeys)?;
-                            let (g_sk, h_sk, pi1, pi2, enc_shares, commits) =
-                                my_open_mls.generate_join_key_material(id, n, group_key)?;
-                            my_open_mls.set_id(id)?;
-                            let keypackage = my_open_mls.generate_key_package()?;
-                            let keypackage = bincode::serialize(&keypackage)
-                                .map_err(|x| SerializationError(x.to_string()))?;
-                            self.request_response.send_request(
-                                &peer,
-                                Request {
-                                    body: RequestMessage::JoinKeyMaterial {
-                                        g_sk,
-                                        h_sk,
-                                        pi1,
-                                        pi2,
-                                        enc_shares,
-                                        commits,
-                                        keypackage,
-                                    },
-                                    signature: None,
-                                },
-                            );
+                            self.verify_archive_keys(opener_pubkeys, Some(join), my_open_mls)?;
                         }
                         ResponseMessage::MemKey { partial_memkey } => {
                             if let Some(memkey) = partial_memkey {
@@ -1001,7 +1140,10 @@ impl MyBehaviour {
                         ResponseMessage::PeerAdded => {}
                         ResponseMessage::OpenerKeys { opener_pubkeys } => {
                             log::info!("Got Opener Keys.");
-                            my_open_mls.add_opener_pubkeys(&opener_pubkeys)?;
+                            self.verify_archive_keys(opener_pubkeys, None, my_open_mls)?;
+                        }
+                        ResponseMessage::ArchiveOpenerKey { elgamal_pk } => {
+                            self.confirm_archive_key(peer, elgamal_pk, my_open_mls)?;
                         }
                     }
                 }

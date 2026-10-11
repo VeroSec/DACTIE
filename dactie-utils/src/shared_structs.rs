@@ -123,7 +123,9 @@ pub enum ResponseMessage {
         id: usize,
         n: Option<thressig::G1>,
         group_key: Vec<u8>,
-        opener_pubkeys: Option<Vec<thressig::G2>>, //In theory the pubkeys should be fetched over another channel, to take power from the Authority
+        // Each archive's ElGamal key, paired with the archive's PeerId so that a joining peer
+        // can check the key with the archive itself instead of trusting the authority.
+        opener_pubkeys: Option<Vec<(PeerId, thressig::G2)>>,
     },
     MemKey {
         partial_memkey: Option<Vec<u8>>,
@@ -136,7 +138,11 @@ pub enum ResponseMessage {
         enc_share_peer_pairings: Vec<u8>,
     },
     OpenerKeys {
-        opener_pubkeys: Vec<thressig::G2>,
+        opener_pubkeys: Vec<(PeerId, thressig::G2)>,
+    },
+    // An archive's own ElGamal key, sent by the archive over its authenticated connection.
+    ArchiveOpenerKey {
+        elgamal_pk: thressig::G2,
     },
     // The archive queued the opening request for its operator to approve.
     OpenPending,

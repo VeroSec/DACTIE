@@ -73,5 +73,8 @@ This section explains the docker setup. If docker is choosen the part above can 
 
 For automated tests only, start an archive with `--auto-approve-open` to answer requests without approval.
 
+### Trusted archives (Peer):
+Members encrypt their key shares to the archives' keys, which the authority hands out. So that a dishonest authority cannot substitute keys it holds, start every peer with each archive's address and PeerId, published out of band: `--archive /ip4/<ip>/tcp/<port>/p2p/<archive PeerId>` (repeat per archive). The peer then confirms every key with its archive before joining, and refuses to join on a mismatch. Without `--archive`, the peer logs a warning and uses the authority's keys unverified.
+
 ### Other functions
 Other network functions like adding more group members, etc are described in the ReadMe.md in dactie-peer.
