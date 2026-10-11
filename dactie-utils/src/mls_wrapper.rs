@@ -1107,6 +1107,11 @@ impl MyOpenMls {
         ciphertext: Vec<u8>,
         ser_nonce: Vec<u8>,
     ) -> Result<(Option<usize>, Vec<u8>), MyOpenMLSError> {
+        // Nonce and ciphertext arrive from the network: a malformed or undecryptable
+        // message must be rejected, not crash the node (from_slice panics on a bad length).
+        if ser_nonce.len() != 12 {
+            return Err(DecryptionError);
+        }
         let nonce = GenericArray::from_slice(&ser_nonce[..]);
         let group_id = GroupId::from_slice(&group_id_vec);
         let group_number = {
@@ -1121,7 +1126,7 @@ impl MyOpenMls {
         let plaintext: Vec<u8> = bincode::deserialize(
             &aes_cipher
                 .decrypt(nonce, ciphertext.as_ref())
-                .expect("Error"),
+                .map_err(|_| DecryptionError)?,
         )
         .map_err(|e| SerializationError(e.to_string()))?;
         Ok((group_number, plaintext))
@@ -1410,6 +1415,8 @@ pub enum MyOpenMLSError {
     PS16Error(#[from] thressig::ThressigError),
     #[error("CommonGroup Not Set")]
     CommonGroupUndefinedError,
+    #[error("Could not decrypt the group message (malformed, or encrypted under another epoch's key)")]
+    DecryptionError,
     #[error("The path to the keystore is not valid or the file is corrupted")]
     KeyMaterialFileError,
 }
