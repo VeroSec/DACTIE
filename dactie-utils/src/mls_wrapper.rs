@@ -452,7 +452,6 @@ impl MyOpenMls {
             })?;
 
         let secret = group.export_secret(&self.provider, "Test", "Test".as_bytes(), 32)?;
-        println!("Secret: {secret:?}");
         let key = Key::<Aes256Gcm>::from_slice(&secret);
         let aes_cipher = Aes256Gcm::new(key);
 
@@ -1333,7 +1332,6 @@ impl GroupStorage {
         let secret = self
             .group
             .export_secret(provider, "Test", "Test".as_bytes(), 32)?;
-        println!("Secret: {secret:?}");
         let key = Key::<Aes256Gcm>::from_slice(&secret);
         let aes_cipher = Aes256Gcm::new(key);
         self.aes_cipher = aes_cipher;

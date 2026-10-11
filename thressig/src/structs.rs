@@ -14,13 +14,20 @@ use std::str::FromStr;
 // instead. Changing them changes the wire format: every peer must agree.
 mod g1_compressed {
     use super::*;
+    use amcl_wrapper::constants::{GroupG1_SIZE, G1_COMP_BYTE_SIZE};
+    use amcl_wrapper::types::GroupG1;
     use serde::de::Error as DeError;
     pub fn serialize<S: serde::Serializer>(g: &G1, s: S) -> Result<S::Ok, S::Error> {
         s.serialize_bytes(&g.to_bytes(true))
     }
     pub fn deserialize<'de, D: serde::Deserializer<'de>>(d: D) -> Result<G1, D::Error> {
         let v: Vec<u8> = Vec::deserialize(d)?;
-        G1::from_bytes(&v).map_err(|e| D::Error::custom(format!("G1: {:?}", e)))
+        // amcl_wrapper's G1::from_bytes prints every element it decodes to stdout, which puts
+        // key material into logs. Same length check and decoding, without the print.
+        if v.len() != GroupG1_SIZE && v.len() != G1_COMP_BYTE_SIZE {
+            return Err(D::Error::custom(format!("G1: unexpected length {}", v.len())));
+        }
+        Ok(G1::from(GroupG1::frombytes(&v)))
     }
 }
 
