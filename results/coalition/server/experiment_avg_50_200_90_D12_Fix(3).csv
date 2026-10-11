@@ -1,0 +1,5 @@
+total_peers,correct_receiver,other_peer,no_p_peers,delivery_ratio
+50,12.4,36.6,19,1
+100,9.6,89.4,37,1
+150,10.6,138.4,57,1
+200,9.6,189.4,82,1
