@@ -57,6 +57,8 @@ pub struct MyOpenMls {
     common_group: Mutex<Option<GroupId>>,
     authority_id: PeerId,
     opener_pubkeys: Mutex<Vec<thressig::G2>>,
+    // Archives needed to open a signature, set by the authority for the whole network.
+    opener_threshold: Mutex<Option<usize>>,
 }
 
 impl MyOpenMls {
@@ -98,6 +100,7 @@ impl MyOpenMls {
             common_group,
             authority_id,
             opener_pubkeys: Mutex::new(Vec::new()),
+            opener_threshold: Mutex::new(None),
         })
     }
 
@@ -108,11 +111,13 @@ impl MyOpenMls {
         grpkey: Vec<u8>,
     ) -> Result<JoinKeyMaterial, MyOpenMLSError> {
         let opener_pubkeys = self.opener_pubkeys.lock().unwrap().clone();
+        let threshold = self.get_opener_threshold()?;
         let res = self.key_store.lock().unwrap().generate_join_key_material(
             id,
             n,
             grpkey,
             &opener_pubkeys,
+            threshold,
         );
         let mut path = self.load_files_path.clone();
         path.push("key_material.json");
@@ -132,7 +137,8 @@ impl MyOpenMls {
         let grpkey = key_store.get_grpkey().ok_or(GPKUndefinedError)?;
         let sk = key_store.get_memkey().ok_or(GSKUndefinedError)?.sk;
         let id = key_store.get_id().ok_or(IDUndefinedError)?;
-        Ok(key_store.generate_enc_shares(grpkey, sk, id, &opener_pubkeys))
+        let threshold = self.get_opener_threshold()?;
+        Ok(key_store.generate_enc_shares(grpkey, sk, id, &opener_pubkeys, threshold))
     }
 
     //Generate Keypair used for encryption of the shares
@@ -218,6 +224,17 @@ impl MyOpenMls {
             .to_file(path)
             .map_err(|_| KeyMaterialFileError)?;
         Ok(())
+    }
+
+    pub fn set_opener_threshold(&self, threshold: usize) {
+        *self.opener_threshold.lock().unwrap() = Some(threshold);
+    }
+
+    pub fn get_opener_threshold(&self) -> Result<usize, MyOpenMLSError> {
+        self.opener_threshold
+            .lock()
+            .unwrap()
+            .ok_or(ThresholdUndefinedError)
     }
 
     pub fn add_opener_pubkeys(
@@ -1409,6 +1426,8 @@ pub enum MyOpenMLSError {
     IDUndefinedError,
     #[error("Elgamalkeys not set")]
     ElgamalUndefinedError,
+    #[error("Opening threshold not set")]
+    ThresholdUndefinedError,
     #[error("Group Signature Operation failed: {0}")]
     PS16Error(#[from] thressig::ThressigError),
     #[error("CommonGroup Not Set")]

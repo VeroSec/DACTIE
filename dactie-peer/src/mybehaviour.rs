@@ -54,6 +54,7 @@ pub(crate) mod archive_keys {
 
     pub(crate) struct Pending {
         pub(crate) keys: Vec<(PeerId, thressig::G2)>,
+        pub(crate) threshold: usize,
         pub(crate) confirmed: HashSet<PeerId>,
         pub(crate) join: Option<PendingJoin>,
     }
@@ -878,15 +879,29 @@ impl MyBehaviour {
     fn verify_archive_keys(
         &mut self,
         keys: Vec<(PeerId, thressig::G2)>,
+        threshold: usize,
         join: Option<archive_keys::PendingJoin>,
         my_open_mls: &MyOpenMls,
     ) -> Result<(), AbstSwarmError> {
+        if threshold == 0 || threshold > keys.len() {
+            log::error!(
+                "Authority sent threshold {threshold} for {} archives; not using its keys",
+                keys.len()
+            );
+            return Ok(());
+        }
+        if threshold <= keys.len() / 2 {
+            log::warn!(
+                "Opening threshold {threshold} of {}: a minority of archives can open signatures",
+                keys.len()
+            );
+        }
         let trusted = archive_keys::trusted();
         if trusted.is_empty() {
             log::warn!(
                 "No trusted archives configured (--archive): accepting the authority's archive keys unverified"
             );
-            return self.accept_archive_keys(keys, join, my_open_mls);
+            return self.accept_archive_keys(keys, threshold, join, my_open_mls);
         }
         let mut listed = std::collections::HashSet::new();
         for (archive, _) in &keys {
@@ -908,6 +923,7 @@ impl MyBehaviour {
         }
         *archive_keys::pending().lock().unwrap() = Some(archive_keys::Pending {
             keys,
+            threshold,
             confirmed: std::collections::HashSet::new(),
             join,
         });
@@ -944,7 +960,7 @@ impl MyBehaviour {
         };
         if let Some(pending) = ready {
             log::info!("All {} archive keys confirmed by the archives", pending.keys.len());
-            self.accept_archive_keys(pending.keys, pending.join, my_open_mls)?;
+            self.accept_archive_keys(pending.keys, pending.threshold, pending.join, my_open_mls)?;
         }
         Ok(())
     }
@@ -952,10 +968,12 @@ impl MyBehaviour {
     fn accept_archive_keys(
         &mut self,
         keys: Vec<(PeerId, thressig::G2)>,
+        threshold: usize,
         join: Option<archive_keys::PendingJoin>,
         my_open_mls: &MyOpenMls,
     ) -> Result<(), AbstSwarmError> {
         let keys: Vec<thressig::G2> = keys.into_iter().map(|(_, key)| key).collect();
+        my_open_mls.set_opener_threshold(threshold);
         my_open_mls.add_opener_pubkeys(&keys)?;
         if let Some(join) = join {
             self.send_join_key_material(join, my_open_mls)?;
@@ -1119,9 +1137,12 @@ impl MyBehaviour {
                             n,
                             group_key,
                             opener_pubkeys,
+                            threshold,
                         } => {
                             log::info!("Identity was verified, proceeding with memkey creation.");
-                            let (Some(n), Some(opener_pubkeys)) = (n, opener_pubkeys) else {
+                            let (Some(n), Some(opener_pubkeys), Some(threshold)) =
+                                (n, opener_pubkeys, threshold)
+                            else {
                                 return Ok(());
                             };
                             let join = archive_keys::PendingJoin {
@@ -1130,7 +1151,12 @@ impl MyBehaviour {
                                 n,
                                 group_key,
                             };
-                            self.verify_archive_keys(opener_pubkeys, Some(join), my_open_mls)?;
+                            self.verify_archive_keys(
+                                opener_pubkeys,
+                                threshold,
+                                Some(join),
+                                my_open_mls,
+                            )?;
                         }
                         ResponseMessage::MemKey { partial_memkey } => {
                             if let Some(memkey) = partial_memkey {
@@ -1138,9 +1164,16 @@ impl MyBehaviour {
                             }
                         }
                         ResponseMessage::PeerAdded => {}
-                        ResponseMessage::OpenerKeys { opener_pubkeys } => {
+                        ResponseMessage::OpenerKeys {
+                            opener_pubkeys,
+                            threshold,
+                        } => {
                             log::info!("Got Opener Keys.");
-                            self.verify_archive_keys(opener_pubkeys, None, my_open_mls)?;
+                            let Some(threshold) = threshold else {
+                                log::error!("Authority sent no opening threshold; end its archive init phase first");
+                                return Ok(());
+                            };
+                            self.verify_archive_keys(opener_pubkeys, threshold, None, my_open_mls)?;
                         }
                         ResponseMessage::ArchiveOpenerKey { elgamal_pk } => {
                             self.confirm_archive_key(peer, elgamal_pk, my_open_mls)?;

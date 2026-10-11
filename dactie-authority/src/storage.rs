@@ -1,6 +1,7 @@
 use crate::storage::MyStorageError::{
     CreateMemkeyError, FileAccessError, GetNError, IDNotinGMLError, KeyPackageSenderError,
-    SerializationError, SignatureNotinIDPairMapError, SignatureNotinPeerPairMapError,
+    NotEnoughPartialOpeningsError, SerializationError, SignatureNotinIDPairMapError,
+    ThresholdNotSetError,
 };
 use dactie_utils::key_store::StoredKeyMaterial;
 use dactie_utils::mls_wrapper::MyOpenMls;
@@ -33,6 +34,10 @@ pub(crate) struct Storage {
     allowed_peers: Mutex<Vec<PeerId>>,
     archive_init_mode: Mutex<bool>,
     opener_pubkeys: Mutex<Vec<G2>>,
+    // Archives needed to open a signature. Fixed when the archive init phase ends, because
+    // every member's shares are created for this value.
+    #[serde(default)]
+    threshold: Mutex<Option<usize>>,
     #[serde_as(as = "Mutex<HashMap<DisplayFromStr, _>>")]
     signature_enc_id_pairing_map: Mutex<HashMap<Signature, Vec<(usize, EncSharePairing)>>>,
     #[serde_as(as = "Mutex<HashMap<DisplayFromStr, _>>")]
@@ -70,6 +75,7 @@ impl Storage {
                 archive_peers: Mutex::new(Vec::new()),
                 archive_init_mode: Mutex::new(true),
                 opener_pubkeys: Mutex::new(Vec::new()),
+                threshold: Mutex::new(None),
                 signature_enc_id_pairing_map: Mutex::new(HashMap::new()),
                 signature_enc_peer_pairing_map: Mutex::new(HashMap::new()),
             },
@@ -88,6 +94,30 @@ impl Storage {
     pub(crate) fn end_init_archive(&self) {
         let mut mode = self.archive_init_mode.lock().unwrap();
         *mode = false;
+    }
+
+    pub(crate) fn get_threshold(&self) -> Option<usize> {
+        *self.threshold.lock().unwrap()
+    }
+
+    pub(crate) fn set_threshold(&self, threshold: usize) {
+        *self.threshold.lock().unwrap() = Some(threshold);
+    }
+
+    /// Distinct archives that have contributed a partial opening for this signature.
+    fn contributing_archives(&self, signature: &Signature) -> usize {
+        self.signature_enc_id_pairing_map
+            .lock()
+            .unwrap()
+            .get(signature)
+            .map(|pairings| {
+                pairings
+                    .iter()
+                    .map(|(_, p)| p.index)
+                    .collect::<HashSet<_>>()
+                    .len()
+            })
+            .unwrap_or(0)
     }
 
     pub(crate) fn get_opener_pubkeys(&self) -> Vec<G2> {
@@ -180,7 +210,7 @@ impl Storage {
             .extend_from_slice(enc_share_peer_pairings);
     }
 
-    //Retrieves all EncShares of a signature, This function removes the signature from the pairing map
+    //Retrieves all EncShares of a signature
     fn open_ids(
         &self,
         signature: &Signature,
@@ -190,7 +220,7 @@ impl Storage {
             .signature_enc_id_pairing_map
             .lock()
             .unwrap()
-            .remove(signature)
+            .get(signature)
             .ok_or(SignatureNotinIDPairMapError)?
             .clone();
 
@@ -218,7 +248,7 @@ impl Storage {
         Ok(result)
     }
 
-    //Retrieves all EncShares of a signature. This function removes the signature from the pairing map
+    //Retrieves all EncShares of a signature
     fn open_peers(
         &self,
         signature: &Signature,
@@ -228,9 +258,9 @@ impl Storage {
             .signature_enc_peer_pairing_map
             .lock()
             .unwrap()
-            .remove(signature)
-            .ok_or(SignatureNotinPeerPairMapError)?
-            .clone();
+            .get(signature)
+            .cloned()
+            .unwrap_or_default();
         let gml = HashSet::from_iter(self.allowed_peers.lock().unwrap().clone());
 
         let all_sj: HashMap<usize, Vec<(PeerId, thressig::GT)>> = enc_share_pairings
@@ -249,10 +279,21 @@ impl Storage {
         signature: Signature,
         my_open_mls: &MyOpenMls,
     ) -> Result<OpenSignatureResult, MyStorageError> {
+        // Fewer partial openings than the threshold cannot reconstruct anything, so keep
+        // collecting until enough archives have approved.
+        let need = self.get_threshold().ok_or(ThresholdNotSetError)?;
+        let have = self.contributing_archives(&signature);
+        if have < need {
+            return Err(NotEnoughPartialOpeningsError { have, need });
+        }
         let res = (
             self.open_ids(&signature, my_open_mls)?,
             self.open_peers(&signature, my_open_mls)?,
         );
+        if !res.0.is_empty() {
+            self.signature_enc_id_pairing_map.lock().unwrap().remove(&signature);
+            self.signature_enc_peer_pairing_map.lock().unwrap().remove(&signature);
+        }
         self.to_file()?;
         Ok(res)
     }
@@ -374,8 +415,11 @@ pub enum MyStorageError {
     #[error("Signature could not be found in SignatureEncIDMap")]
     SignatureNotinIDPairMapError,
 
-    #[error("Signature could not be found in SignatureEncPeerMap")]
-    SignatureNotinPeerPairMapError,
+    #[error("Only {have} of the {need} archives needed have approved this opening")]
+    NotEnoughPartialOpeningsError { have: usize, need: usize },
+
+    #[error("The opening threshold is not set; end the archive init phase first")]
+    ThresholdNotSetError,
 
     #[error("Got a keypackage with a different identity from a peer. Sender PeerID:{sender_peer_id}, KeyPackage PeerID: {peer_id}")]
     KeyPackageSenderError {

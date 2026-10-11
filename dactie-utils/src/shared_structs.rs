@@ -126,6 +126,8 @@ pub enum ResponseMessage {
         // Each archive's ElGamal key, paired with the archive's PeerId so that a joining peer
         // can check the key with the archive itself instead of trusting the authority.
         opener_pubkeys: Option<Vec<(PeerId, thressig::G2)>>,
+        // Number of archives needed to open a signature; members split their key accordingly.
+        threshold: Option<usize>,
     },
     MemKey {
         partial_memkey: Option<Vec<u8>>,
@@ -139,6 +141,7 @@ pub enum ResponseMessage {
     },
     OpenerKeys {
         opener_pubkeys: Vec<(PeerId, thressig::G2)>,
+        threshold: Option<usize>,
     },
     // An archive's own ElGamal key, sent by the archive over its authenticated connection.
     ArchiveOpenerKey {

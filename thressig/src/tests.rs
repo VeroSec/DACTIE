@@ -149,3 +149,51 @@ fn test_signature_bincode_roundtrip() {
     assert_eq!(sig.s, back.s, "s did not survive the round trip");
     assert_eq!(sig, back);
 }
+
+/// With threshold t, partial openings from t - 1 openers must not identify the signer.
+#[test]
+fn test_opening_needs_threshold_openers() {
+    let mut gml: HashMap<usize, String> = HashMap::new();
+    let (grpkey, mgrkey) = setup();
+    let (opener_sec_keys, opener_pub_keys): (Vec<_>, Vec<_>) =
+        (0..4).map(|_| elgamal_keygen(&grpkey.g_tilde)).unzip();
+    let threshold = 3;
+    let n = join_mgr1();
+    let id = 7usize;
+    let (g_sk, h_sk, pi1, pi2, sk, enc_shares, commits) =
+        join_mem1(id, n.clone(), &grpkey, threshold, &opener_pub_keys);
+    let partial_memkey = join_mgr2(
+        id,
+        JoinMgr2Args {
+            gml: &mut gml,
+            name: "member".to_string(),
+            mgrkey: &mgrkey,
+            grpkey: &grpkey,
+            n: &n,
+            g_sk: &g_sk,
+            h_sk: &h_sk,
+            opener_pubkeys: &opener_pub_keys,
+            commits: &commits,
+            pi1,
+            pi2,
+            enc_shares: &enc_shares,
+        },
+    )
+    .unwrap();
+    let memkey = join_mem2(&sk, &partial_memkey);
+    let sig = sign(&memkey, &grpkey, &"msg".as_bytes()).unwrap();
+    let members: HashSet<usize> = gml.keys().copied().collect();
+
+    let partial = |openers: usize| {
+        let mut all_sj = HashMap::new();
+        for j in 0..openers {
+            let p = create_open_pairing(&sig, enc_shares[j].clone(), &opener_sec_keys[j]);
+            all_sj.insert(p.index, vec![(id, p.pairing)]);
+        }
+        all_sj
+    };
+
+    assert!(open(&sig, &grpkey, &members, &partial(threshold - 1)).is_empty());
+    assert_eq!(open(&sig, &grpkey, &members, &partial(threshold)), vec![id]);
+    assert_eq!(open(&sig, &grpkey, &members, &partial(4)), vec![id]);
+}

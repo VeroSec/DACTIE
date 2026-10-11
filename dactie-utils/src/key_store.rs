@@ -89,9 +89,9 @@ impl StoredKeyMaterial {
         n: thressig::G1,
         grpkey: Vec<u8>,
         opener_pubkeys: &[G2],
+        threshold: usize,
     ) -> JoinKeyMaterial {
         let grpkey = Grpkey::from_bytes(&grpkey);
-        let threshold = opener_pubkeys.len() / 2;
         let (g_sk, h_sk, pi1, pi2, sk, enc_shares, commits) =
             join_mem1(id, n, &grpkey, threshold, opener_pubkeys);
         self.memkey = Some(Memkey {
@@ -110,8 +110,8 @@ impl StoredKeyMaterial {
         sk: FieldElement,
         id: usize,
         opener_pubkeys: &[G2],
+        threshold: usize,
     ) -> (Vec<EncShare>, Vec<thressig::G1>) {
-        let threshold = opener_pubkeys.len() / 2;
         create_enc_shares(&id, &grpkey, threshold, opener_pubkeys, &sk)
     }
 

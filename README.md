@@ -46,6 +46,8 @@ This section explains the docker setup. If docker is choosen the part above can 
 ### End the Archive Initialization Progress(Authority):
 `end_init_archive`
 
+This also fixes the opening threshold: how many archives must approve before a signature can be opened. It defaults to a strict majority of the registered archives; start the authority with `--threshold <t>` to choose another value between 1 and the number of archives. Every member splits its key for this threshold, so it cannot change afterwards.
+
 ### Register Identity for each peer (Peer1):
 1. `register_identity <peer_id_aa> <peer_name>`, peer name can be anything for example peer1 peer2
 

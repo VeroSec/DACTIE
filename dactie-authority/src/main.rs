@@ -36,6 +36,11 @@ struct Args {
     /// Explicit external address to advertise (e.g. /ip4/10.244.192.116/tcp/10001)
     #[arg(long)]
     advertise_addr: Option<Multiaddr>,
+
+    /// Archives needed to open a signature. Fixed when the archive init phase ends;
+    /// defaults to a strict majority of the registered archives.
+    #[arg(long)]
+    threshold: Option<usize>,
 }
 
 #[tokio::main]
@@ -68,6 +73,24 @@ async fn main() -> Result<(), Box<dyn Error>> {
         key_material.to_file(km_path)?;
         (storage, key_material)
     };
+
+    // Deployments whose init phase ended before the threshold was stored created every
+    // member's shares with half the archives (rounded down), so keep using that.
+    if !storage.get_archive_init_mode() && storage.get_threshold().is_none() {
+        let legacy = (storage.get_archive_peer_ids().len() / 2).max(1);
+        log::warn!("No opening threshold stored; using the legacy value {legacy}");
+        storage.set_threshold(legacy);
+        storage.to_file()?;
+    }
+    if let Some(threshold) = args.threshold {
+        match storage.get_threshold() {
+            Some(fixed) if !storage.get_archive_init_mode() && fixed != threshold => log::warn!(
+                "--threshold {threshold} ignored: the init phase already fixed the threshold at {fixed}"
+            ),
+            _ if storage.get_archive_init_mode() => storage.set_threshold(threshold),
+            _ => {}
+        }
+    }
 
     log::info!(
         "Archives registered: {}, init phase: {}",

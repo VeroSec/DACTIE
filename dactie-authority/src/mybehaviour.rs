@@ -265,6 +265,13 @@ impl MyBehaviour {
         Ok(())
     }
 
+    /// A member must create one share per archive and Feldman commitments for exactly the
+    /// network's threshold, or it could pick a threshold that lets fewer archives open it.
+    fn shares_match_network(storage: &Storage, enc_shares: &[EncShare], commits: &[thressig::G1]) -> bool {
+        storage.get_threshold() == Some(commits.len())
+            && enc_shares.len() == storage.get_opener_pubkeys().len()
+    }
+
     fn store_open_pairings(
         storage: &Storage,
         archive: PeerId,
@@ -324,10 +331,29 @@ impl MyBehaviour {
     ) -> Result<(), AbstSwarmError> {
         let pubkeys = &storage.get_opener_pubkeys();
         if pubkeys.len() > 1 {
+            let archives = pubkeys.len();
+            // Default: a strict majority of archives must approve an opening.
+            let threshold = storage.get_threshold().unwrap_or(archives / 2 + 1);
+            if threshold == 0 || threshold > archives {
+                log::error!(
+                    "Threshold {threshold} is invalid for {archives} archives; restart with --threshold between 1 and {archives}"
+                );
+                return Ok(());
+            }
+            if threshold <= archives / 2 {
+                log::warn!("Threshold {threshold} of {archives}: a minority of archives can open signatures");
+            }
+            if threshold == archives {
+                log::warn!("Threshold {threshold} of {archives}: one unavailable archive blocks every opening");
+            }
+            storage.set_threshold(threshold);
+            my_open_mls.set_opener_threshold(threshold);
             storage.end_init_archive();
             let peer = my_open_mls.get_peerid();
             let id = 0usize;
-            log::info!("Enough Archives registered, ending init phase");
+            log::info!(
+                "Enough Archives registered, ending init phase (opening threshold {threshold} of {archives})"
+            );
             let (n, group_key) = storage.return_new_n(peer, id, "Authority".to_string());
             my_open_mls.add_opener_pubkeys(pubkeys)?;
             let (g_sk, h_sk, pi1, pi2, enc_shares, commits) =
@@ -433,6 +459,7 @@ impl MyBehaviour {
                                         n,
                                         group_key,
                                         opener_pubkeys: Some(opener_pubkeys),
+                                        threshold: storage.get_threshold(),
                                     }
                                 } else {
                                     ResponseMessage::IdentityVerified {
@@ -440,6 +467,7 @@ impl MyBehaviour {
                                         n: None,
                                         group_key,
                                         opener_pubkeys: None,
+                                        threshold: None,
                                     }
                                 };
                                 log::info!("Verified Identity sending out response...");
@@ -469,6 +497,10 @@ impl MyBehaviour {
                             commits,
                             keypackage,
                         } => {
+                            if !Self::shares_match_network(storage, &enc_shares, &commits) {
+                                log::warn!("Rejecting join from {peer}: its shares do not match the archives and threshold");
+                                return Ok(());
+                            }
                             let (id, partial_memkey) = storage.return_memkey(ReturnMemkeyArgs {
                                 peer_id: &peer,
                                 g_sk: &g_sk,
@@ -581,6 +613,11 @@ impl MyBehaviour {
                                 log::info!("Verification of new Peer from existing Sig failed, KP does not belong to Peer");
                             }
 
+                            if verified && !Self::shares_match_network(storage, &enc_shares, &commits) {
+                                verified = false;
+                                log::info!("Verification of new Peer from existing Sig failed, shares do not match the archives and threshold");
+                            }
+
                             if verified {
                                 //Verify EncShare
                                 let opener_pubkeys = storage.get_opener_pubkeys();
@@ -660,6 +697,7 @@ impl MyBehaviour {
                         RequestMessage::RequestOpenerKeys => {
                             let res = ResponseMessage::OpenerKeys {
                                 opener_pubkeys: storage.get_archive_keys(),
+                                threshold: storage.get_threshold(),
                             };
                             self.request_response
                                 .send_response(channel, my_open_mls.sign(res)?)
