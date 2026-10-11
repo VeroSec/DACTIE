@@ -2,7 +2,6 @@ pub(crate) mod abstswarm_builder;
 pub(crate) mod event_handler;
 pub(crate) mod instruction_handler;
 
-use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 use thiserror::Error;
 
@@ -61,17 +60,6 @@ where
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub(crate) struct Message<T: Debug + Clone> {
-    pub(crate) source: PeerId,
-    pub(crate) body: T,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub(crate) enum Address {
-    Broadcast(String),
-    Group(usize),
-}
 
 #[derive(Debug, Error)]
 #[allow(clippy::enum_variant_names)]
