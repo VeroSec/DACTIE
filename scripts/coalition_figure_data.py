@@ -5,7 +5,7 @@
 
 Each RESULT_DIR holds `adversary_*_D*_Fix(*).csv` files written by
 dactie-experiment-anonymity. The paper uses two independent v3 runs with
-identical parameters (the server and the laptop, `~/anonymity-results-v3`), so every
+identical parameters (the evaluation server and a laptop), so every
 (N, D, c) cell averages ten runs. Rows with incomplete delivery or N > 200 are
 dropped. `bound_high` is Eq. (psml-coalition) evaluated at D = mesh_n_high.
 """

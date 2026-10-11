@@ -37,7 +37,7 @@ verifies and opens to the right member.
 
 Release build, single thread, 3 archives, t = 3, 1 KiB payload. Signature size: 226 bytes.
 
-| Operation | server (AMD EPYC 7763) | laptop (Intel Core Ultra 7 165U) |
+| Operation | Server (AMD EPYC 7763) | Laptop (Intel Core Ultra 7 165U) |
 | --- | --- | --- |
 | sign | 2.67 ms | 1.86 ms |
 | verify | 7.53 ms | 4.97 ms |

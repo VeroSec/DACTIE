@@ -65,13 +65,33 @@ This section explains the docker setup. If docker is choosen the part above can 
 3. `ls_groups` to get group_number
 4. `enc_broad <group_number> <msg>`
 
-### Open a message(Authority and Archives):
+### Open a message (Authority and Archives):
+Opening a signature needs the authority and a threshold of archives: the authority can ask, but each archive operator decides.
 1. Send a message over the network to get its signature
-2. Ask the archives for their partial openings (authority): `req_open <signatur>`
-3. On each archive (`docker attach <archive container>`), list the request with `pending`, check the evidence, then `approve <id>` or `deny <id>`. The authority cannot open a signature until enough archives have approved.
-4. Open the signature (authority): `open <signature>`
+2. Ask every archive for its partial opening (authority): `req_open <signature>`
+3. Decide on the request in each archive's console (see below): `approve <id>` or `deny <id>`
+4. Once enough archives have approved, open the signature (authority): `open <signature>`. It prints the member ID and name, and every PeerID of that member.
 
-For automated tests only, start an archive with `--auto-approve-open` to answer requests without approval.
+#### Archive console
+Each archive reads operator commands from its terminal. With Docker, attach with `docker attach <archive container>` (e.g. `archive_node1`) and detach again with `Ctrl+P`, `Ctrl+Q`, which leaves the archive running.
+
+| Command | Effect |
+| --- | --- |
+| `pending` | Lists opening requests awaiting a decision, with their id and arrival time |
+| `approve <id>` | Computes this archive's partial opening and sends it to the authority |
+| `deny <id>` | Discards the request |
+
+When the authority runs `req_open`, every archive prints the request's id. A session looks like this:
+```
+Opening request 3f9c2a1b7e4d5c60 from the authority is pending. Check the evidence, then run `approve 3f9c2a1b7e4d5c60` or `deny 3f9c2a1b7e4d5c60`.
+pending
+3f9c2a1b7e4d5c60  received 2026-10-11 14:02:51
+approve 3f9c2a1b7e4d5c60
+Submitted this archive's partial opening for 3f9c2a1b7e4d5c60
+```
+Pending requests are stored in the archive's database (table `pending_opens`), so they survive a restart and the operator can decide later.
+
+For automated tests only, start an archive with `--auto-approve-open`: it then answers every request without approval, so the authority could open any signature on its own.
 
 ### Trusted archives (Peer):
 Members encrypt their key shares to the archives' keys, which the authority hands out. So that a dishonest authority cannot substitute keys it holds, start every peer with each archive's address and PeerId, published out of band: `--archive /ip4/<ip>/tcp/<port>/p2p/<archive PeerId>` (repeat per archive). The peer then confirms every key with its archive before joining, and refuses to join on a mismatch. Without `--archive`, the peer logs a warning and uses the authority's keys unverified.
