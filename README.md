@@ -65,10 +65,13 @@ This section explains the docker setup. If docker is choosen the part above can 
 3. `ls_groups` to get group_number
 4. `enc_broad <group_number> <msg>`
 
-### Open a message(Authority):
+### Open a message(Authority and Archives):
 1. Send a message over the network to get its signature
-2. Get the opening pairings from the archives with: `req_open <signatur>`
-3. Open the signature: `open <signature>`
+2. Ask the archives for their partial openings (authority): `req_open <signatur>`
+3. On each archive (`docker attach <archive container>`), list the request with `pending`, check the evidence, then `approve <id>` or `deny <id>`. The authority cannot open a signature until enough archives have approved.
+4. Open the signature (authority): `open <signature>`
+
+For automated tests only, start an archive with `--auto-approve-open` to answer requests without approval.
 
 ### Other functions
 Other network functions like adding more group members, etc are described in the ReadMe.md in dactie-peer.

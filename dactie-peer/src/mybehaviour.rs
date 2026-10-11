@@ -934,6 +934,7 @@ impl MyBehaviour {
                         ResponseMessage::AddPeerShare => {
                             //Nothing to do for now
                         }
+                        ResponseMessage::OpenPending | ResponseMessage::OpenPairingsReceived => {} //Archive and authority only
                         ResponseMessage::EncSharePairings { .. } => {
                             //Nothing to do for now
                         }
@@ -1156,6 +1157,9 @@ impl InstructionHandler for MyBehaviour {
             Instruction::ReqOpen { .. } => {} //Ignore
             Instruction::Open { .. } => {}    //Ignore
             Instruction::EndInitArchive => {} //Ignore
+            Instruction::ListPendingOpens
+            | Instruction::ApproveOpen { .. }
+            | Instruction::DenyOpen { .. } => {} //Archive-only
         }
     }
 }

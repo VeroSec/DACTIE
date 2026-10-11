@@ -15,6 +15,7 @@ use tokio::signal::unix::{signal, SignalKind};
 use tokio::sync::mpsc;
 
 mod abstswarm;
+mod myclient;
 mod mybehaviour;
 
 #[derive(Parser, Debug)]
@@ -47,6 +48,11 @@ struct Args {
     /// Identity of Archive
     #[arg(short, long)]
     identity: String,
+
+    /// Answer opening requests without operator approval (tests only: the authority
+    /// could then open any signature on its own)
+    #[arg(long, default_value_t = false)]
+    auto_approve_open: bool,
 }
 
 #[tokio::main]
@@ -109,6 +115,19 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .connect(&args.url)
         .await?;
     log::info!("Postgres connection established");
+    mybehaviour::ensure_pending_opens_table(&pool).await?;
+    mybehaviour::AUTO_APPROVE_OPEN
+        .set(args.auto_approve_open)
+        .expect("set once at startup");
+    if args.auto_approve_open {
+        log::warn!("--auto-approve-open: opening requests are answered without approval");
+    }
+    let console_tx = instruction_tx.clone();
+    tokio::spawn(async move {
+        if let Err(e) = myclient::run(console_tx).await {
+            log::error!("Operator console failed: {e}");
+        }
+    });
 
     let load_file_path = PathBuf::from_str(&args.km_dir)?;
 

@@ -54,9 +54,9 @@ pub enum RequestMessage {
         group_id: Vec<u8>,
         epoch: u64,
     },
+    // Carries no PeerId: an archive must not learn which PeerID a member joined from.
     AddIDShare {
         id: usize,
-        peer_id: PeerId,
         enc_share: EncShare,
         commits: Vec<thressig::G1>,
     },
@@ -92,6 +92,12 @@ pub enum RequestMessage {
         signature: Vec<u8>,
     },
     RequestOpenerKeys,
+    // Sent by an archive to the authority once its operator approved an opening.
+    SubmitOpenPairings {
+        signature: Vec<u8>,
+        enc_share_id_pairings: Vec<u8>,
+        enc_share_peer_pairings: Vec<u8>,
+    },
 }
 
 impl Signable for RequestMessage {
@@ -132,6 +138,9 @@ pub enum ResponseMessage {
     OpenerKeys {
         opener_pubkeys: Vec<thressig::G2>,
     },
+    // The archive queued the opening request for its operator to approve.
+    OpenPending,
+    OpenPairingsReceived,
 }
 impl Signable for ResponseMessage {
     type Output = Response;
@@ -254,4 +263,12 @@ pub enum Instruction {
         signature: Vec<u8>,
     },
     EndInitArchive,
+    /// Archive operator commands for pending opening requests
+    ListPendingOpens,
+    ApproveOpen {
+        id: String,
+    },
+    DenyOpen {
+        id: String,
+    },
 }

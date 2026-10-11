@@ -58,7 +58,7 @@ impl MyClient {
         } else {
             println!(
                 "Available Commands:
-        - req_open <signatur>: Requests open pairings from archives
+        - req_open <signatur>: Asks the archives to open; each archive operator must approve
         - open <signatur>: Opens Signatur   
         - end_init_archive: Ends Init Phase no new archives can join"
             )

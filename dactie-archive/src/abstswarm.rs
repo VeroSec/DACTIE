@@ -50,7 +50,7 @@ where
         loop {
             tokio::select! {
                 event = self.swarm.select_next_some() => self.swarm.behaviour_mut().handle_event(event, &self.pool, &self.my_open_mls).await,
-                Some(instruction) = self.instruction_rx.recv() =>  self.swarm.behaviour_mut().handle_instruction(instruction).await,
+                Some(instruction) = self.instruction_rx.recv() =>  self.swarm.behaviour_mut().handle_instruction(instruction, &self.pool, &self.my_open_mls).await,
                 else => {
                     log::warn!("Both swarm and instruction receiver closed. Ending event loop");
                     break

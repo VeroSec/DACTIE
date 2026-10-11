@@ -45,3 +45,10 @@ CREATE TABLE commit (
     welcome_option BYTEA,
     epoch BIGINT NOT NULL
 );
+
+-- Opening requests awaiting this archive operator's decision (also created by the archive at startup)
+CREATE TABLE IF NOT EXISTS pending_opens (
+    id TEXT PRIMARY KEY,
+    signature BYTEA NOT NULL,
+    received_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);

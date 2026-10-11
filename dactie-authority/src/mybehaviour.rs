@@ -212,14 +212,12 @@ impl MyBehaviour {
         id: usize,
         enc_shares: &[EncShare],
         commits: &[thressig::G1],
-        sender_peer_id: PeerId,
     ) -> Result<(), AbstSwarmError> {
         for (i, peer_id) in archvive_peer_ids.iter().enumerate() {
             self.request_response.send_request(
                 peer_id,
                 my_open_mls.sign(RequestMessage::AddIDShare {
                     id,
-                    peer_id: sender_peer_id,
                     enc_share: enc_shares[i].clone(),
                     commits: commits.to_owned(),
                 })?,
@@ -264,6 +262,40 @@ impl MyBehaviour {
                 })?,
             );
         }
+        Ok(())
+    }
+
+    fn store_open_pairings(
+        storage: &Storage,
+        archive: PeerId,
+        signature: &[u8],
+        enc_share_id_pairings: &[u8],
+        enc_share_peer_pairings: &[u8],
+    ) -> Result<(), AbstSwarmError> {
+        let id_pairings: Vec<(usize, EncSharePairing)> =
+            bincode::deserialize(enc_share_id_pairings)
+                .map_err(|x| SerializationError(x.to_string()))?;
+
+        let peer_pairings_bytes: Vec<(Vec<u8>, EncSharePairing)> =
+            bincode::deserialize(enc_share_peer_pairings)
+                .map_err(|x| SerializationError(x.to_string()))?;
+        let mut peer_pairings = Vec::new();
+        for (peer_id_bytes, enc_share_pairing) in peer_pairings_bytes {
+            let peer_id = PeerId::from_bytes(&peer_id_bytes)
+                .map_err(|e| SerializationError(e.to_string()))?;
+            peer_pairings.push((peer_id, enc_share_pairing));
+        }
+
+        let signature: Signature =
+            bincode::deserialize(signature).map_err(|x| SerializationError(x.to_string()))?;
+        log::info!(
+            "Got {} EncShare Pairing from {}",
+            id_pairings.len() + peer_pairings.len(),
+            archive
+        );
+        storage.insert_enc_id_share_pairing(signature.clone(), &id_pairings);
+        storage.insert_enc_peer_share_pairing(signature, &peer_pairings);
+        storage.to_file()?;
         Ok(())
     }
 
@@ -321,7 +353,6 @@ impl MyBehaviour {
                 id,
                 &enc_shares,
                 &commits,
-                peer,
             )?;
             storage.to_file()?;
         } else {
@@ -453,7 +484,6 @@ impl MyBehaviour {
                                 id,
                                 &enc_shares,
                                 &commits,
-                                peer,
                             )?;
                             let keypackage: KeyPackage = bincode::deserialize(&keypackage)
                                 .map_err(|x| SerializationError(x.to_string()))?;
@@ -602,6 +632,32 @@ impl MyBehaviour {
                             }
                         }
 
+                        // An archive submits its partial opening once its operator approved it.
+                        // Only registered archives may contribute, so the threshold counts archives.
+                        RequestMessage::SubmitOpenPairings {
+                            signature,
+                            enc_share_id_pairings,
+                            enc_share_peer_pairings,
+                        } => {
+                            if !storage.get_archive_peer_ids().contains(&peer) {
+                                log::warn!("Ignoring opening pairings from non-archive peer {peer}");
+                                return Ok(());
+                            }
+                            Self::store_open_pairings(
+                                storage,
+                                peer,
+                                &signature,
+                                &enc_share_id_pairings,
+                                &enc_share_peer_pairings,
+                            )?;
+                            self.request_response
+                                .send_response(
+                                    channel,
+                                    my_open_mls.sign(ResponseMessage::OpenPairingsReceived)?,
+                                )
+                                .unwrap_or(());
+                        }
+
                         RequestMessage::RequestOpenerKeys => {
                             let res = ResponseMessage::OpenerKeys {
                                 opener_pubkeys: storage.get_opener_pubkeys(),
@@ -616,36 +672,8 @@ impl MyBehaviour {
                 }
                 request_response::Message::Response { response, .. } => {
                     //Ignore all other Responses for now
-                    if let ResponseMessage::EncSharePairings {
-                        enc_share_id_pairings,
-                        enc_share_peer_pairings,
-                        signature,
-                    } = response.body
-                    {
-                        let id_pairings: Vec<(usize, EncSharePairing)> =
-                            bincode::deserialize(&enc_share_id_pairings)
-                                .map_err(|x| SerializationError(x.to_string()))?;
-
-                        let peer_pairings_bytes: Vec<(Vec<u8>, EncSharePairing)> =
-                            bincode::deserialize(&enc_share_peer_pairings)
-                                .map_err(|x| SerializationError(x.to_string()))?;
-                        let mut peer_pairings = Vec::new();
-                        for (peer_id_bytes, enc_share_pairing) in peer_pairings_bytes {
-                            let peer_id = PeerId::from_bytes(&peer_id_bytes)
-                                .map_err(|e| SerializationError(e.to_string()))?;
-                            peer_pairings.push((peer_id, enc_share_pairing));
-                        }
-
-                        let signature: Signature = bincode::deserialize(&signature)
-                            .map_err(|x| SerializationError(x.to_string()))?;
-                        log::info!(
-                            "Got {} EncShare Pairing from {}",
-                            id_pairings.len() + peer_pairings.len(),
-                            peer
-                        );
-                        storage.insert_enc_id_share_pairing(signature.clone(), &id_pairings);
-                        storage.insert_enc_peer_share_pairing(signature, &peer_pairings);
-                        storage.to_file()?;
+                    if let ResponseMessage::OpenPending = response.body {
+                        log::info!("Archive {peer} queued the opening request for operator approval");
                     }
                 }
             }

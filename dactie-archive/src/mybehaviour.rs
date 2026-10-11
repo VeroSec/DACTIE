@@ -12,6 +12,7 @@ use libp2p::swarm::{NetworkBehaviour, SwarmEvent};
 use libp2p::{gossipsub, identify, kad, request_response, Multiaddr, StreamProtocol};
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::iter;
+use std::sync::OnceLock;
 use std::time::Duration;
 use thiserror::Error;
 use tokio::io;
@@ -27,6 +28,31 @@ use dactie_utils::mls_wrapper::MyOpenMLSError::{GroupNotAvailable, Serialization
 use dactie_utils::mls_wrapper::{MyOpenMLSError, MyOpenMls};
 
 const NUM_CHANNELS: u64 = 10;
+
+/// Whether opening requests from the authority are answered without operator approval.
+/// Off by default: the threshold of archives only protects anonymity if each archive decides.
+pub(crate) static AUTO_APPROVE_OPEN: OnceLock<bool> = OnceLock::new();
+
+/// Short, stable handle for a pending opening request, shown to the operator.
+fn open_request_id(signature: &[u8]) -> String {
+    let mut hasher = DefaultHasher::new();
+    signature.hash(&mut hasher);
+    format!("{:016x}", hasher.finish())
+}
+
+/// Pending opening requests outlive restarts, so an operator can decide later.
+pub(crate) async fn ensure_pending_opens_table(pool: &sqlx::PgPool) -> Result<(), MyBehaviourError> {
+    sqlx::query(
+        "CREATE TABLE IF NOT EXISTS pending_opens (
+            id TEXT PRIMARY KEY,
+            signature BYTEA NOT NULL,
+            received_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        )",
+    )
+    .execute(pool)
+    .await?;
+    Ok(())
+}
 
 #[derive(NetworkBehaviour)]
 #[behaviour(out_event = "MyBehaviourEvent")]
@@ -350,6 +376,103 @@ impl MyBehaviour {
     /**
         Function that register the identity of the archive and handle common group commits.
     **/
+    async fn queue_open(
+        pool: &sqlx::PgPool,
+        id: &str,
+        signature: &[u8],
+    ) -> Result<(), MyBehaviourError> {
+        sqlx::query(
+            "INSERT INTO pending_opens (id, signature) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
+        )
+        .bind(id)
+        .bind(signature)
+        .execute(pool)
+        .await?;
+        Ok(())
+    }
+
+    async fn take_pending_open(
+        pool: &sqlx::PgPool,
+        id: &str,
+    ) -> Result<Option<Vec<u8>>, MyBehaviourError> {
+        let row: Option<(Vec<u8>,)> =
+            sqlx::query_as("DELETE FROM pending_opens WHERE id = $1 RETURNING signature")
+                .bind(id)
+                .fetch_optional(pool)
+                .await?;
+        Ok(row.map(|(signature,)| signature))
+    }
+
+    async fn print_pending_opens(&self, pool: &sqlx::PgPool) -> Result<(), AbstSwarmError> {
+        let rows: Vec<(String, String)> = sqlx::query_as(
+            "SELECT id, to_char(received_at, 'YYYY-MM-DD HH24:MI:SS') FROM pending_opens ORDER BY received_at",
+        )
+        .fetch_all(pool)
+        .await
+        .map_err(MyBehaviourError::from)?;
+        if rows.is_empty() {
+            println!("No pending opening requests");
+        }
+        for (id, received_at) in rows {
+            println!("{id}  received {received_at}");
+        }
+        Ok(())
+    }
+
+    async fn approve_open(
+        &mut self,
+        pool: &sqlx::PgPool,
+        my_open_mls: &MyOpenMls,
+        id: &str,
+    ) -> Result<(), AbstSwarmError> {
+        match Self::take_pending_open(pool, id).await? {
+            Some(signature) => {
+                self.submit_open_pairings(pool, my_open_mls, signature).await?;
+                println!("Submitted this archive's partial opening for {id}");
+            }
+            None => println!("No pending opening request {id}"),
+        }
+        Ok(())
+    }
+
+    async fn deny_open(&self, pool: &sqlx::PgPool, id: &str) -> Result<(), AbstSwarmError> {
+        match Self::take_pending_open(pool, id).await? {
+            Some(_) => println!("Denied opening request {id}"),
+            None => println!("No pending opening request {id}"),
+        }
+        Ok(())
+    }
+
+    /// Computes this archive's partial opening over every stored share, since the signer is
+    /// unknown, and hands it to the authority, which combines the partial openings.
+    async fn submit_open_pairings(
+        &mut self,
+        pool: &sqlx::PgPool,
+        my_open_mls: &MyOpenMls,
+        signature: Vec<u8>,
+    ) -> Result<(), AbstSwarmError> {
+        let id_enc_shares = Self::get_all_id_enc_shares(pool).await?;
+        let peer_enc_shares = Self::get_all_peer_enc_shares(pool).await?;
+        let enc_share_id_pairings =
+            bincode::serialize(&my_open_mls.get_enc_share_pairings(id_enc_shares, &signature)?)
+                .map_err(|e| SerializationError(e.to_string()))?;
+        let enc_share_peer_pairings =
+            bincode::serialize(&my_open_mls.get_enc_share_pairings(peer_enc_shares, &signature)?)
+                .map_err(|e| SerializationError(e.to_string()))?;
+        self.request_response.send_request(
+            &my_open_mls.get_authorityid(),
+            Request {
+                body: RequestMessage::SubmitOpenPairings {
+                    signature,
+                    enc_share_id_pairings,
+                    enc_share_peer_pairings,
+                },
+                signature: None,
+            },
+        );
+        Ok(())
+    }
+
     fn register_identity(&mut self, peer_id: &PeerId, identity: String) {
         let request = Request {
             body: RequestMessage::VerifyIdentity {
@@ -593,7 +716,6 @@ impl MyBehaviour {
 
                         RequestMessage::AddIDShare {
                             id,
-                            peer_id,
                             enc_share,
                             commits,
                         } => {
@@ -602,10 +724,7 @@ impl MyBehaviour {
                             if my_open_mls.verify_enc_share(&enc_share, &commits, None) {
                                 let commits = bincode::serialize(&commits).unwrap();
                                 let enc_share = enc_share.to_bytes();
-                                let peer_id = peer_id.to_bytes();
                                 Self::insert_id_enc_share(pool, id, &enc_share, &commits).await?;
-                                Self::insert_peer_enc_share(pool, &peer_id, &enc_share, &commits)
-                                    .await?;
                             }
                             //Add to DB
                             self.request_response
@@ -673,33 +792,27 @@ impl MyBehaviour {
                             }
                         }
 
+                        // The archive decides on every opening itself; the authority can only ask.
                         RequestMessage::RequestOpen { signature } => {
                             if my_open_mls.get_authorityid() == peer {
-                                log::info!(
-                                    "Received a OpenRequest from Authority {}",
-                                    peer.to_string()
-                                );
-                                let id_enc_shares = Self::get_all_id_enc_shares(pool).await?;
-                                let peer_enc_shares = Self::get_all_peer_enc_shares(pool).await?;
-                                let enc_share_id_pairings = bincode::serialize(
-                                    &my_open_mls
-                                        .get_enc_share_pairings(id_enc_shares, &signature)?,
-                                )
-                                .map_err(|e| SerializationError(e.to_string()))?;
-                                let enc_share_peer_pairings = bincode::serialize(
-                                    &my_open_mls
-                                        .get_enc_share_pairings(peer_enc_shares, &signature)?,
-                                )
-                                .map_err(|e| SerializationError(e.to_string()))?;
+                                let id = open_request_id(&signature);
+                                if *AUTO_APPROVE_OPEN.get().unwrap_or(&false) {
+                                    log::warn!(
+                                        "Auto-approving opening request {id} (--auto-approve-open)"
+                                    );
+                                    self.submit_open_pairings(pool, my_open_mls, signature)
+                                        .await?;
+                                } else {
+                                    Self::queue_open(pool, &id, &signature).await?;
+                                    println!(
+                                        "Opening request {id} from the authority is pending. Check the evidence, then run `approve {id}` or `deny {id}`."
+                                    );
+                                }
                                 self.request_response
                                     .send_response(
                                         channel,
                                         Response {
-                                            body: ResponseMessage::EncSharePairings {
-                                                signature,
-                                                enc_share_id_pairings,
-                                                enc_share_peer_pairings,
-                                            },
+                                            body: ResponseMessage::OpenPending,
                                             signature: None,
                                         },
                                     )
@@ -734,6 +847,9 @@ impl MyBehaviour {
                             );
                         }
                         ResponseMessage::MemKey { .. } => {}
+                        ResponseMessage::OpenPairingsReceived => {
+                            log::info!("Authority received our partial opening");
+                        }
 
                         //Ignore all other Responses for now
                         _ => {}
@@ -809,9 +925,24 @@ impl EventHandler for MyBehaviour {
 
 #[async_trait]
 impl InstructionHandler for MyBehaviour {
-    async fn handle_instruction(&mut self, instruction: Instruction) {
-        if let Instruction::RegisterIdentity { peer_id, identity } = instruction {
-            self.register_identity(&peer_id, identity);
+    async fn handle_instruction(
+        &mut self,
+        instruction: Instruction,
+        pool: &sqlx::PgPool,
+        my_open_mls: &MyOpenMls,
+    ) {
+        let result = match instruction {
+            Instruction::RegisterIdentity { peer_id, identity } => {
+                self.register_identity(&peer_id, identity);
+                Ok(())
+            }
+            Instruction::ListPendingOpens => self.print_pending_opens(pool).await,
+            Instruction::ApproveOpen { id } => self.approve_open(pool, my_open_mls, &id).await,
+            Instruction::DenyOpen { id } => self.deny_open(pool, &id).await,
+            _ => Ok(()),
+        };
+        if let Err(e) = result {
+            log::error!("{e:?}")
         }
     }
 }
