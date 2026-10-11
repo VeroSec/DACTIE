@@ -1,0 +1,17 @@
+[package]
+name = "dactie-benchmark"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Criterion microbenchmarks for the threshold group signature (thressig) used by DACTIE"
+
+[dependencies]
+thressig = { path = "../thressig" }
+bincode = "1.3.3"
+
+[dev-dependencies]
+criterion = "0.5"
+
+[[bench]]
+name = "thressig"
+harness = false
