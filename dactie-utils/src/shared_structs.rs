@@ -1,7 +1,7 @@
 use libp2p::PeerId;
 use openmls::group::GroupId;
 use serde::{Deserialize, Serialize};
-use thressig::structs::{EncShare, ShareLinkProof, Signature};
+use thressig::structs::{EncShare, ShareLinkProof, Signature, Token};
 
 //Trait that defines a message before it has been signed with the group signature
 pub trait Signable {
@@ -91,6 +91,13 @@ pub enum RequestMessage {
         commits: Vec<thressig::G1>,
         // proves that the shares hide the requesting member's sk, bound to the keypackage
         share_link: ShareLinkProof,
+        // one of the member's registration tokens for the current epoch
+        token: Token,
+    },
+    // Sent by a member's registration peer: blinded tokens for the AA to sign.
+    RequestTokens {
+        epoch: u64,
+        blinded: Vec<thressig::G1>,
     },
     RequestOpen {
         signature: Vec<u8>,
@@ -154,6 +161,16 @@ pub enum ResponseMessage {
     // The archive queued the opening request for its operator to approve.
     OpenPending,
     OpenPairingsReceived,
+    // The AA's signatures on blinded tokens, and the epoch key to check them against.
+    Tokens {
+        epoch: u64,
+        signed: Vec<thressig::G1>,
+        epoch_pubkey: thressig::G2,
+    },
+    TokensRefused {
+        current_epoch: u64,
+        reason: String,
+    },
 }
 impl Signable for ResponseMessage {
     type Output = Response;
@@ -268,6 +285,10 @@ pub enum Instruction {
     },
     GetOpenerKeys {
         peer_id: PeerId,
+    },
+    GetTokens {
+        peer_id: PeerId,
+        count: usize,
     },
     ReqOpen {
         signature: Vec<u8>,

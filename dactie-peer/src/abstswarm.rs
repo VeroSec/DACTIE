@@ -132,4 +132,8 @@ pub(crate) enum AbstSwarmError {
     MLSError(#[from] MyOpenMLSError),
     #[error("Failed to validate Message")]
     MessageValidationError,
+    #[error("No registration token left in {dir}; run get_tokens on the member's registration peer")]
+    NoRegistrationToken { dir: String },
+    #[error("Could not store registration tokens: {reason}")]
+    TokenStoreError { reason: String },
 }

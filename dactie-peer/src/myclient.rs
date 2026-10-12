@@ -365,6 +365,15 @@ impl MyClient {
                 }
                 Err(_) => println!("Failed to convert some of the peer IDs"),
             };
+        } else if input.starts_with("get_tokens") && split.len() > 1 {
+            match PeerId::from_str(split[1]) {
+                Ok(peer_id) => {
+                    let count = split.get(2).and_then(|n| n.parse().ok()).unwrap_or(5);
+                    self.instruction_tx
+                        .send(Instruction::GetTokens { peer_id, count })?;
+                }
+                Err(_) => println!("Failed to convert some of the peer IDs"),
+            };
         } else if input.starts_with("get_opener_keys") && split.len() > 1 {
             match PeerId::from_str(split[1]) {
                 Ok(peer_id) => {
@@ -390,7 +399,8 @@ impl MyClient {
         - peer_id: Prints out PeerId
         - register_identity <authorization_peer_id> <identity>: Registers a new identity at Authorization Authority
         - peer_from_sig <authorization_peer_id> <save_file_path>: Adds a new peer from an existing GroupSignature Memberkey
-        - get_opener_keys <authorization_peer_id>: Requests Opener Keys from Authority")
+        - get_opener_keys <authorization_peer_id>: Requests Opener Keys from Authority
+        - get_tokens <authorization_peer_id> [count]: Requests registration tokens for new sharing peers (registration peer only)")
         }
 
         Ok(())

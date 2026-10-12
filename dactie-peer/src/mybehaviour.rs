@@ -3,6 +3,7 @@ use async_trait::async_trait;
 use dactie_utils::net::{is_unroutable_addr, MESH_N, MESH_N_HIGH, MESH_N_LOW};
 use dactie_utils::admission;
 use dactie_utils::key_store;
+use dactie_utils::token_store::TokenStore;
 use libp2p::gossipsub::{IdentTopic, MessageAcceptance};
 use libp2p::identity::{Keypair, ParseError};
 use libp2p::kad::store::MemoryStore;
@@ -489,6 +490,15 @@ impl MyBehaviour {
         sig_file_path: String,
     ) -> Result<(), AbstSwarmError> {
         let path = PathBuf::from_str(&sig_file_path).map_err(|_| KeyMaterialFileError)?;
+        // Each new sharing peer spends one of the member's tokens, kept next to its key file.
+        let token_dir = path.parent().map(PathBuf::from).unwrap_or_default();
+        let mut tokens = TokenStore::load(&token_dir);
+        let token = tokens.take().ok_or(AbstSwarmError::NoRegistrationToken {
+            dir: token_dir.display().to_string(),
+        })?;
+        tokens
+            .save(&token_dir)
+            .map_err(|e| AbstSwarmError::TokenStoreError { reason: e.to_string() })?;
         let new_key_store =
             key_store::StoredKeyMaterial::from_file(path).map_err(|_| KeyMaterialFileError)?;
         my_open_mls.set_grpkey(
@@ -514,9 +524,37 @@ impl MyBehaviour {
             enc_shares,
             commits,
             share_link,
+            token,
         };
         self.request_response
             .send_request(&peer_id, my_open_mls.sign(body)?);
+        Ok(())
+    }
+
+    /// Blinds `count` fresh tokens for `epoch` (by default the last epoch the AA named) and
+    /// asks the AA to sign them. Sent unsigned, so the AA sees which member asks.
+    fn request_tokens(
+        &mut self,
+        my_open_mls: &MyOpenMls,
+        authority: PeerId,
+        count: usize,
+        epoch: Option<u64>,
+    ) -> Result<(), AbstSwarmError> {
+        let dir = my_open_mls.key_dir();
+        let mut store = TokenStore::load(&dir);
+        let epoch = epoch.unwrap_or(store.epoch);
+        store.pending = (0..count).map(|_| thressig::tokens::blind(epoch)).collect();
+        store
+            .save(&dir)
+            .map_err(|e| AbstSwarmError::TokenStoreError { reason: e.to_string() })?;
+        let blinded = store.pending.iter().map(|t| t.blinded.clone()).collect();
+        self.request_response.send_request(
+            &authority,
+            Request {
+                body: RequestMessage::RequestTokens { epoch, blinded },
+                signature: None,
+            },
+        );
         Ok(())
     }
 
@@ -1187,6 +1225,31 @@ impl MyBehaviour {
                         ResponseMessage::ArchiveOpenerKey { elgamal_pk } => {
                             self.confirm_archive_key(peer, elgamal_pk, my_open_mls)?;
                         }
+                        ResponseMessage::Tokens {
+                            epoch,
+                            signed,
+                            epoch_pubkey,
+                        } => {
+                            let (stored, failed) =
+                                my_open_mls.receive_tokens(epoch, &signed, &epoch_pubkey)?;
+                            log::info!("Received {stored} registration tokens for epoch {epoch}");
+                            if failed > 0 {
+                                log::error!("{failed} tokens do not match the epoch key, so the authority could recognize them when they are spent; discarded");
+                            }
+                        }
+                        ResponseMessage::TokensRefused {
+                            current_epoch,
+                            reason,
+                        } => {
+                            let pending = TokenStore::load(&my_open_mls.key_dir()).pending;
+                            match pending.first() {
+                                Some(t) if t.epoch != current_epoch => {
+                                    log::info!("Authority is in epoch {current_epoch}; requesting the tokens again");
+                                    self.request_tokens(my_open_mls, peer, pending.len(), Some(current_epoch))?;
+                                }
+                                _ => log::warn!("Authority refused tokens: {reason}"),
+                            }
+                        }
                     }
                 }
             }
@@ -1335,6 +1398,11 @@ impl InstructionHandler for MyBehaviour {
             }
             Instruction::GetOpenerKeys { peer_id } => {
                 if let Err(error) = self.get_opener_keys(peer_id) {
+                    Self::notify(notification_tx, Notification::Err(error));
+                }
+            }
+            Instruction::GetTokens { peer_id, count } => {
+                if let Err(error) = self.request_tokens(my_open_mls, peer_id, count, None) {
                     Self::notify(notification_tx, Notification::Err(error));
                 }
             }

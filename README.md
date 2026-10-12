@@ -52,8 +52,9 @@ This also fixes the opening threshold: how many archives must approve before a s
 1. `register_identity <peer_id_aa> <peer_name>`, peer name can be anything for example peer1 peer2
 
 ### Create new Peer with identity of Peer1 (Peer2):
-1. Request the opener keys from the authority`get_opener_keys  <authorization_peer_id>`
-2. Register a new peer with an existing group key material: `peer_from_sig <authorization_peer_id> <save_file_path>`
+1. On Peer1, request registration tokens: `get_tokens <authorization_peer_id> [count]`. Each new peer uses one; the authority signs at most `--peers-per-member` per member and epoch (`--epoch-secs`).
+2. On Peer2, request the opener keys from the authority`get_opener_keys  <authorization_peer_id>`
+3. Register a new peer with an existing group key material: `peer_from_sig <authorization_peer_id> <save_file_path>`. It takes a token from the `tokens.json` next to that file.
 
 ### Subscribe to Topics:
 1. `sub <topic>`

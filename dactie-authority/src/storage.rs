@@ -16,7 +16,7 @@ use std::io::BufReader;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use thiserror::Error;
-use thressig::structs::{EncShare, EncSharePairing, Grpkey, Mgrkey, Signature};
+use thressig::structs::{EncShare, EncSharePairing, Grpkey, Mgrkey, Signature, Token};
 use thressig::{FieldElement, G1, G2};
 
 /**
@@ -42,6 +42,22 @@ pub(crate) struct Storage {
     signature_enc_id_pairing_map: Mutex<HashMap<Signature, Vec<(usize, EncSharePairing)>>>,
     #[serde_as(as = "Mutex<HashMap<DisplayFromStr, _>>")]
     signature_enc_peer_pairing_map: Mutex<HashMap<Signature, Vec<(PeerId, EncSharePairing)>>>,
+    /// Secret from which the AA derives one token key per epoch.
+    #[serde(default = "FieldElement::random")]
+    token_master: FieldElement,
+    /// The PeerID each member registered from: the only PeerID the AA links to a name, and
+    /// the one the member requests tokens from.
+    #[serde(default)]
+    registration_peers: Mutex<HashMap<PeerId, usize>>,
+    /// Tokens signed per member: MemberID -> (epoch, count).
+    #[serde(default)]
+    tokens_issued: Mutex<HashMap<usize, (u64, usize)>>,
+    /// Serials of spent tokens, so that no token registers two PeerIDs.
+    #[serde(default)]
+    spent_tokens: Mutex<HashSet<Vec<u8>>>,
+    /// (epoch length in seconds, tokens per member and epoch), set from the command line.
+    #[serde(skip)]
+    token_policy: Mutex<(u64, usize)>,
 }
 
 type OpenSignatureResult = (Vec<(usize, String)>, Vec<PeerId>);
@@ -79,6 +95,11 @@ impl Storage {
                 threshold: Mutex::new(None),
                 signature_enc_id_pairing_map: Mutex::new(HashMap::new()),
                 signature_enc_peer_pairing_map: Mutex::new(HashMap::new()),
+                token_master: FieldElement::random(),
+                registration_peers: Mutex::new(HashMap::new()),
+                tokens_issued: Mutex::new(HashMap::new()),
+                spent_tokens: Mutex::new(HashSet::new()),
+                token_policy: Mutex::new((30 * 24 * 3600, 5)),
             },
             key_material,
         )
@@ -299,6 +320,79 @@ impl Storage {
         Ok(res)
     }
 
+    pub(crate) fn set_token_policy(&self, epoch_secs: u64, per_member: usize) {
+        *self.token_policy.lock().unwrap() = (epoch_secs.max(1), per_member);
+    }
+
+    pub(crate) fn current_epoch(&self) -> u64 {
+        let epoch_secs = self.token_policy.lock().unwrap().0;
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        now / epoch_secs
+    }
+
+    fn epoch_key(&self, epoch: u64) -> FieldElement {
+        thressig::tokens::epoch_key(&self.token_master, epoch)
+    }
+
+    /// Signs blinded tokens for the member that registered from `peer`, at most k per member
+    /// and epoch, and returns them with the epoch's public key. Refusals carry the current
+    /// epoch, so a member that blinded for the wrong epoch can retry.
+    pub(crate) fn issue_tokens(
+        &self,
+        peer: &PeerId,
+        epoch: u64,
+        blinded: &[G1],
+    ) -> Result<(Vec<G1>, G2), (u64, String)> {
+        let current = self.current_epoch();
+        if epoch != current {
+            return Err((current, format!("epoch {epoch} is not the current epoch")));
+        }
+        let member = *self
+            .registration_peers
+            .lock()
+            .unwrap()
+            .get(peer)
+            .ok_or((current, "only a member's registration peer gets tokens".to_string()))?;
+        let per_member = self.token_policy.lock().unwrap().1;
+        let signed: Vec<G1> = {
+            let mut issued = self.tokens_issued.lock().unwrap();
+            let entry = issued.entry(member).or_insert((current, 0));
+            if entry.0 != current {
+                *entry = (current, 0);
+            }
+            let n = blinded.len().min(per_member - entry.1);
+            entry.1 += n;
+            let key = self.epoch_key(current);
+            blinded[..n]
+                .iter()
+                .map(|b| thressig::tokens::sign_blinded(&key, b))
+                .collect()
+        };
+        if signed.is_empty() {
+            return Err((current, format!("all {per_member} tokens of this epoch were issued")));
+        }
+        self.to_file().map_err(|e| (current, e.to_string()))?;
+        let pubkey = thressig::tokens::epoch_pubkey(&self.grpkey.g_tilde, &self.epoch_key(current));
+        Ok((signed, pubkey))
+    }
+
+    /// Accepts each token once, and only in its own epoch.
+    pub(crate) fn spend_token(&self, token: &Token) -> Result<(), String> {
+        if token.epoch != self.current_epoch() {
+            return Err(format!("token of epoch {} has expired", token.epoch));
+        }
+        if !thressig::tokens::verify_with_key(token, &self.epoch_key(token.epoch)) {
+            return Err("token signature is invalid".to_string());
+        }
+        if !self.spent_tokens.lock().unwrap().insert(token.serial.clone()) {
+            return Err("token was already spent".to_string());
+        }
+        self.to_file().map_err(|e| e.to_string())
+    }
+
     pub fn remove_n(&self, peer_id: &PeerId) -> Option<(G1, usize, String)> {
         self.n_store.lock().unwrap().remove(peer_id)
     }
@@ -331,6 +425,7 @@ impl Storage {
         let (n, id, name) = self.remove_n(args.peer_id).ok_or(GetNError {
             peer_id: *args.peer_id,
         })?;
+        let registration_peer = *args.peer_id;
         let opener_pubkeys = self.opener_pubkeys.lock().unwrap().clone();
         let mut gml_guard = self.gml.lock().unwrap();
         let part_memkey = thressig::join_mgr2(
@@ -357,6 +452,10 @@ impl Storage {
         // is not reentrant, so the guard must be released first or serialization
         // deadlocks against it, leaving a half-written file on disk.
         drop(gml_guard);
+        self.registration_peers
+            .lock()
+            .unwrap()
+            .insert(registration_peer, id);
 
         self.to_file()?;
         Ok((id, part_memkey.to_bytes()))
@@ -434,4 +533,49 @@ pub enum MyStorageError {
 
     #[error("Could not access file: {reason:?}")]
     FileAccessError { reason: String },
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_token_cap_and_spending() {
+        let dir = std::env::temp_dir().join(format!("dactie-token-test-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let (storage, _) = Storage::new(dir.join("storage.json"));
+        storage.set_token_policy(3600, 3);
+        let member = PeerId::random();
+        storage.registration_peers.lock().unwrap().insert(member, 42);
+        let epoch = storage.current_epoch();
+        let blind = |n: usize| (0..n).map(|_| thressig::tokens::blind(epoch)).collect::<Vec<_>>();
+        let points = |ts: &[thressig::structs::BlindedToken]| {
+            ts.iter().map(|t| t.blinded.clone()).collect::<Vec<_>>()
+        };
+
+        // Only a member's registration peer, and only for the current epoch.
+        assert!(storage.issue_tokens(&PeerId::random(), epoch, &points(&blind(1))).is_err());
+        let refused = storage.issue_tokens(&member, epoch + 1, &points(&blind(1)));
+        assert_eq!(refused.unwrap_err().0, epoch);
+
+        // At most k = 3 per member and epoch, however they are requested.
+        let first = blind(2);
+        let (signed, pubkey) = storage.issue_tokens(&member, epoch, &points(&first)).unwrap();
+        assert_eq!(signed.len(), 2);
+        assert_eq!(storage.issue_tokens(&member, epoch, &points(&blind(5))).unwrap().0.len(), 1);
+        assert!(storage.issue_tokens(&member, epoch, &points(&blind(1))).is_err());
+
+        // Each token registers one PeerID, and only a token the AA signed counts.
+        let token =
+            thressig::tokens::unblind(&first[0], &signed[0], &storage.grpkey.g_tilde, &pubkey)
+                .unwrap();
+        assert!(storage.spend_token(&token).is_ok());
+        assert!(storage.spend_token(&token).is_err());
+        let forged = Token {
+            serial: vec![7; 32],
+            ..token
+        };
+        assert!(storage.spend_token(&forged).is_err());
+        std::fs::remove_dir_all(dir).ok();
+    }
 }

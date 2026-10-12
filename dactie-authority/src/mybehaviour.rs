@@ -592,12 +592,41 @@ impl MyBehaviour {
                             }
                         }
 
+                        // A member's registration peer asks for blinded tokens to be signed.
+                        // Unsigned: the AA must see which member asks, to cap its tokens.
+                        RequestMessage::RequestTokens { epoch, blinded } => {
+                            let body = match storage.issue_tokens(&peer, epoch, &blinded) {
+                                Ok((signed, epoch_pubkey)) => {
+                                    log::info!(
+                                        "Signed {} registration tokens for epoch {epoch}",
+                                        signed.len()
+                                    );
+                                    ResponseMessage::Tokens {
+                                        epoch,
+                                        signed,
+                                        epoch_pubkey,
+                                    }
+                                }
+                                Err((current_epoch, reason)) => {
+                                    log::info!("Refused tokens to {peer}: {reason}");
+                                    ResponseMessage::TokensRefused {
+                                        current_epoch,
+                                        reason,
+                                    }
+                                }
+                            };
+                            self.request_response
+                                .send_response(channel, my_open_mls.sign(body)?)
+                                .unwrap_or(());
+                        }
+
                         //Register Peer with existing Group Signature.
                         RequestMessage::AddPeerToSig {
                             keypackage,
                             enc_shares,
                             commits,
                             share_link,
+                            token,
                         } => {
                             log::info!("Got Request to add new peer from existing member");
                             match my_open_mls.verify(request) {
@@ -656,6 +685,14 @@ impl MyBehaviour {
                                         log::info!("Verification of new Peer from existing Sig failed, EncShares could not be verified");
                                         break;
                                     }
+                                }
+                            }
+
+                            // Spent last, so a request that fails a check does not use it up.
+                            if verified {
+                                if let Err(reason) = storage.spend_token(&token) {
+                                    verified = false;
+                                    log::info!("Verification of new Peer from existing Sig failed, {reason}");
                                 }
                             }
 

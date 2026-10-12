@@ -1,7 +1,9 @@
 #!/bin/bash
-# Local end-to-end run: join, an additional sharing peer, a broadcast, and an opening.
+# Local end-to-end run: join, registration tokens, an additional sharing peer, a broadcast,
+# and an opening.
 # AA, two archives (PostgreSQL in Docker), member peer1, and peer2 as a second sharing peer
-# of the same member (peer_from_sig). peer2 publishes, both archives approve the opening,
+# of the same member (peer_from_sig) with one of peer1's tokens; the AA caps tokens at k = 2
+# and refuses a token twice. peer2 publishes, both archives approve the opening,
 # and the AA must name peer1's member and list peer2's PeerID. An observer node that never
 # registered subscribes to the same topic and must not receive any gossip; the AA keeps at
 # most 5 such connections open and closes each after 60 s.
@@ -15,7 +17,7 @@ W=${W:-$REPO/target/e2e}
 S=camera
 AA_PORT=10001
 
-rm -rf "$W"; mkdir -p "$W"/{aa,arc1,arc2,p1,p2,obs,obs2,obs3,obs4,obs5,obs6,obs7}
+rm -rf "$W"; mkdir -p "$W"/{aa,arc1,arc2,p1,p2,p3,obs,obs2,obs3,obs4,obs5,obs6,obs7}
 tmux kill-session -t $S 2>/dev/null
 docker rm -f camera-pg1 camera-pg2 >/dev/null 2>&1
 
@@ -42,7 +44,7 @@ for i in 1 2; do
 done
 
 tmux new-session -d -s $S -n main "sleep infinity"
-run aa "$BIN/dactie-authority -K $W/aa --port $AA_PORT"
+run aa "$BIN/dactie-authority -K $W/aa --port $AA_PORT --peers-per-member 2"
 wait_count "$W/aa.log" 'Local PeerId' 1 30
 AA=$(grep -o 'Local PeerId: [A-Za-z0-9]*' "$W/aa.log" | head -1 | awk '{print $3}')
 echo "AA $AA"
@@ -62,6 +64,12 @@ wait_count "$W/arc1.log" 'Got a new ID Share' 2 30
 wait_count "$W/arc2.log" 'Got a new ID Share' 2 30
 echo "OK join: both archives stored peer1's share"
 
+# The first request uses a stale epoch, so this also covers the retry.
+send p1 "get_tokens $AA 3"
+wait_count "$W/p1.log" 'Received 2 registration tokens' 1 30
+cp "$W/p1/tokens.json" "$W/tokens.bak"
+echo "OK tokens: the AA signed 2 of the 3 requested tokens (k = 2)"
+
 run p2 "$BIN/dactie-peer -K $W/p2 -b $AA -B /ip4/127.0.0.1/tcp/$AA_PORT"
 sleep 4
 send p2 "get_opener_keys $AA"
@@ -70,7 +78,18 @@ send p2 "peer_from_sig $AA $W/p1/key_material.json"
 wait_count "$W/aa.log" 'Adding new peer from existing member' 1 30
 wait_count "$W/arc1.log" 'Got a new Peer Share' 1 30
 wait_count "$W/arc2.log" 'Got a new Peer Share' 1 30
-echo "OK peer_from_sig: AA accepted peer2's share link"
+echo "OK peer_from_sig: AA accepted peer2's share link and token"
+
+# Put the spent token back and try to register a third peer with it.
+cp "$W/tokens.bak" "$W/p1/tokens.json"
+run p3 "$BIN/dactie-peer -K $W/p3 -b $AA -B /ip4/127.0.0.1/tcp/$AA_PORT"
+sleep 4
+send p3 "get_opener_keys $AA"
+sleep 3
+send p3 "peer_from_sig $AA $W/p1/key_material.json"
+wait_count "$W/aa.log" 'token was already spent' 1 30
+[ "$(grep -c 'Adding new peer from existing member' "$W/aa.log")" -eq 1 ] || fail "the AA admitted a peer with a spent token"
+echo "OK double spend: the AA refused a token that was already used"
 
 # An unregistered node, connected like any other, subscribed to the same channel.
 run obs "$BIN/dactie-peer -K $W/obs -b $AA -B /ip4/127.0.0.1/tcp/$AA_PORT" "info,libp2p_swarm=debug"

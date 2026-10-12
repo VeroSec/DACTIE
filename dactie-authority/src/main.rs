@@ -41,6 +41,15 @@ struct Args {
     /// defaults to a strict majority of the registered archives.
     #[arg(long)]
     threshold: Option<usize>,
+
+    /// Length of a token epoch in seconds. Each epoch, a member gets at most
+    /// --peers-per-member registration tokens.
+    #[arg(long, default_value_t = 30 * 24 * 3600)]
+    epoch_secs: u64,
+
+    /// Sharing peers a member can register per epoch (k).
+    #[arg(long, default_value_t = 5)]
+    peers_per_member: usize,
 }
 
 #[tokio::main]
@@ -91,6 +100,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
             _ => {}
         }
     }
+
+    storage.set_token_policy(args.epoch_secs, args.peers_per_member);
 
     log::info!(
         "Archives registered: {}, init phase: {}",

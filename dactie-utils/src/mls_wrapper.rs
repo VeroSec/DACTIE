@@ -538,6 +538,46 @@ impl MyOpenMls {
             .clone())
     }
 
+    /// Folder of this node's key material, which also holds its tokens.json.
+    pub fn key_dir(&self) -> PathBuf {
+        self.load_files_path.clone()
+    }
+
+    /// Checks the AA's answer to blinded tokens and stores the tokens. Returns how many were
+    /// stored and how many failed the check against the epoch key.
+    pub fn receive_tokens(
+        &self,
+        epoch: u64,
+        signed: &[thressig::G1],
+        epoch_pubkey: &thressig::G2,
+    ) -> Result<(usize, usize), MyOpenMLSError> {
+        let g_tilde = self
+            .key_store
+            .lock()
+            .unwrap()
+            .get_grpkey()
+            .ok_or(GPKUndefinedError)?
+            .g_tilde;
+        let dir = self.key_dir();
+        let mut store = crate::token_store::TokenStore::load(&dir);
+        let pending: Vec<_> = store.pending.drain(..).filter(|t| t.epoch == epoch).collect();
+        let (mut stored, mut failed) = (0, 0);
+        for (blinded, sig) in pending.iter().zip(signed) {
+            match thressig::tokens::unblind(blinded, sig, &g_tilde, epoch_pubkey) {
+                Some(token) => {
+                    store.tokens.push(token);
+                    stored += 1;
+                }
+                None => failed += 1,
+            }
+        }
+        store.epoch = epoch;
+        store
+            .save(&dir)
+            .map_err(|e| SerializationError(e.to_string()))?;
+        Ok((stored, failed))
+    }
+
     /// PeerIDs of all members of the common group, i.e. every admitted node.
     pub fn common_group_peers(&self) -> HashSet<PeerId> {
         let Ok(group_id) = self.get_common_group_id() else {
