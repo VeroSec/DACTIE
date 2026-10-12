@@ -2,7 +2,8 @@
 # Local end-to-end run: join, an additional sharing peer, a broadcast, and an opening.
 # AA, two archives (PostgreSQL in Docker), member peer1, and peer2 as a second sharing peer
 # of the same member (peer_from_sig). peer2 publishes, both archives approve the opening,
-# and the AA must name peer1's member and list peer2's PeerID.
+# and the AA must name peer1's member and list peer2's PeerID. An observer node that never
+# registered subscribes to the same topic and must not receive any gossip.
 # Needs Docker, tmux and `cargo build --release`. Logs go to target/e2e/.
 # Leaves tmux session "camera" and containers camera-pg1/2 running for inspection;
 # clean up with: tmux kill-session -t camera; docker rm -f camera-pg1 camera-pg2
@@ -13,7 +14,7 @@ W=${W:-$REPO/target/e2e}
 S=camera
 AA_PORT=10001
 
-rm -rf "$W"; mkdir -p "$W"/{aa,arc1,arc2,p1,p2}
+rm -rf "$W"; mkdir -p "$W"/{aa,arc1,arc2,p1,p2,obs}
 tmux kill-session -t $S 2>/dev/null
 docker rm -f camera-pg1 camera-pg2 >/dev/null 2>&1
 
@@ -26,7 +27,7 @@ wait_count() { # file pattern count seconds
     done
     fail "waited $4 s for $3x '$2' in $(basename "$1")"
 }
-run() { tmux new-window -d -t $S -n "$1" "cd $W && RUST_LOG=info $2 2>&1 | tee $W/$1.log"; }
+run() { tmux new-window -d -t $S -n "$1" "cd $W && RUST_LOG=${3:-info} $2 2>&1 | tee $W/$1.log"; }
 send() { tmux send-keys -t "$S:$1" "$2" Enter; }
 
 for i in 1 2; do
@@ -70,6 +71,10 @@ wait_count "$W/arc1.log" 'Got a new Peer Share' 1 30
 wait_count "$W/arc2.log" 'Got a new Peer Share' 1 30
 echo "OK peer_from_sig: AA accepted peer2's share link"
 
+# An unregistered node, connected like any other, subscribed to the same channel.
+run obs "$BIN/dactie-peer -K $W/obs -b $AA -B /ip4/127.0.0.1/tcp/$AA_PORT" "info,libp2p_swarm=debug"
+sleep 4
+send obs "sub t"
 send p1 "sub t"
 send p2 "sub t"
 sleep 6
@@ -78,6 +83,13 @@ wait_count "$W/p1.log" 'camera-ready-e2e' 1 30
 SIG=$(grep -A6 "camera-ready-e2e" "$W/p1.log" | grep -A1 '^Signature:' | tail -1 | tr -d '[:space:]')
 [ -n "$SIG" ] || fail "no signature printed by peer1"
 echo "OK broadcast: peer1 received peer2's message"
+sleep 3
+grep -q "Connection established peer=$AA" "$W/obs.log" \
+    || fail "observer never connected to the AA, so the check below proves nothing"
+if grep -q 'Received gossipsub payload' "$W/obs.log"; then
+    fail "an observer that never registered received gossip"
+fi
+echo "OK observer: an unregistered node received no gossip"
 
 send aa "req_open $SIG"
 for i in 1 2; do

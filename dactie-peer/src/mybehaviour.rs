@@ -1,6 +1,7 @@
 use crate::mybehaviour::MyBehaviourError::PubSubBehaviourError;
 use async_trait::async_trait;
 use dactie_utils::net::{is_unroutable_addr, MESH_N, MESH_N_HIGH, MESH_N_LOW};
+use dactie_utils::admission;
 use dactie_utils::key_store;
 use libp2p::gossipsub::{IdentTopic, MessageAcceptance};
 use libp2p::identity::{Keypair, ParseError};
@@ -146,6 +147,7 @@ impl MyBehaviour {
         let mut gossipsub =
             gossipsub::Behaviour::new(gossipsub::MessageAuthenticity::Anonymous, gossipsub_config)
                 .map_err(|err| PubSubBehaviourError(err.to_string()))?;
+        admission::enable(&mut gossipsub).map_err(PubSubBehaviourError)?;
 
         gossipsub
             .subscribe(&IdentTopic::new("Test"))
@@ -1350,6 +1352,10 @@ impl EventHandler for MyBehaviour {
         my_open_mls: &MyOpenMls,
         event: SwarmEvent<Self::ToSwarm>,
     ) {
+        let connected = match &event {
+            SwarmEvent::ConnectionEstablished { peer_id, .. } => Some(*peer_id),
+            _ => None,
+        };
         if let Err(e) = match event {
             SwarmEvent::Behaviour(MyBehaviourEvent::Gossipsub(event)) => {
                 self.handle_pubsub_event(notification_tx, my_open_mls, *event)
@@ -1364,6 +1370,7 @@ impl EventHandler for MyBehaviour {
         } {
             Self::notify_error(notification_tx, e);
         }
+        admission::update(&mut self.gossipsub, my_open_mls, connected.as_ref());
     }
 }
 

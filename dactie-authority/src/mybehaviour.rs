@@ -20,6 +20,7 @@ use crate::abstswarm::instruction_handler::InstructionHandler;
 use crate::abstswarm::AbstSwarmError::{MLSError, SendError};
 use crate::abstswarm::{AbstSwarmError, Notification};
 use crate::storage::{ReturnMemkeyArgs, Storage};
+use dactie_utils::admission;
 use dactie_utils::net::{is_unroutable_addr, MESH_N, MESH_N_HIGH, MESH_N_LOW};
 use dactie_utils::mls_wrapper::MyOpenMLSError::SerializationError;
 use dactie_utils::mls_wrapper::{MyOpenMLSError, MyOpenMls};
@@ -74,6 +75,7 @@ impl MyBehaviour {
             gossipsub_config,
         )
         .map_err(|err| PubSubBehaviourError(err.to_string()))?;
+        admission::enable(&mut gossipsub).map_err(PubSubBehaviourError)?;
 
         gossipsub
             .subscribe(&IdentTopic::new("Test"))
@@ -783,6 +785,10 @@ impl EventHandler for MyBehaviour {
         storage: &Storage,
         event: SwarmEvent<Self::ToSwarm>,
     ) {
+        let connected = match &event {
+            SwarmEvent::ConnectionEstablished { peer_id, .. } => Some(*peer_id),
+            _ => None,
+        };
         if let Err(e) = match event {
             SwarmEvent::Behaviour(MyBehaviourEvent::IdentifyEvent(e)) => {
                 self.handle_identify_event(e)
@@ -794,6 +800,7 @@ impl EventHandler for MyBehaviour {
         } {
             Self::notify_error(notification_tx, e);
         }
+        admission::update(&mut self.gossipsub, my_open_mls, connected.as_ref());
     }
 }
 
@@ -845,6 +852,8 @@ impl InstructionHandler for MyBehaviour {
             //Ignore other instructions
             _ => {}
         }
+        // end_init_archive creates the common group from the console, not from an event.
+        admission::update(&mut self.gossipsub, my_open_mls, None);
     }
 }
 

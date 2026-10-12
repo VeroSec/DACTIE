@@ -1,6 +1,7 @@
 use crate::mybehaviour::MyBehaviourError::PubSubBehaviourError;
 use async_trait::async_trait;
 use dactie_utils::net::{is_unroutable_addr, MESH_N, MESH_N_HIGH, MESH_N_LOW};
+use dactie_utils::admission;
 use dactie_utils::shared_structs::*;
 use libp2p::futures::TryStreamExt;
 use libp2p::gossipsub::{IdentTopic, MessageAcceptance};
@@ -132,6 +133,7 @@ impl MyBehaviour {
             gossipsub_config,
         )
         .map_err(|err| PubSubBehaviourError(err.to_string()))?;
+        admission::enable(&mut gossipsub).map_err(PubSubBehaviourError)?;
 
         gossipsub
             .subscribe(&IdentTopic::new("Test"))
@@ -924,6 +926,10 @@ impl EventHandler for MyBehaviour {
         pool: &sqlx::PgPool,
         my_open_mls: &MyOpenMls,
     ) {
+        let connected = match &event {
+            SwarmEvent::ConnectionEstablished { peer_id, .. } => Some(*peer_id),
+            _ => None,
+        };
         if let Err(e) = match event {
             SwarmEvent::Behaviour(MyBehaviourEvent::Gossipsub(event)) => {
                 self.handle_pubsub_event(*event, pool, my_open_mls).await
@@ -939,6 +945,7 @@ impl EventHandler for MyBehaviour {
         } {
             log::error!("{e:?}")
         }
+        admission::update(&mut self.gossipsub, my_open_mls, connected.as_ref());
     }
 }
 

@@ -538,6 +538,23 @@ impl MyOpenMls {
             .clone())
     }
 
+    /// PeerIDs of all members of the common group, i.e. every admitted node.
+    pub fn common_group_peers(&self) -> HashSet<PeerId> {
+        let Ok(group_id) = self.get_common_group_id() else {
+            return HashSet::new();
+        };
+        let map = self.group_store.lock().unwrap();
+        map.get(&group_id)
+            .map(|store| {
+                store
+                    .group
+                    .members()
+                    .filter_map(|m| PeerId::from_bytes(m.credential.serialized_content()).ok())
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
     pub fn get_common_group_id(&self) -> Result<GroupId, MyOpenMLSError> {
         self.common_group
             .lock()
