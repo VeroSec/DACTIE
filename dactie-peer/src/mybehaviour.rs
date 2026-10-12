@@ -11,6 +11,7 @@ use libp2p::kad::store::MemoryStore;
 use libp2p::kad::{Mode, PROTOCOL_NAME};
 use libp2p::request_response::ProtocolSupport;
 use libp2p::swarm::{NetworkBehaviour, SwarmEvent};
+use libp2p::connection_limits::{self, ConnectionLimits};
 use libp2p::{gossipsub, identify, kad, request_response, Multiaddr, PeerId, StreamProtocol};
 use openmls::key_packages::KeyPackage;
 use std::collections::BTreeMap;
@@ -113,6 +114,17 @@ pub(crate) struct MyBehaviour {
     pub(crate) request_response: request_response::json::Behaviour<Request, Response>,
     /// Limits connections of nodes outside the common MLS group.
     pub(crate) gate: admission::Gate,
+    /// Caps established connections at the high watermark
+    pub(crate) limits: connection_limits::Behaviour,
+}
+
+impl crate::abstswarm::ProtectedPeers for MyBehaviour {
+    fn protected_peers(&self) -> std::collections::HashSet<PeerId> {
+        let mut peers: std::collections::HashSet<PeerId> =
+            self.gossipsub.all_mesh_peers().copied().collect();
+        peers.extend(archive_keys::trusted().iter().copied());
+        peers
+    }
 }
 
 impl MyBehaviour {
@@ -121,6 +133,7 @@ impl MyBehaviour {
         boot_peer_id_option: Option<PeerId>,
         boot_peer_addr: Multiaddr,
         archives: &[(PeerId, Multiaddr)],
+        conn_high: usize,
     ) -> Result<MyBehaviour, MyBehaviourError> {
         // To content-address message, we can take the hash of message and use it as an ID.
         let message_id_fn = |message: &gossipsub::Message| {
@@ -185,12 +198,19 @@ impl MyBehaviour {
             request_response::Config::default(),
         );
 
+        let limits = connection_limits::Behaviour::new(
+            ConnectionLimits::default()
+                .with_max_established(Some(conn_high as u32))
+                .with_max_established_per_peer(Some(1)),
+        );
+
         Ok(Self {
             gossipsub,
             identify,
             kademlia,
             request_response,
             gate: admission::Gate::default(),
+            limits,
         })
     }
 
@@ -1545,6 +1565,13 @@ impl From<gossipsub::Event> for MyBehaviourEvent {
 impl From<kad::Event> for MyBehaviourEvent {
     fn from(_event: kad::Event) -> Self {
         MyBehaviourEvent::KademliaEvent(())
+    }
+}
+
+// The connection limits never emit events; their event type has no values.
+impl From<void::Void> for MyBehaviourEvent {
+    fn from(event: void::Void) -> Self {
+        void::unreachable(event)
     }
 }
 

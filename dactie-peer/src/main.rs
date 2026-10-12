@@ -69,6 +69,14 @@ struct Args {
     /// Without any, the authority's keys are used unverified.
     #[arg(long = "archive")]
     archives: Vec<Multiaddr>,
+
+    /// Low connection watermark: once full, the peer closes connections down to this.
+    #[arg(long, default_value_t = 50)]
+    conn_low: usize,
+
+    /// High connection watermark: the peer never holds more connections.
+    #[arg(long, default_value_t = 100)]
+    conn_high: usize,
 }
 
 /// Splits `/ip4/.../tcp/.../p2p/<PeerId>` into the PeerId and the address to dial.
@@ -148,6 +156,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         args.authority_peer_id,
         args.bootstrap_addr,
         &archives,
+        args.conn_high.max(args.conn_low),
     )?;
 
     let mut abstswarm_builder = AbstSwarmBuilder::new(
@@ -157,7 +166,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
         behaviour,
         myopenmls.clone(),
         group_commit_rx,
-    )?;
+    )?
+    .connection_watermarks(args.conn_low, args.conn_high.max(args.conn_low));
 
     if let Some(port) = args.port {
         abstswarm_builder =

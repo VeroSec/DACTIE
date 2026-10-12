@@ -106,6 +106,9 @@ Pending requests are stored in the archive's database (table `pending_opens`), s
 
 For automated tests only, start an archive with `--auto-approve-open`: it then answers every request without approval, so the authority could open any signature on its own.
 
+### Connection watermarks (Peer):
+Each sharing peer keeps between 50 and 100 connections: it never accepts more than `--conn-high` (default 100), and once full it closes connections down to `--conn-low` (default 50), sparing its gossipsub mesh peers, the authority, trusted archives and connections younger than 20 s. This follows go-libp2p's connection manager and keeps large networks from connecting every peer to every other. The authority and archives are not capped, since every peer has to reach them.
+
 ### Trusted archives (Peer):
 Members encrypt their key shares to the archives' keys, which the authority hands out. So that a dishonest authority cannot substitute keys it holds, start every peer with each archive's address and PeerId, published out of band: `--archive /ip4/<ip>/tcp/<port>/p2p/<archive PeerId>` (repeat per archive). The peer then confirms every key with its archive before joining, and refuses to join on a mismatch. Without `--archive`, the peer logs a warning and uses the authority's keys unverified.
 

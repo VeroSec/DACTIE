@@ -2,8 +2,11 @@ pub(crate) mod abstswarm_builder;
 pub(crate) mod event_handler;
 pub(crate) mod instruction_handler;
 
+use rand::seq::SliceRandom;
+use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 use thiserror::Error;
 use tokio::sync::mpsc;
 
@@ -12,7 +15,7 @@ use dactie_utils::shared_structs::{Instruction, MessageBody};
 use event_handler::EventHandler;
 use instruction_handler::InstructionHandler;
 use libp2p::futures::StreamExt;
-use libp2p::swarm::NetworkBehaviour;
+use libp2p::swarm::{NetworkBehaviour, SwarmEvent};
 use libp2p::PeerId;
 use libp2p::Swarm;
 use libp2p_metrics as lp2p_metrics;
@@ -36,6 +39,15 @@ use openmls::group::GroupId;
 /// The `Network` does not know or care what the Instructions and Notifications contain. It is up to
 /// the client(s) to give them meaning.
 ///
+/// Peers a behaviour must stay connected to when connections are trimmed.
+pub(crate) trait ProtectedPeers {
+    fn protected_peers(&self) -> HashSet<PeerId>;
+}
+
+/// New connections are not trimmed during their first seconds (go-libp2p's
+/// connection manager uses the same 20 s grace period).
+const CONN_GRACE: Duration = Duration::from_secs(20);
+
 pub(crate) struct AbstSwarm<TBehaviour>
 where
     TBehaviour: NetworkBehaviour,
@@ -47,11 +59,16 @@ where
     my_open_mls: Arc<MyOpenMls>,
     metrics: Option<lp2p_metrics::Metrics>,
     join_relay: crate::join_relay::JoinRelay,
+    /// Connection watermarks: once a peer holds `conn_high` connections, it closes
+    /// unprotected ones down to `conn_low` so that newcomers find free slots.
+    conn_low: usize,
+    conn_high: usize,
+    conn_since: HashMap<PeerId, Instant>,
 }
 
 impl<TBehaviour> AbstSwarm<TBehaviour>
 where
-    TBehaviour: NetworkBehaviour + EventHandler + InstructionHandler,
+    TBehaviour: NetworkBehaviour + EventHandler + InstructionHandler + ProtectedPeers,
 {
     pub(crate) fn new(
         instruction_rx: mpsc::UnboundedReceiver<Instruction>,
@@ -60,6 +77,7 @@ where
         swarm: Swarm<TBehaviour>,
         my_open_mls: Arc<MyOpenMls>,
         metrics: Option<lp2p_metrics::Metrics>,
+        (conn_low, conn_high): (usize, usize),
     ) -> Self {
         AbstSwarm {
             instruction_rx,
@@ -69,12 +87,45 @@ where
             group_commit_rx,
             metrics,
             join_relay: Default::default(),
+            conn_low,
+            conn_high,
+            conn_since: HashMap::new(),
+        }
+    }
+
+    /// Once the peer is full, close connections down to the low watermark. The
+    /// authority, the behaviour's protected peers (gossipsub mesh, trusted
+    /// archives) and connections younger than the grace period are kept.
+    fn trim_connections(&mut self) {
+        let connected: Vec<PeerId> = self.swarm.connected_peers().copied().collect();
+        if connected.len() < self.conn_high {
+            return;
+        }
+        let mut protected = self.swarm.behaviour().protected_peers();
+        protected.insert(self.my_open_mls.get_authorityid());
+        let now = Instant::now();
+        let mut candidates: Vec<PeerId> = connected
+            .iter()
+            .filter(|p| !protected.contains(*p))
+            .filter(|p| {
+                self.conn_since
+                    .get(*p)
+                    .is_none_or(|since| now.duration_since(*since) >= CONN_GRACE)
+            })
+            .copied()
+            .collect();
+        candidates.shuffle(&mut rand::thread_rng());
+        let excess = connected.len() - self.conn_low;
+        for peer in candidates.into_iter().take(excess) {
+            let _ = self.swarm.disconnect_peer_id(peer);
         }
     }
 
     pub(crate) async fn run(mut self) {
+        let mut trim = tokio::time::interval(Duration::from_secs(5));
         loop {
             tokio::select! {
+                _ = trim.tick() => self.trim_connections(),
                 Some(group_id) = self.group_commit_rx.recv() => {
                     let my_open_mls_clone = self.my_open_mls.clone();
                     let notification_tx_clone= self.notification_tx.clone();
@@ -90,6 +141,15 @@ where
                     // Record swarm-level event metrics (counts, protocol stats)
                     if let Some(metrics) = &self.metrics {
                         lp2p_metrics::Recorder::record(metrics, &event);
+                    }
+                    match &event {
+                        SwarmEvent::ConnectionEstablished { peer_id, .. } => {
+                            self.conn_since.entry(*peer_id).or_insert_with(Instant::now);
+                        }
+                        SwarmEvent::ConnectionClosed { peer_id, num_established: 0, .. } => {
+                            self.conn_since.remove(peer_id);
+                        }
+                        _ => {}
                     }
                     self.swarm.behaviour_mut().handle_event(&self.notification_tx,&self.my_open_mls, event).await
                 },

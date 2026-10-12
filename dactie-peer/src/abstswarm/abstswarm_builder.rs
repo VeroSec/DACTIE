@@ -8,7 +8,7 @@ use tokio::sync::mpsc;
 
 use crate::abstswarm::event_handler::EventHandler;
 use crate::abstswarm::instruction_handler::InstructionHandler;
-use crate::abstswarm::{AbstSwarm, Instruction, Notification};
+use crate::abstswarm::{AbstSwarm, Instruction, Notification, ProtectedPeers};
 use dactie_utils::mls_wrapper::MyOpenMls;
 use identity::Keypair;
 use libp2p::swarm::NetworkBehaviour;
@@ -27,11 +27,12 @@ pub(crate) struct AbstSwarmBuilder<TBehaviour> {
     metrics: Option<lp2p_metrics::Metrics>,
     // Addresses to advertise to remote peers as dialable
     external_addresses: Vec<Multiaddr>,
+    conn_watermarks: (usize, usize),
 }
 
 impl<TBehaviour> AbstSwarmBuilder<TBehaviour>
 where
-    TBehaviour: NetworkBehaviour + EventHandler + InstructionHandler,
+    TBehaviour: NetworkBehaviour + EventHandler + InstructionHandler + ProtectedPeers,
 {
     pub(crate) fn new(
         keypair: Keypair,
@@ -51,7 +52,15 @@ where
             group_commit_rx,
             metrics: None,
             external_addresses: Vec::new(),
+            conn_watermarks: (50, 100),
         })
+    }
+
+    /// Low and high connection watermark; the high one must match the cap the
+    /// behaviour's connection limits enforce.
+    pub(crate) fn connection_watermarks(mut self, low: usize, high: usize) -> Self {
+        self.conn_watermarks = (low, high);
+        self
     }
 
     pub(crate) fn listen_address(mut self, address: Multiaddr) -> Self {
@@ -105,6 +114,7 @@ where
             swarm,
             self.my_open_mls,
             self.metrics,
+            self.conn_watermarks,
         ))
     }
 }
