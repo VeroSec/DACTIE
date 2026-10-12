@@ -1,7 +1,7 @@
 use libp2p::PeerId;
 use openmls::group::GroupId;
 use serde::{Deserialize, Serialize};
-use thressig::structs::{EncShare, ShareLinkProof, Signature, Token};
+use thressig::structs::{EncShare, MemberProof, Signature, SlotTag};
 
 //Trait that defines a message before it has been signed with the group signature
 pub trait Signable {
@@ -89,20 +89,16 @@ pub enum RequestMessage {
         keypackage: Vec<u8>,
         enc_shares: Vec<EncShare>,
         commits: Vec<thressig::G1>,
-        // proves that the shares hide the requesting member's sk, bound to the keypackage
-        share_link: ShareLinkProof,
-        // one of the member's registration tokens for the current epoch
-        token: Token,
+        // one of the member's k slot tags for the current epoch
+        tag: SlotTag,
+        // proves that the shares and the tag hide some member's sk, bound to the keypackage
+        proof: MemberProof,
     },
-    // Sent by a member's registration peer: blinded tokens for the AA to sign, for the
-    // current or the next epoch.
-    RequestTokens {
-        epoch: u64,
-        blinded: Vec<thressig::G1>,
-    },
-    // Sent by a sharing peer: keeps its registration for the token's epoch.
+    // Sent by a sharing peer: keeps its registration for the tag's epoch.
     RenewPeer {
-        token: Token,
+        tag: SlotTag,
+        // proves the tag, bound to the requesting PeerID
+        proof: MemberProof,
     },
     RequestOpen {
         signature: Vec<u8>,
@@ -158,6 +154,13 @@ pub enum ResponseMessage {
     OpenerKeys {
         opener_pubkeys: Vec<(PeerId, thressig::G2)>,
         threshold: Option<usize>,
+        // epoch length and slots per member and epoch, for registering sharing peers
+        epoch_secs: u64,
+        peers_per_member: usize,
+    },
+    // The AA did not register a sharing peer.
+    PeerRefused {
+        reason: String,
     },
     // An archive's own ElGamal key, sent by the archive over its authenticated connection.
     ArchiveOpenerKey {
@@ -166,22 +169,11 @@ pub enum ResponseMessage {
     // The archive queued the opening request for its operator to approve.
     OpenPending,
     OpenPairingsReceived,
-    // The AA's signatures on blinded tokens, and the epoch key to check them against.
-    Tokens {
-        epoch: u64,
-        current_epoch: u64,
-        signed: Vec<thressig::G1>,
-        epoch_pubkey: thressig::G2,
-    },
     // The peer stays registered until the end of this epoch.
     PeerRenewed {
         until_epoch: u64,
     },
     RenewRefused {
-        reason: String,
-    },
-    TokensRefused {
-        current_epoch: u64,
         reason: String,
     },
 }
@@ -298,12 +290,6 @@ pub enum Instruction {
     },
     GetOpenerKeys {
         peer_id: PeerId,
-    },
-    GetTokens {
-        peer_id: PeerId,
-        count: usize,
-        // tokens for the next epoch, to renew sharing peers before the current one ends
-        next: bool,
     },
     RenewPeer {
         peer_id: PeerId,

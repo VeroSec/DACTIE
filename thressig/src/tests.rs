@@ -323,27 +323,40 @@ fn test_join_rejects_shares_that_cannot_be_interpolated() {
 }
 
 #[test]
-fn test_share_link_for_additional_peer() {
+fn test_member_proof_for_additional_peer() {
     let (grpkey, mgrkey, pks, opener_sks, n) = join_setup(4);
     let id = 9usize;
     let material = join_mem1(id, n.clone(), &grpkey, 3, &pks);
     let (_, _, _, _, _, sk, enc_shares, commits) = &material;
     let memkey = join_mem2(sk, &try_join(id, &grpkey, &mgrkey, &pks, &n, &material, enc_shares, commits).unwrap());
 
-    // The member shares its key again, under a fresh base, for a new sharing peer.
+    // The member shares its key again, under a fresh base, for a new sharing peer, and uses
+    // its slot 1 of epoch 5.
     let (peer_shares, peer_commits) = create_enc_shares(&id, &grpkey, 3, &pks, &memkey.sk);
     let h_blind = check_share_layout(&peer_shares, &peer_commits, pks.len()).unwrap();
+    let slot = tags::tag(&memkey.sk, 5, 1);
+    let pairs = [(h_blind.clone(), peer_commits[0].clone()), tags::statement(&slot)];
     let context = b"keypackage of the new peer";
-    let proof = prove_share_link(&memkey, &grpkey, &h_blind, &peer_commits[0], context).unwrap();
-    let proof: ShareLinkProof = bincode::deserialize(&bincode::serialize(&proof).unwrap()).unwrap();
-    assert!(verify_share_link(&proof, &grpkey, &h_blind, &peer_commits[0], context));
-    assert!(!verify_share_link(&proof, &grpkey, &h_blind, &peer_commits[0], b"another peer"));
+    let proof = prove_member(&memkey, &grpkey, &pairs, context).unwrap();
+    let proof: MemberProof = bincode::deserialize(&bincode::serialize(&proof).unwrap()).unwrap();
+    assert!(verify_member(&proof, &grpkey, &pairs, context));
+    assert!(!verify_member(&proof, &grpkey, &pairs, b"another peer"));
 
-    // Shares of another secret cannot be linked.
+    // Shares of another secret, or a tag of another key, cannot be proven.
     let (bad_shares, bad_commits) = create_enc_shares(&id, &grpkey, 3, &pks, &FieldElement::random());
     let bad_h = check_share_layout(&bad_shares, &bad_commits, pks.len()).unwrap();
-    let bad_proof = prove_share_link(&memkey, &grpkey, &bad_h, &bad_commits[0], context).unwrap();
-    assert!(!verify_share_link(&bad_proof, &grpkey, &bad_h, &bad_commits[0], context));
+    let bad_pairs = [(bad_h, bad_commits[0].clone()), tags::statement(&slot)];
+    let bad_proof = prove_member(&memkey, &grpkey, &bad_pairs, context).unwrap();
+    assert!(!verify_member(&bad_proof, &grpkey, &bad_pairs, context));
+    let foreign = tags::tag(&FieldElement::random(), 5, 1);
+    let foreign_pairs = [pairs[0].clone(), tags::statement(&foreign)];
+    let foreign_proof = prove_member(&memkey, &grpkey, &foreign_pairs, context).unwrap();
+    assert!(!verify_member(&foreign_proof, &grpkey, &foreign_pairs, context));
+
+    // A relabeled tag (other epoch or slot, same value) fails too.
+    let relabeled = SlotTag { slot: 2, ..slot.clone() };
+    let relabeled_pairs = [pairs[0].clone(), tags::statement(&relabeled)];
+    assert!(!verify_member(&proof, &grpkey, &relabeled_pairs, context));
 
     // The linked peer shares open the member's signatures.
     let sig = sign(&memkey, &grpkey, &"msg".as_bytes()).unwrap();
@@ -355,4 +368,18 @@ fn test_share_link_for_additional_peer() {
     }
     let peers: HashSet<String> = [peer.clone()].into_iter().collect();
     assert_eq!(open(&sig, &grpkey, &peers, &all_sj), vec![peer]);
+}
+
+#[test]
+fn test_slot_tags() {
+    let (sk, other) = (FieldElement::random(), FieldElement::random());
+    // Deterministic per member, epoch and slot, so the AA can refuse a second use.
+    assert_eq!(tags::tag(&sk, 5, 1), tags::tag(&sk, 5, 1));
+    // Different for another slot, epoch or member.
+    assert_ne!(tags::tag(&sk, 5, 1).tag, tags::tag(&sk, 5, 2).tag);
+    assert_ne!(tags::tag(&sk, 5, 1).tag, tags::tag(&sk, 6, 1).tag);
+    assert_ne!(tags::tag(&sk, 5, 1).tag, tags::tag(&other, 5, 1).tag);
+    let tag = tags::tag(&sk, 5, 1);
+    let received: SlotTag = bincode::deserialize(&bincode::serialize(&tag).unwrap()).unwrap();
+    assert_eq!(received, tag);
 }

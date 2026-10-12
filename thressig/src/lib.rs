@@ -12,7 +12,7 @@ use structs::*;
 use thiserror::Error;
 mod spk_dlog;
 pub mod structs;
-pub mod tokens;
+pub mod tags;
 
 #[cfg(test)]
 mod tests;
@@ -508,40 +508,43 @@ pub fn verify<T: Serialize + ?Sized>(
     }
 }
 
-fn share_link_transcript(
+fn member_transcript(
     grpkey: &Grpkey,
     proof_sigma1: &G1,
     proof_sigma2: &G1,
-    h_blind: &G1,
-    c0: &G1,
+    pairs: &[(G1, G1)],
     r1: &GT,
-    r2: &G1,
+    r2s: &[G1],
     msg: &[u8],
 ) -> Vec<u8> {
     let mut msg_to_send: Vec<u8> = Vec::new();
-    msg_to_send.extend_from_slice(b"share-link|");
+    msg_to_send.extend_from_slice(b"member-proof|");
     msg_to_send.extend(grpkey.to_bytes());
     msg_to_send.extend(proof_sigma1.to_bytes(false));
     msg_to_send.extend(proof_sigma2.to_bytes(false));
-    msg_to_send.extend(h_blind.to_bytes(false));
-    msg_to_send.extend(c0.to_bytes(false));
+    for (base, value) in pairs {
+        msg_to_send.extend(base.to_bytes(false));
+        msg_to_send.extend(value.to_bytes(false));
+    }
     msg_to_send.extend(r1.to_bytes());
-    msg_to_send.extend(r2.to_bytes(false));
+    for r2 in r2s {
+        msg_to_send.extend(r2.to_bytes(false));
+    }
     msg_to_send.extend_from_slice(msg);
     msg_to_send
 }
 
 /**
- * Proves that shares committed under h_blind with first commitment c0 hide the sk of this
- * member's credential, without revealing the member. Used when a member adds a sharing peer.
+ * Proves knowledge of this member's sk, that it holds a credential on it, and that
+ * value = base^sk for every pair, without revealing the member. A new sharing peer proves
+ * that its shares (h_blind, C0) and its slot tag hide this sk; a renewal proves the tag only.
  **/
-pub fn prove_share_link(
+pub fn prove_member(
     memkey: &Memkey,
     grpkey: &Grpkey,
-    h_blind: &G1,
-    c0: &G1,
+    pairs: &[(G1, G1)],
     msg: &[u8],
-) -> Result<ShareLinkProof, ThressigError> {
+) -> Result<MemberProof, ThressigError> {
     let sigma1 = memkey.sigma1.as_ref().ok_or(MemkeySetError {
         val: "sigma1".to_string(),
     })?;
@@ -559,13 +562,13 @@ pub fn prove_share_link(
 
     let k = FieldElement::random();
     let r1 = e1.pow(&(&k * &t)); // e(sigma1', Y1~)^k
-    let r2 = h_blind * &k;
-    let c = FieldElement::from_msg_hash(&share_link_transcript(
-        grpkey, &sigma1, &sigma2, h_blind, c0, &r1, &r2, msg,
+    let r2s: Vec<G1> = pairs.iter().map(|(base, _)| base * &k).collect();
+    let c = FieldElement::from_msg_hash(&member_transcript(
+        grpkey, &sigma1, &sigma2, pairs, &r1, &r2s, msg,
     ));
     let s = (&c * &memkey.sk) + &k;
 
-    Ok(ShareLinkProof {
+    Ok(MemberProof {
         sigma1,
         sigma2,
         c,
@@ -573,14 +576,12 @@ pub fn prove_share_link(
     })
 }
 
-pub fn verify_share_link(
-    proof: &ShareLinkProof,
-    grpkey: &Grpkey,
-    h_blind: &G1,
-    c0: &G1,
-    msg: &[u8],
-) -> bool {
-    if proof.sigma1.is_identity() || h_blind.is_identity() {
+pub fn verify_member(proof: &MemberProof, grpkey: &Grpkey, pairs: &[(G1, G1)], msg: &[u8]) -> bool {
+    if proof.sigma1.is_identity()
+        || pairs
+            .iter()
+            .any(|(base, value)| base.is_identity() || value.is_identity())
+    {
         return false;
     }
     /* e(sigma2', g~) / e(sigma1', X~) = e(sigma1', Y1~)^sk */
@@ -588,18 +589,20 @@ pub fn verify_share_link(
         * GT::ate_pairing(&(&proof.sigma1).neg(), &grpkey.x_pub_tilde);
     let r1 = cred.pow(&proof.c).inverse()
         * GT::ate_pairing(&(&proof.sigma1 * &proof.s), &grpkey.y1_pub_tilde);
-    /* c0 = h_blind^sk */
-    let r2 = (h_blind * &proof.s) - (c0 * &proof.c);
+    /* value = base^sk */
+    let r2s: Vec<G1> = pairs
+        .iter()
+        .map(|(base, value)| (base * &proof.s) - (value * &proof.c))
+        .collect();
 
     proof.c
-        == FieldElement::from_msg_hash(&share_link_transcript(
+        == FieldElement::from_msg_hash(&member_transcript(
             grpkey,
             &proof.sigma1,
             &proof.sigma2,
-            h_blind,
-            c0,
+            pairs,
             &r1,
-            &r2,
+            &r2s,
             msg,
         ))
 }

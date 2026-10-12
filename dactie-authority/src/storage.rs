@@ -16,8 +16,8 @@ use std::io::BufReader;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use thiserror::Error;
-use thressig::structs::{EncShare, EncSharePairing, Grpkey, Mgrkey, Signature, Token};
-use thressig::{FieldElement, G1, G2};
+use thressig::structs::{EncShare, EncSharePairing, Grpkey, Mgrkey, Signature, SlotTag};
+use thressig::{FieldElement, GroupElement, G1, G2};
 
 /**
    The storage is used to save information about the added group members and the key material that is required to add new members.
@@ -42,25 +42,15 @@ pub(crate) struct Storage {
     signature_enc_id_pairing_map: Mutex<HashMap<Signature, Vec<(usize, EncSharePairing)>>>,
     #[serde_as(as = "Mutex<HashMap<DisplayFromStr, _>>")]
     signature_enc_peer_pairing_map: Mutex<HashMap<Signature, Vec<(PeerId, EncSharePairing)>>>,
-    /// Secret from which the AA derives one token key per epoch.
-    #[serde(default = "FieldElement::random")]
-    token_master: FieldElement,
-    /// The PeerID each member registered from: the only PeerID the AA links to a name, and
-    /// the one the member requests tokens from.
-    #[serde(default)]
-    registration_peers: Mutex<HashMap<PeerId, usize>>,
-    /// Tokens signed per member and epoch: MemberID -> epoch -> count.
-    #[serde(default)]
-    tokens_issued: Mutex<HashMap<usize, HashMap<u64, usize>>>,
     /// Each registered sharing peer and the last epoch its registration covers.
     #[serde(default)]
     peer_epochs: Mutex<HashMap<PeerId, u64>>,
-    /// Serials of spent tokens, so that no token registers two PeerIDs.
+    /// Slot tags already used, per epoch, so that no tag registers or renews a peer twice.
     #[serde(default)]
-    spent_tokens: Mutex<HashSet<Vec<u8>>>,
-    /// (epoch length in seconds, tokens per member and epoch), set from the command line.
+    used_tags: Mutex<HashMap<u64, HashSet<Vec<u8>>>>,
+    /// (epoch length in seconds, slots per member and epoch), set from the command line.
     #[serde(skip)]
-    token_policy: Mutex<(u64, usize)>,
+    epoch_policy: Mutex<(u64, usize)>,
 }
 
 type OpenSignatureResult = (Vec<(usize, String)>, Vec<PeerId>);
@@ -98,12 +88,9 @@ impl Storage {
                 threshold: Mutex::new(None),
                 signature_enc_id_pairing_map: Mutex::new(HashMap::new()),
                 signature_enc_peer_pairing_map: Mutex::new(HashMap::new()),
-                token_master: FieldElement::random(),
-                registration_peers: Mutex::new(HashMap::new()),
-                tokens_issued: Mutex::new(HashMap::new()),
                 peer_epochs: Mutex::new(HashMap::new()),
-                spent_tokens: Mutex::new(HashSet::new()),
-                token_policy: Mutex::new((30 * 24 * 3600, 5)),
+                used_tags: Mutex::new(HashMap::new()),
+                epoch_policy: Mutex::new((30 * 24 * 3600, 5)),
             },
             key_material,
         )
@@ -324,12 +311,17 @@ impl Storage {
         Ok(res)
     }
 
-    pub(crate) fn set_token_policy(&self, epoch_secs: u64, per_member: usize) {
-        *self.token_policy.lock().unwrap() = (epoch_secs.max(1), per_member);
+    pub(crate) fn set_epoch_policy(&self, epoch_secs: u64, per_member: usize) {
+        *self.epoch_policy.lock().unwrap() = (epoch_secs.max(1), per_member);
+    }
+
+    /// (epoch length in seconds, slots per member and epoch).
+    pub(crate) fn get_epoch_policy(&self) -> (u64, usize) {
+        *self.epoch_policy.lock().unwrap()
     }
 
     pub(crate) fn current_epoch(&self) -> u64 {
-        let epoch_secs = self.token_policy.lock().unwrap().0;
+        let epoch_secs = self.epoch_policy.lock().unwrap().0;
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
@@ -337,68 +329,37 @@ impl Storage {
         now / epoch_secs
     }
 
-    fn epoch_key(&self, epoch: u64) -> FieldElement {
-        thressig::tokens::epoch_key(&self.token_master, epoch)
-    }
-
-    /// Signs blinded tokens for the member that registered from `peer`, at most k per member
-    /// and epoch, and returns them with the epoch's public key. Tokens for the next epoch let
-    /// a member renew its sharing peers before the current epoch ends. Refusals carry the
-    /// current epoch, so a member that blinded for the wrong epoch can retry.
-    pub(crate) fn issue_tokens(
-        &self,
-        peer: &PeerId,
-        epoch: u64,
-        blinded: &[G1],
-    ) -> Result<(Vec<G1>, G2), (u64, String)> {
+    /// Accepts a slot tag once, for a slot in 1..=k and one of `epochs`. The proof that the
+    /// tag belongs to a member must have been checked before.
+    fn accept_tag(&self, tag: &SlotTag, epochs: &[u64]) -> Result<(), String> {
         let current = self.current_epoch();
-        if epoch != current && epoch != current + 1 {
-            return Err((current, format!("epoch {epoch} is neither the current nor the next epoch")));
+        let per_member = self.epoch_policy.lock().unwrap().1;
+        if !epochs.contains(&tag.epoch) {
+            return Err(format!("slot tag of epoch {} is not valid in epoch {current}", tag.epoch));
         }
-        let member = *self
-            .registration_peers
-            .lock()
-            .unwrap()
-            .get(peer)
-            .ok_or((current, "only a member's registration peer gets tokens".to_string()))?;
-        let per_member = self.token_policy.lock().unwrap().1;
-        let signed: Vec<G1> = {
-            let mut issued = self.tokens_issued.lock().unwrap();
-            let per_epoch = issued.entry(member).or_default();
-            per_epoch.retain(|e, _| *e >= current);
-            let count = per_epoch.entry(epoch).or_insert(0);
-            let n = blinded.len().min(per_member - *count);
-            *count += n;
-            let key = self.epoch_key(epoch);
-            blinded[..n]
-                .iter()
-                .map(|b| thressig::tokens::sign_blinded(&key, b))
-                .collect()
-        };
-        if signed.is_empty() {
-            return Err((current, format!("all {per_member} tokens of epoch {epoch} were issued")));
+        if tag.slot == 0 || tag.slot as usize > per_member {
+            return Err(format!("slot {} is not one of the {per_member} slots", tag.slot));
         }
-        self.to_file().map_err(|e| (current, e.to_string()))?;
-        let pubkey = thressig::tokens::epoch_pubkey(&self.grpkey.g_tilde, &self.epoch_key(epoch));
-        Ok((signed, pubkey))
-    }
-
-    /// Accepts each token once. A new sharing peer needs a token of the current epoch.
-    pub(crate) fn spend_token(&self, token: &Token) -> Result<(), String> {
-        if token.epoch != self.current_epoch() {
-            return Err(format!("token of epoch {} is not for the current epoch", token.epoch));
-        }
-        self.spend(token)
-    }
-
-    fn spend(&self, token: &Token) -> Result<(), String> {
-        if !thressig::tokens::verify_with_key(token, &self.epoch_key(token.epoch)) {
-            return Err("token signature is invalid".to_string());
-        }
-        if !self.spent_tokens.lock().unwrap().insert(token.serial.clone()) {
-            return Err("token was already spent".to_string());
+        {
+            let mut used = self.used_tags.lock().unwrap();
+            used.retain(|epoch, _| *epoch >= current);
+            if !used
+                .entry(tag.epoch)
+                .or_default()
+                .insert(tag.tag.to_bytes(true))
+            {
+                return Err(format!(
+                    "slot {} of epoch {} was already used by this member",
+                    tag.slot, tag.epoch
+                ));
+            }
         }
         self.to_file().map_err(|e| e.to_string())
+    }
+
+    /// A new sharing peer needs a tag of the current epoch.
+    pub(crate) fn accept_registration_tag(&self, tag: &SlotTag) -> Result<(), String> {
+        self.accept_tag(tag, &[self.current_epoch()])
     }
 
     /// Records that a sharing peer's registration covers `epoch`.
@@ -407,20 +368,17 @@ impl Storage {
         self.to_file()
     }
 
-    /// Extends a registered sharing peer to the token's epoch, the current or the next one.
-    pub(crate) fn renew_peer(&self, peer: &PeerId, token: &Token) -> Result<u64, String> {
+    /// Extends a registered sharing peer to the tag's epoch, the current or the next one.
+    pub(crate) fn renew_peer(&self, peer: &PeerId, tag: &SlotTag) -> Result<u64, String> {
         let current = self.current_epoch();
         if !self.peer_epochs.lock().unwrap().contains_key(peer) {
             return Err("not a registered sharing peer".to_string());
         }
-        if token.epoch != current && token.epoch != current + 1 {
-            return Err(format!("token of epoch {} is neither the current nor the next epoch", token.epoch));
-        }
-        self.spend(token)?;
+        self.accept_tag(tag, &[current, current + 1])?;
         let until = {
             let mut epochs = self.peer_epochs.lock().unwrap();
             let until = epochs.entry(*peer).or_insert(0);
-            *until = (*until).max(token.epoch);
+            *until = (*until).max(tag.epoch);
             *until
         };
         self.to_file().map_err(|e| e.to_string())?;
@@ -483,7 +441,6 @@ impl Storage {
         let (n, id, name) = self.remove_n(args.peer_id).ok_or(GetNError {
             peer_id: *args.peer_id,
         })?;
-        let registration_peer = *args.peer_id;
         let opener_pubkeys = self.opener_pubkeys.lock().unwrap().clone();
         let mut gml_guard = self.gml.lock().unwrap();
         let part_memkey = thressig::join_mgr2(
@@ -510,10 +467,6 @@ impl Storage {
         // is not reentrant, so the guard must be released first or serialization
         // deadlocks against it, leaving a half-written file on disk.
         drop(gml_guard);
-        self.registration_peers
-            .lock()
-            .unwrap()
-            .insert(registration_peer, id);
 
         self.to_file()?;
         Ok((id, part_memkey.to_bytes()))
@@ -598,78 +551,33 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_token_cap_and_spending() {
-        let dir = std::env::temp_dir().join(format!("dactie-token-test-{}", std::process::id()));
+    fn test_slot_tags_renewal_and_expiry() {
+        let dir = std::env::temp_dir().join(format!("dactie-slot-test-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let (storage, _) = Storage::new(dir.join("storage.json"));
-        storage.set_token_policy(3600, 3);
-        let member = PeerId::random();
-        storage.registration_peers.lock().unwrap().insert(member, 42);
+        storage.set_epoch_policy(3600, 2);
         let epoch = storage.current_epoch();
-        let blind = |n: usize| (0..n).map(|_| thressig::tokens::blind(epoch)).collect::<Vec<_>>();
-        let points = |ts: &[thressig::structs::BlindedToken]| {
-            ts.iter().map(|t| t.blinded.clone()).collect::<Vec<_>>()
-        };
+        let sk = FieldElement::random();
+        let tag = |e, s| thressig::tags::tag(&sk, e, s);
 
-        // Only a member's registration peer, and only for the current or the next epoch.
-        assert!(storage.issue_tokens(&PeerId::random(), epoch, &points(&blind(1))).is_err());
-        let refused = storage.issue_tokens(&member, epoch + 2, &points(&blind(1)));
-        assert_eq!(refused.unwrap_err().0, epoch);
+        // A new peer needs one of the k = 2 slots of the current epoch, each once.
+        assert!(storage.accept_registration_tag(&tag(epoch, 1)).is_ok());
+        assert!(storage.accept_registration_tag(&tag(epoch, 1)).is_err());
+        assert!(storage.accept_registration_tag(&tag(epoch, 3)).is_err());
+        assert!(storage.accept_registration_tag(&tag(epoch + 1, 2)).is_err());
+        assert!(storage.accept_registration_tag(&tag(epoch, 2)).is_ok());
+        // Another member has its own tags for the same slots.
+        let other = thressig::tags::tag(&FieldElement::random(), epoch, 1);
+        assert!(storage.accept_registration_tag(&other).is_ok());
 
-        // At most k = 3 per member and epoch, however they are requested.
-        let first = blind(2);
-        let (signed, pubkey) = storage.issue_tokens(&member, epoch, &points(&first)).unwrap();
-        assert_eq!(signed.len(), 2);
-        assert_eq!(storage.issue_tokens(&member, epoch, &points(&blind(5))).unwrap().0.len(), 1);
-        assert!(storage.issue_tokens(&member, epoch, &points(&blind(1))).is_err());
-
-        // Each token registers one PeerID, and only a token the AA signed counts.
-        let token =
-            thressig::tokens::unblind(&first[0], &signed[0], &storage.grpkey.g_tilde, &pubkey)
-                .unwrap();
-        assert!(storage.spend_token(&token).is_ok());
-        assert!(storage.spend_token(&token).is_err());
-        let forged = Token {
-            serial: vec![7; 32],
-            ..token
-        };
-        assert!(storage.spend_token(&forged).is_err());
-        std::fs::remove_dir_all(dir).ok();
-    }
-
-    #[test]
-    fn test_renewal_and_expiry() {
-        let dir = std::env::temp_dir().join(format!("dactie-expiry-test-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let (storage, _) = Storage::new(dir.join("storage.json"));
-        storage.set_token_policy(3600, 2);
-        let member = PeerId::random();
-        storage.registration_peers.lock().unwrap().insert(member, 7);
-        let epoch = storage.current_epoch();
-        let issue = |e: u64| {
-            let blinded = thressig::tokens::blind(e);
-            let (signed, pubkey) =
-                storage.issue_tokens(&member, e, &[blinded.blinded.clone()]).unwrap();
-            thressig::tokens::unblind(&blinded, &signed[0], &storage.grpkey.g_tilde, &pubkey)
-                .unwrap()
-        };
-
-        // Next-epoch tokens count against the next epoch's k, not the current one.
-        let next = issue(epoch + 1);
-        let current = issue(epoch);
-        issue(epoch);
-        issue(epoch + 1);
-        let blinded = thressig::tokens::blind(epoch);
-        assert!(storage.issue_tokens(&member, epoch, &[blinded.blinded]).is_err());
-
-        // A next-epoch token does not register a new peer, but renews a registered one.
-        assert!(storage.spend_token(&next).is_err());
+        // Renewal: registered peers only, with a tag of the current or the next epoch.
         let (stays, leaves, stranger) = (PeerId::random(), PeerId::random(), PeerId::random());
         storage.register_peer_epoch(stays, epoch).unwrap();
         storage.register_peer_epoch(leaves, epoch - 1).unwrap();
-        assert!(storage.renew_peer(&stranger, &current).is_err());
-        assert_eq!(storage.renew_peer(&stays, &next).unwrap(), epoch + 1);
-        assert!(storage.renew_peer(&stays, &next).is_err());
+        assert!(storage.renew_peer(&stranger, &tag(epoch + 1, 1)).is_err());
+        assert_eq!(storage.renew_peer(&stays, &tag(epoch + 1, 1)).unwrap(), epoch + 1);
+        assert!(storage.renew_peer(&stays, &tag(epoch + 1, 1)).is_err());
+        assert!(storage.renew_peer(&stays, &tag(epoch + 2, 1)).is_err());
 
         // Only the peer whose registration ended before the current epoch expires.
         assert_eq!(storage.expired_peers(), vec![leaves]);

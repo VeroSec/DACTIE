@@ -132,8 +132,10 @@ pub(crate) enum AbstSwarmError {
     MLSError(#[from] MyOpenMLSError),
     #[error("Failed to validate Message")]
     MessageValidationError,
-    #[error("No registration token left in {dir}; run get_tokens on the member's registration peer")]
-    NoRegistrationToken { dir: String },
-    #[error("Could not store registration tokens: {reason}")]
-    TokenStoreError { reason: String },
+    #[error("All slots of epoch {epoch} are used by this member (see {dir}/slots.json)")]
+    NoFreeSlot { dir: String, epoch: u64 },
+    #[error("Could not record the used slot: {reason}")]
+    SlotStoreError { reason: String },
+    #[error("Epoch length and slots are unknown; run get_opener_keys first")]
+    NoEpochPolicy,
 }

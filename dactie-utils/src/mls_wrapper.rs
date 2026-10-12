@@ -21,7 +21,7 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 use std::path::PathBuf;
 use std::sync::Mutex;
 use thiserror::Error;
-use thressig::structs::{EncShare, EncSharePairing, ShareLinkProof, Signature};
+use thressig::structs::{EncShare, EncSharePairing, MemberProof, Signature, SlotTag};
 use tokio::sync::mpsc;
 use tokio::time::{sleep, Duration};
 use MyOpenMLSError::*;
@@ -59,6 +59,8 @@ pub struct MyOpenMls {
     opener_pubkeys: Mutex<Vec<thressig::G2>>,
     // Archives needed to open a signature, set by the authority for the whole network.
     opener_threshold: Mutex<Option<usize>>,
+    // (epoch length in seconds, slots per member and epoch), announced by the authority.
+    epoch_policy: Mutex<Option<(u64, usize)>>,
 }
 
 impl MyOpenMls {
@@ -101,6 +103,7 @@ impl MyOpenMls {
             authority_id,
             opener_pubkeys: Mutex::new(Vec::new()),
             opener_threshold: Mutex::new(None),
+            epoch_policy: Mutex::new(None),
         })
     }
 
@@ -129,12 +132,15 @@ impl MyOpenMls {
         Ok(res)
     }
 
-    /// Shares the member key again for an additional sharing peer, with a proof that the
-    /// shares hide the key of this member's credential. `context` binds the proof to the peer.
-    pub fn generate_enc_shares(
+    /// Shares the member key again for an additional sharing peer, takes the member's tag for
+    /// `slot` of `epoch`, and proves that both hide the key of this member's credential.
+    /// `context` binds the proof to the new peer.
+    pub fn prepare_peer_registration(
         &self,
         context: &[u8],
-    ) -> Result<(Vec<EncShare>, Vec<thressig::G1>, ShareLinkProof), MyOpenMLSError> {
+        epoch: u64,
+        slot: u32,
+    ) -> Result<(Vec<EncShare>, Vec<thressig::G1>, SlotTag, MemberProof), MyOpenMLSError> {
         let opener_pubkeys = self.opener_pubkeys.lock().unwrap().clone();
         let mut key_store = self.key_store.lock().unwrap();
         let grpkey = key_store.get_grpkey().ok_or(GPKUndefinedError)?;
@@ -148,17 +154,19 @@ impl MyOpenMls {
             &opener_pubkeys,
             threshold,
         );
-        let h_blind = &enc_shares.first().ok_or(ElgamalUndefinedError)?.h_blind;
-        let share_link =
-            thressig::prove_share_link(&memkey, &grpkey, h_blind, &commits[0], context)?;
-        Ok((enc_shares, commits, share_link))
+        let h_blind = enc_shares.first().ok_or(ElgamalUndefinedError)?.h_blind.clone();
+        let tag = thressig::tags::tag(&memkey.sk, epoch, slot);
+        let pairs = [(h_blind, commits[0].clone()), thressig::tags::statement(&tag)];
+        let proof = thressig::prove_member(&memkey, &grpkey, &pairs, context)?;
+        Ok((enc_shares, commits, tag, proof))
     }
 
-    /// Checks that a new peer's shares form one polynomial over the archives and hide the key
-    /// of some member's credential, without learning which member.
-    pub fn verify_share_link(
+    /// Checks that a new peer's shares form one polynomial over the archives, and that they
+    /// and the slot tag hide the key of some member's credential, without learning which member.
+    pub fn verify_peer_registration(
         &self,
-        share_link: &ShareLinkProof,
+        proof: &MemberProof,
+        tag: &SlotTag,
         enc_shares: &[EncShare],
         commits: &[thressig::G1],
         n_openers: usize,
@@ -170,10 +178,51 @@ impl MyOpenMls {
         };
         match thressig::check_share_layout(enc_shares, commits, n_openers) {
             Ok(h_blind) => {
-                thressig::verify_share_link(share_link, &grpkey, &h_blind, &commits[0], context)
+                let pairs = [(h_blind, commits[0].clone()), thressig::tags::statement(tag)];
+                thressig::verify_member(proof, &grpkey, &pairs, context)
             }
             Err(_) => false,
         }
+    }
+
+    /// The member's tag for `slot` of `epoch` and its proof, for renewing a sharing peer.
+    pub fn prove_renewal(
+        &self,
+        context: &[u8],
+        epoch: u64,
+        slot: u32,
+    ) -> Result<(SlotTag, MemberProof), MyOpenMLSError> {
+        let key_store = self.key_store.lock().unwrap();
+        let grpkey = key_store.get_grpkey().ok_or(GPKUndefinedError)?;
+        let memkey = key_store.get_memkey().ok_or(GSKUndefinedError)?;
+        let tag = thressig::tags::tag(&memkey.sk, epoch, slot);
+        let proof =
+            thressig::prove_member(&memkey, &grpkey, &[thressig::tags::statement(&tag)], context)?;
+        Ok((tag, proof))
+    }
+
+    pub fn verify_renewal(&self, proof: &MemberProof, tag: &SlotTag, context: &[u8]) -> bool {
+        match self.key_store.lock().unwrap().get_grpkey() {
+            Some(grpkey) => {
+                thressig::verify_member(proof, &grpkey, &[thressig::tags::statement(tag)], context)
+            }
+            None => false,
+        }
+    }
+
+    /// Epoch length and slots per member and epoch, as the AA announced them.
+    pub fn set_epoch_policy(&self, epoch_secs: u64, peers_per_member: usize) {
+        *self.epoch_policy.lock().unwrap() = Some((epoch_secs.max(1), peers_per_member));
+    }
+
+    /// The AA's current epoch and k, if this node has fetched them with get_opener_keys.
+    pub fn epoch_policy(&self) -> Option<(u64, usize)> {
+        let (epoch_secs, k) = (*self.epoch_policy.lock().unwrap())?;
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        Some((now / epoch_secs, k))
     }
 
     //Generate Keypair used for encryption of the shares
@@ -541,42 +590,6 @@ impl MyOpenMls {
     /// Folder of this node's key material, which also holds its tokens.json.
     pub fn key_dir(&self) -> PathBuf {
         self.load_files_path.clone()
-    }
-
-    /// Checks the AA's answer to blinded tokens and stores the tokens. Returns how many were
-    /// stored and how many failed the check against the epoch key.
-    pub fn receive_tokens(
-        &self,
-        epoch: u64,
-        current_epoch: u64,
-        signed: &[thressig::G1],
-        epoch_pubkey: &thressig::G2,
-    ) -> Result<(usize, usize), MyOpenMLSError> {
-        let g_tilde = self
-            .key_store
-            .lock()
-            .unwrap()
-            .get_grpkey()
-            .ok_or(GPKUndefinedError)?
-            .g_tilde;
-        let dir = self.key_dir();
-        let mut store = crate::token_store::TokenStore::load(&dir);
-        let pending: Vec<_> = store.pending.drain(..).filter(|t| t.epoch == epoch).collect();
-        let (mut stored, mut failed) = (0, 0);
-        for (blinded, sig) in pending.iter().zip(signed) {
-            match thressig::tokens::unblind(blinded, sig, &g_tilde, epoch_pubkey) {
-                Some(token) => {
-                    store.tokens.push(token);
-                    stored += 1;
-                }
-                None => failed += 1,
-            }
-        }
-        store.epoch = current_epoch;
-        store
-            .save(&dir)
-            .map_err(|e| SerializationError(e.to_string()))?;
-        Ok((stored, failed))
     }
 
     /// PeerIDs of all members of the common group, i.e. every admitted node.

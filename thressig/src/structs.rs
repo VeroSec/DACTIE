@@ -86,12 +86,11 @@ pub struct Signature {
     pub s: FieldElement,
 }
 
-/// Proves that the shares of an additional peer hide the sk of some member's credential,
-/// without revealing which member: a randomized credential (sigma1, sigma2) and one Schnorr
-/// proof that sk satisfies both e(sigma2, g~) = e(sigma1, X~) e(sigma1, Y1~)^sk and
-/// C0 = h_blind^sk, where C0 is the first Feldman commitment.
+/// Proves knowledge of the sk of some member's credential and that value = base^sk for given
+/// pairs, without revealing the member: a randomized credential (sigma1, sigma2) and one Schnorr
+/// proof for e(sigma2, g~) = e(sigma1, X~) e(sigma1, Y1~)^sk and every pair.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-pub struct ShareLinkProof {
+pub struct MemberProof {
     #[serde(with = "g1_compressed")]
     pub sigma1: G1,
     #[serde(with = "g1_compressed")]
@@ -102,23 +101,13 @@ pub struct ShareLinkProof {
     pub s: FieldElement,
 }
 
-/// An unblinded registration token: the AA's BLS signature on H(epoch, serial). The AA signed
-/// it blinded, so it cannot tell which member it issued the token to.
+/// A member's tag for one of its k slots in an epoch, H(epoch, slot)^sk.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-pub struct Token {
+pub struct SlotTag {
     pub epoch: u64,
-    pub serial: Vec<u8>,
+    pub slot: u32,
     #[serde(with = "g1_compressed")]
-    pub sig: G1,
-}
-
-/// A token before issuance. The member keeps `serial` and `r` and sends only `blinded`.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct BlindedToken {
-    pub epoch: u64,
-    pub serial: Vec<u8>,
-    pub r: FieldElement,
-    pub blinded: G1,
+    pub tag: G1,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]

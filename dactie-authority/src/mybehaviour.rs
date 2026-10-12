@@ -616,46 +616,24 @@ impl MyBehaviour {
                             }
                         }
 
-                        // A member's registration peer asks for blinded tokens to be signed.
-                        // Unsigned: the AA must see which member asks, to cap its tokens.
-                        RequestMessage::RequestTokens { epoch, blinded } => {
-                            let body = match storage.issue_tokens(&peer, epoch, &blinded) {
-                                Ok((signed, epoch_pubkey)) => {
-                                    log::info!(
-                                        "Signed {} registration tokens for epoch {epoch}",
-                                        signed.len()
-                                    );
-                                    ResponseMessage::Tokens {
-                                        epoch,
-                                        current_epoch: storage.current_epoch(),
-                                        signed,
-                                        epoch_pubkey,
+                        // A sharing peer keeps its registration for another epoch with one of
+                        // its member's slot tags. Unsigned: the proof shows it is a member's tag.
+                        RequestMessage::RenewPeer { tag, proof } => {
+                            let body = if !my_open_mls.verify_renewal(&proof, &tag, &peer.to_bytes())
+                            {
+                                ResponseMessage::RenewRefused {
+                                    reason: "the slot tag does not belong to a member".to_string(),
+                                }
+                            } else {
+                                match storage.renew_peer(&peer, &tag) {
+                                    Ok(until_epoch) => {
+                                        log::info!("Renewed sharing peer {peer} until epoch {until_epoch}");
+                                        ResponseMessage::PeerRenewed { until_epoch }
                                     }
-                                }
-                                Err((current_epoch, reason)) => {
-                                    log::info!("Refused tokens to {peer}: {reason}");
-                                    ResponseMessage::TokensRefused {
-                                        current_epoch,
-                                        reason,
+                                    Err(reason) => {
+                                        log::info!("Refused to renew {peer}: {reason}");
+                                        ResponseMessage::RenewRefused { reason }
                                     }
-                                }
-                            };
-                            self.request_response
-                                .send_response(channel, my_open_mls.sign(body)?)
-                                .unwrap_or(());
-                        }
-
-                        // A sharing peer keeps its registration for another epoch with a
-                        // token. Unsigned: the token and the PeerID of the connection suffice.
-                        RequestMessage::RenewPeer { token } => {
-                            let body = match storage.renew_peer(&peer, &token) {
-                                Ok(until_epoch) => {
-                                    log::info!("Renewed sharing peer {peer} until epoch {until_epoch}");
-                                    ResponseMessage::PeerRenewed { until_epoch }
-                                }
-                                Err(reason) => {
-                                    log::info!("Refused to renew {peer}: {reason}");
-                                    ResponseMessage::RenewRefused { reason }
                                 }
                             };
                             self.request_response
@@ -668,8 +646,8 @@ impl MyBehaviour {
                             keypackage,
                             enc_shares,
                             commits,
-                            share_link,
-                            token,
+                            tag,
+                            proof,
                         } => {
                             log::info!("Got Request to add new peer from existing member");
                             match my_open_mls.verify(request) {
@@ -688,33 +666,31 @@ impl MyBehaviour {
                                 }
                             };
 
-                            let mut verified = true;
-                            // The shares must hide the key of the member who asks, or opening
-                            // a signature would never expose this peer.
-                            if !my_open_mls.verify_share_link(
-                                &share_link,
+                            let mut refusal: Option<String> = None;
+                            // The shares must hide the key of the member who asks, or opening a
+                            // signature would never expose this peer, and so must the slot tag.
+                            if !my_open_mls.verify_peer_registration(
+                                &proof,
+                                &tag,
                                 &enc_shares,
                                 &commits,
                                 storage.get_opener_pubkeys().len(),
                                 &keypackage,
                             ) {
-                                verified = false;
-                                log::info!("Verification of new Peer from existing Sig failed, shares do not hide the member key");
+                                refusal = Some("the shares or the slot tag do not hide a member key".to_string());
                             }
                             //Verify Keypackage belongs to Peer
                             let keypackage: KeyPackage = bincode::deserialize(&keypackage)
                                 .map_err(|x| SerializationError(x.to_string()))?;
-                            if !Storage::verify_key_package(&keypackage, peer)? {
-                                verified = false;
-                                log::info!("Verification of new Peer from existing Sig failed, KP does not belong to Peer");
+                            if refusal.is_none() && !Storage::verify_key_package(&keypackage, peer)? {
+                                refusal = Some("the KeyPackage does not belong to the peer".to_string());
                             }
 
-                            if verified && !Self::shares_match_network(storage, &enc_shares, &commits) {
-                                verified = false;
-                                log::info!("Verification of new Peer from existing Sig failed, shares do not match the archives and threshold");
+                            if refusal.is_none() && !Self::shares_match_network(storage, &enc_shares, &commits) {
+                                refusal = Some("the shares do not match the archives and threshold".to_string());
                             }
 
-                            if verified {
+                            if refusal.is_none() {
                                 //Verify EncShare
                                 let opener_pubkeys = storage.get_opener_pubkeys();
                                 for (enc_share, key) in enc_shares.iter().zip(opener_pubkeys.iter())
@@ -724,24 +700,30 @@ impl MyBehaviour {
                                         &commits,
                                         Some(key.clone()),
                                     ) {
-                                        verified = false;
-                                        log::info!("Verification of new Peer from existing Sig failed, EncShares could not be verified");
+                                        refusal = Some("an encrypted share could not be verified".to_string());
                                         break;
                                     }
                                 }
                             }
 
-                            // Spent last, so a request that fails a check does not use it up.
-                            if verified {
-                                if let Err(reason) = storage.spend_token(&token) {
-                                    verified = false;
-                                    log::info!("Verification of new Peer from existing Sig failed, {reason}");
+                            // Used last, so a request that fails a check does not use up a slot.
+                            if refusal.is_none() {
+                                if let Err(reason) = storage.accept_registration_tag(&tag) {
+                                    refusal = Some(reason);
                                 }
                             }
 
-                            if verified {
+                            if let Some(reason) = refusal {
+                                log::info!("Verification of new Peer from existing Sig failed, {reason}");
+                                self.request_response
+                                    .send_response(
+                                        channel,
+                                        my_open_mls.sign(ResponseMessage::PeerRefused { reason })?,
+                                    )
+                                    .unwrap_or(());
+                            } else {
                                 log::info!("Adding new peer from existing member");
-                                storage.register_peer_epoch(peer, token.epoch)?;
+                                storage.register_peer_epoch(peer, tag.epoch)?;
                                 self.send_out_peer_enc_shares(
                                     my_open_mls,
                                     &storage.get_archive_peer_ids(),
@@ -800,9 +782,12 @@ impl MyBehaviour {
                         }
 
                         RequestMessage::RequestOpenerKeys => {
+                            let (epoch_secs, peers_per_member) = storage.get_epoch_policy();
                             let res = ResponseMessage::OpenerKeys {
                                 opener_pubkeys: storage.get_archive_keys(),
                                 threshold: storage.get_threshold(),
+                                epoch_secs,
+                                peers_per_member,
                             };
                             self.request_response
                                 .send_response(channel, my_open_mls.sign(res)?)

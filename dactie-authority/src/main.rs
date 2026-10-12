@@ -42,12 +42,12 @@ struct Args {
     #[arg(long)]
     threshold: Option<usize>,
 
-    /// Length of a token epoch in seconds. Each epoch, a member gets at most
-    /// --peers-per-member registration tokens.
+    /// Length of an epoch in seconds. A sharing peer's registration lasts until the end of
+    /// the epoch of its slot tag.
     #[arg(long, default_value_t = 30 * 24 * 3600)]
     epoch_secs: u64,
 
-    /// Sharing peers a member can register per epoch (k).
+    /// Slots per member and epoch (k): how many sharing peers a member can register.
     #[arg(long, default_value_t = 5)]
     peers_per_member: usize,
 }
@@ -101,7 +101,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         }
     }
 
-    storage.set_token_policy(args.epoch_secs, args.peers_per_member);
+    storage.set_epoch_policy(args.epoch_secs, args.peers_per_member);
 
     log::info!(
         "Archives registered: {}, init phase: {}",
