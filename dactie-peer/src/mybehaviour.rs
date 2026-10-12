@@ -3,6 +3,7 @@ use async_trait::async_trait;
 use dactie_utils::net::{is_unroutable_addr, MESH_N, MESH_N_HIGH, MESH_N_LOW};
 use crate::join_relay;
 use dactie_utils::admission;
+use dactie_utils::conn_cap;
 use dactie_utils::key_store;
 use dactie_utils::slot_store::SlotStore;
 use libp2p::gossipsub::{IdentTopic, MessageAcceptance};
@@ -11,7 +12,6 @@ use libp2p::kad::store::MemoryStore;
 use libp2p::kad::{Mode, PROTOCOL_NAME};
 use libp2p::request_response::ProtocolSupport;
 use libp2p::swarm::{NetworkBehaviour, SwarmEvent};
-use libp2p::connection_limits::{self, ConnectionLimits};
 use libp2p::{gossipsub, identify, kad, request_response, Multiaddr, PeerId, StreamProtocol};
 use openmls::key_packages::KeyPackage;
 use std::collections::BTreeMap;
@@ -114,8 +114,8 @@ pub(crate) struct MyBehaviour {
     pub(crate) request_response: request_response::json::Behaviour<Request, Response>,
     /// Limits connections of nodes outside the common MLS group.
     pub(crate) gate: admission::Gate,
-    /// Caps established connections at the high watermark
-    pub(crate) limits: connection_limits::Behaviour,
+    /// Caps connections at the high watermark, refusing before the handshake
+    pub(crate) limits: conn_cap::ConnCap,
 }
 
 impl crate::abstswarm::ProtectedPeers for MyBehaviour {
@@ -198,10 +198,13 @@ impl MyBehaviour {
             request_response::Config::default(),
         );
 
-        let limits = connection_limits::Behaviour::new(
-            ConnectionLimits::default()
-                .with_max_established(Some(conn_high as u32))
-                .with_max_established_per_peer(Some(1)),
+        // Refuses before the handshake once full. The authority and the trusted
+        // archives are exempt, like they are from trimming.
+        let limits = conn_cap::ConnCap::new(
+            conn_cap::Limits::for_high_watermark(conn_high),
+            boot_peer_id_option
+                .into_iter()
+                .chain(archives.iter().map(|(archive, _)| *archive)),
         );
 
         Ok(Self {
@@ -1565,13 +1568,6 @@ impl From<gossipsub::Event> for MyBehaviourEvent {
 impl From<kad::Event> for MyBehaviourEvent {
     fn from(_event: kad::Event) -> Self {
         MyBehaviourEvent::KademliaEvent(())
-    }
-}
-
-// The connection limits never emit events; their event type has no values.
-impl From<void::Void> for MyBehaviourEvent {
-    fn from(event: void::Void) -> Self {
-        void::unreachable(event)
     }
 }
 
