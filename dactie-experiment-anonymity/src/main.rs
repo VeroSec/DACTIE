@@ -1,4 +1,5 @@
 mod adversary;
+mod conn_cap;
 mod experiment;
 mod peer;
 

@@ -1,5 +1,5 @@
+use crate::conn_cap::ConnCap;
 use futures::StreamExt;
-use libp2p::connection_limits::{self, ConnectionLimits};
 use libp2p::gossipsub::IdentTopic;
 use libp2p::kad::store::MemoryStore;
 use libp2p::kad::{Mode, PROTOCOL_NAME};
@@ -215,8 +215,8 @@ pub(crate) struct MyBehaviour {
     pub(crate) identify: identify::Behaviour,
     /// The Kademlia DHT used to discover peers
     pub(crate) kademlia: kad::Behaviour<MemoryStore>,
-    /// Caps established connections at the high watermark
-    pub(crate) limits: connection_limits::Behaviour,
+    /// Caps established connections at the high watermark, refusing before the handshake
+    pub(crate) limits: ConnCap,
 }
 
 impl Peer {
@@ -319,10 +319,13 @@ impl Peer {
 
         swarm.behaviour_mut().kademlia.set_mode(Some(Mode::Server));
 
+        // Loopback only: every peer runs in this process. Listening on all
+        // interfaces made each peer advertise one address per interface, and every
+        // dial then opened that many sockets and aborted all but one mid-handshake.
         if bootstrap_peer.is_none() {
-            swarm.listen_on("/ip4/0.0.0.0/tcp/10001".parse()?)?;
+            swarm.listen_on("/ip4/127.0.0.1/tcp/10001".parse()?)?;
         } else {
-            swarm.listen_on("/ip4/0.0.0.0/tcp/0".parse()?)?;
+            swarm.listen_on("/ip4/127.0.0.1/tcp/0".parse()?)?;
         }
 
         Ok(swarm)
@@ -362,19 +365,13 @@ impl Peer {
         }
 
         // The bootstrap peer stays uncapped: every joining peer dials it first.
-        let limits = if bootstrap_peer.is_none() {
-            ConnectionLimits::default()
-        } else {
-            ConnectionLimits::default()
-                .with_max_established(Some(mesh.conn_high as u32))
-                .with_max_established_per_peer(Some(1))
-        };
+        let limits = ConnCap::new(bootstrap_peer.as_ref().map(|_| mesh.conn_high));
 
         Ok(MyBehaviour {
             gossipsub,
             identify,
             kademlia,
-            limits: connection_limits::Behaviour::new(limits),
+            limits,
         })
     }
 
