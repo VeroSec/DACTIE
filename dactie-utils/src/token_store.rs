@@ -10,7 +10,7 @@ use thressig::structs::{BlindedToken, Token};
 
 #[derive(Default, Serialize, Deserialize)]
 pub struct TokenStore {
-    /// The AA's epoch as last learned from it.
+    /// The AA's current epoch as last learned from it.
     pub epoch: u64,
     /// Blinded tokens sent to the AA and not yet answered.
     pub pending: Vec<BlindedToken>,
@@ -36,9 +36,9 @@ impl TokenStore {
         std::fs::rename(tmp, Self::path(dir))
     }
 
-    /// Removes and returns a token, preferring the newest epoch.
-    pub fn take(&mut self) -> Option<Token> {
-        let newest = (0..self.tokens.len()).max_by_key(|&i| self.tokens[i].epoch)?;
-        Some(self.tokens.remove(newest))
+    /// Removes and returns a token of `epoch`.
+    pub fn take(&mut self, epoch: u64) -> Option<Token> {
+        let i = self.tokens.iter().position(|t| t.epoch == epoch)?;
+        Some(self.tokens.remove(i))
     }
 }

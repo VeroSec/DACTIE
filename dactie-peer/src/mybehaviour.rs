@@ -493,7 +493,7 @@ impl MyBehaviour {
         // Each new sharing peer spends one of the member's tokens, kept next to its key file.
         let token_dir = path.parent().map(PathBuf::from).unwrap_or_default();
         let mut tokens = TokenStore::load(&token_dir);
-        let token = tokens.take().ok_or(AbstSwarmError::NoRegistrationToken {
+        let token = tokens.take(tokens.epoch).ok_or(AbstSwarmError::NoRegistrationToken {
             dir: token_dir.display().to_string(),
         })?;
         tokens
@@ -531,18 +531,23 @@ impl MyBehaviour {
         Ok(())
     }
 
-    /// Blinds `count` fresh tokens for `epoch` (by default the last epoch the AA named) and
-    /// asks the AA to sign them. Sent unsigned, so the AA sees which member asks.
+    /// Blinds `count` fresh tokens for the AA's current epoch, or the next one, and asks the AA
+    /// to sign them. `current` updates the epoch last learned from the AA. Sent unsigned, so
+    /// the AA sees which member asks.
     fn request_tokens(
         &mut self,
         my_open_mls: &MyOpenMls,
         authority: PeerId,
         count: usize,
-        epoch: Option<u64>,
+        next: bool,
+        current: Option<u64>,
     ) -> Result<(), AbstSwarmError> {
         let dir = my_open_mls.key_dir();
         let mut store = TokenStore::load(&dir);
-        let epoch = epoch.unwrap_or(store.epoch);
+        if let Some(current) = current {
+            store.epoch = current;
+        }
+        let epoch = store.epoch + u64::from(next);
         store.pending = (0..count).map(|_| thressig::tokens::blind(epoch)).collect();
         store
             .save(&dir)
@@ -552,6 +557,31 @@ impl MyBehaviour {
             &authority,
             Request {
                 body: RequestMessage::RequestTokens { epoch, blinded },
+                signature: None,
+            },
+        );
+        Ok(())
+    }
+
+    /// Keeps this sharing peer registered with a token from the member's tokens.json,
+    /// preferring one for the next epoch.
+    fn renew(&mut self, authority: PeerId, sig_file_path: String) -> Result<(), AbstSwarmError> {
+        let path = PathBuf::from_str(&sig_file_path).map_err(|_| KeyMaterialFileError)?;
+        let dir = path.parent().map(PathBuf::from).unwrap_or_default();
+        let mut tokens = TokenStore::load(&dir);
+        let token = tokens
+            .take(tokens.epoch + 1)
+            .or_else(|| tokens.take(tokens.epoch))
+            .ok_or(AbstSwarmError::NoRegistrationToken {
+                dir: dir.display().to_string(),
+            })?;
+        tokens
+            .save(&dir)
+            .map_err(|e| AbstSwarmError::TokenStoreError { reason: e.to_string() })?;
+        self.request_response.send_request(
+            &authority,
+            Request {
+                body: RequestMessage::RenewPeer { token },
                 signature: None,
             },
         );
@@ -1227,11 +1257,16 @@ impl MyBehaviour {
                         }
                         ResponseMessage::Tokens {
                             epoch,
+                            current_epoch,
                             signed,
                             epoch_pubkey,
                         } => {
-                            let (stored, failed) =
-                                my_open_mls.receive_tokens(epoch, &signed, &epoch_pubkey)?;
+                            let (stored, failed) = my_open_mls.receive_tokens(
+                                epoch,
+                                current_epoch,
+                                &signed,
+                                &epoch_pubkey,
+                            )?;
                             log::info!("Received {stored} registration tokens for epoch {epoch}");
                             if failed > 0 {
                                 log::error!("{failed} tokens do not match the epoch key, so the authority could recognize them when they are spent; discarded");
@@ -1241,14 +1276,27 @@ impl MyBehaviour {
                             current_epoch,
                             reason,
                         } => {
-                            let pending = TokenStore::load(&my_open_mls.key_dir()).pending;
-                            match pending.first() {
-                                Some(t) if t.epoch != current_epoch => {
+                            let store = TokenStore::load(&my_open_mls.key_dir());
+                            match store.pending.first() {
+                                Some(t) if store.epoch != current_epoch => {
+                                    let next = t.epoch > store.epoch;
                                     log::info!("Authority is in epoch {current_epoch}; requesting the tokens again");
-                                    self.request_tokens(my_open_mls, peer, pending.len(), Some(current_epoch))?;
+                                    self.request_tokens(
+                                        my_open_mls,
+                                        peer,
+                                        store.pending.len(),
+                                        next,
+                                        Some(current_epoch),
+                                    )?;
                                 }
                                 _ => log::warn!("Authority refused tokens: {reason}"),
                             }
+                        }
+                        ResponseMessage::PeerRenewed { until_epoch } => {
+                            log::info!("Registration renewed until epoch {until_epoch}");
+                        }
+                        ResponseMessage::RenewRefused { reason } => {
+                            log::warn!("Authority refused to renew this peer: {reason}");
                         }
                     }
                 }
@@ -1401,8 +1449,20 @@ impl InstructionHandler for MyBehaviour {
                     Self::notify(notification_tx, Notification::Err(error));
                 }
             }
-            Instruction::GetTokens { peer_id, count } => {
-                if let Err(error) = self.request_tokens(my_open_mls, peer_id, count, None) {
+            Instruction::GetTokens {
+                peer_id,
+                count,
+                next,
+            } => {
+                if let Err(error) = self.request_tokens(my_open_mls, peer_id, count, next, None) {
+                    Self::notify(notification_tx, Notification::Err(error));
+                }
+            }
+            Instruction::RenewPeer {
+                peer_id,
+                sig_file_path,
+            } => {
+                if let Err(error) = self.renew(peer_id, sig_file_path) {
                     Self::notify(notification_tx, Notification::Err(error));
                 }
             }

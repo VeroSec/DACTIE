@@ -167,6 +167,30 @@ impl MyBehaviour {
     /**
     Functions that handle the management of the Common MLS Group
     **/
+    /// Removes sharing peers whose registration ended with an earlier epoch from the common
+    /// group. The admission check then excludes them from GossipSub on every node.
+    fn remove_from_common_group(
+        &mut self,
+        my_open_mls: &MyOpenMls,
+        storage: &Storage,
+        expired: &[PeerId],
+    ) -> Result<(), AbstSwarmError> {
+        let members = my_open_mls.common_group_peers();
+        let present: Vec<PeerId> = expired
+            .iter()
+            .filter(|p| members.contains(p))
+            .copied()
+            .collect();
+        if !present.is_empty() {
+            let group_id = my_open_mls.get_common_group_id()?;
+            let (commit, epoch) = my_open_mls.remove_group_members(group_id.clone(), &present)?;
+            self.publish_commit(my_open_mls, group_id.to_vec(), vec![], commit, None, epoch)?;
+        }
+        storage.forget_peers(expired)?;
+        log::info!("Expired {} sharing peers: {:?}", present.len(), present);
+        Ok(())
+    }
+
     fn publish_commit(
         &mut self,
         my_open_mls: &MyOpenMls,
@@ -603,6 +627,7 @@ impl MyBehaviour {
                                     );
                                     ResponseMessage::Tokens {
                                         epoch,
+                                        current_epoch: storage.current_epoch(),
                                         signed,
                                         epoch_pubkey,
                                     }
@@ -613,6 +638,24 @@ impl MyBehaviour {
                                         current_epoch,
                                         reason,
                                     }
+                                }
+                            };
+                            self.request_response
+                                .send_response(channel, my_open_mls.sign(body)?)
+                                .unwrap_or(());
+                        }
+
+                        // A sharing peer keeps its registration for another epoch with a
+                        // token. Unsigned: the token and the PeerID of the connection suffice.
+                        RequestMessage::RenewPeer { token } => {
+                            let body = match storage.renew_peer(&peer, &token) {
+                                Ok(until_epoch) => {
+                                    log::info!("Renewed sharing peer {peer} until epoch {until_epoch}");
+                                    ResponseMessage::PeerRenewed { until_epoch }
+                                }
+                                Err(reason) => {
+                                    log::info!("Refused to renew {peer}: {reason}");
+                                    ResponseMessage::RenewRefused { reason }
                                 }
                             };
                             self.request_response
@@ -698,6 +741,7 @@ impl MyBehaviour {
 
                             if verified {
                                 log::info!("Adding new peer from existing member");
+                                storage.register_peer_epoch(peer, token.epoch)?;
                                 self.send_out_peer_enc_shares(
                                     my_open_mls,
                                     &storage.get_archive_peer_ids(),
@@ -841,6 +885,17 @@ impl EventHandler for MyBehaviour {
             Self::notify_error(notification_tx, e);
         }
         admission::update(&mut self.gossipsub, my_open_mls, connected.as_ref());
+    }
+
+    fn expire_peers(&mut self, my_open_mls: &MyOpenMls, storage: &Storage) {
+        let expired = storage.expired_peers();
+        if expired.is_empty() {
+            return;
+        }
+        if let Err(e) = self.remove_from_common_group(my_open_mls, storage, &expired) {
+            log::error!("Could not expire sharing peers: {e}");
+        }
+        admission::update(&mut self.gossipsub, my_open_mls, None);
     }
 }
 

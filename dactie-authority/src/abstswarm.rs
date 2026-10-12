@@ -70,8 +70,11 @@ where
     }
 
     pub(crate) async fn run(mut self) {
+        // Sharing peers expire at the end of their epoch, without any event to trigger it.
+        let mut expiry = tokio::time::interval(std::time::Duration::from_secs(5));
         loop {
             tokio::select! {
+                _ = expiry.tick() => self.swarm.behaviour_mut().expire_peers(&self.my_open_mls, &self.storage),
                 Some(group_id) = self.group_commit_rx.recv() => {
                     let my_open_mls_clone = self.my_open_mls.clone();
                     let notification_tx_clone= self.notification_tx.clone();

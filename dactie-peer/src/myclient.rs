@@ -369,9 +369,21 @@ impl MyClient {
             match PeerId::from_str(split[1]) {
                 Ok(peer_id) => {
                     let count = split.get(2).and_then(|n| n.parse().ok()).unwrap_or(5);
-                    self.instruction_tx
-                        .send(Instruction::GetTokens { peer_id, count })?;
+                    let next = split.contains(&"next");
+                    self.instruction_tx.send(Instruction::GetTokens {
+                        peer_id,
+                        count,
+                        next,
+                    })?;
                 }
+                Err(_) => println!("Failed to convert some of the peer IDs"),
+            };
+        } else if input.starts_with("renew") && split.len() > 2 {
+            match PeerId::from_str(split[1]) {
+                Ok(peer_id) => self.instruction_tx.send(Instruction::RenewPeer {
+                    peer_id,
+                    sig_file_path: split[2].to_string(),
+                })?,
                 Err(_) => println!("Failed to convert some of the peer IDs"),
             };
         } else if input.starts_with("get_opener_keys") && split.len() > 1 {
@@ -400,7 +412,8 @@ impl MyClient {
         - register_identity <authorization_peer_id> <identity>: Registers a new identity at Authorization Authority
         - peer_from_sig <authorization_peer_id> <save_file_path>: Adds a new peer from an existing GroupSignature Memberkey
         - get_opener_keys <authorization_peer_id>: Requests Opener Keys from Authority
-        - get_tokens <authorization_peer_id> [count]: Requests registration tokens for new sharing peers (registration peer only)")
+        - get_tokens <authorization_peer_id> [count] [next]: Requests registration tokens for new sharing peers, or with next for renewing them in the next epoch (registration peer only)
+        - renew <authorization_peer_id> <save_file_path>: Keeps this sharing peer registered in the next epoch, with a token from the tokens.json next to save_file_path")
         }
 
         Ok(())

@@ -49,9 +49,12 @@ pub(crate) struct Storage {
     /// the one the member requests tokens from.
     #[serde(default)]
     registration_peers: Mutex<HashMap<PeerId, usize>>,
-    /// Tokens signed per member: MemberID -> (epoch, count).
+    /// Tokens signed per member and epoch: MemberID -> epoch -> count.
     #[serde(default)]
-    tokens_issued: Mutex<HashMap<usize, (u64, usize)>>,
+    tokens_issued: Mutex<HashMap<usize, HashMap<u64, usize>>>,
+    /// Each registered sharing peer and the last epoch its registration covers.
+    #[serde(default)]
+    peer_epochs: Mutex<HashMap<PeerId, u64>>,
     /// Serials of spent tokens, so that no token registers two PeerIDs.
     #[serde(default)]
     spent_tokens: Mutex<HashSet<Vec<u8>>>,
@@ -98,6 +101,7 @@ impl Storage {
                 token_master: FieldElement::random(),
                 registration_peers: Mutex::new(HashMap::new()),
                 tokens_issued: Mutex::new(HashMap::new()),
+                peer_epochs: Mutex::new(HashMap::new()),
                 spent_tokens: Mutex::new(HashSet::new()),
                 token_policy: Mutex::new((30 * 24 * 3600, 5)),
             },
@@ -338,8 +342,9 @@ impl Storage {
     }
 
     /// Signs blinded tokens for the member that registered from `peer`, at most k per member
-    /// and epoch, and returns them with the epoch's public key. Refusals carry the current
-    /// epoch, so a member that blinded for the wrong epoch can retry.
+    /// and epoch, and returns them with the epoch's public key. Tokens for the next epoch let
+    /// a member renew its sharing peers before the current epoch ends. Refusals carry the
+    /// current epoch, so a member that blinded for the wrong epoch can retry.
     pub(crate) fn issue_tokens(
         &self,
         peer: &PeerId,
@@ -347,8 +352,8 @@ impl Storage {
         blinded: &[G1],
     ) -> Result<(Vec<G1>, G2), (u64, String)> {
         let current = self.current_epoch();
-        if epoch != current {
-            return Err((current, format!("epoch {epoch} is not the current epoch")));
+        if epoch != current && epoch != current + 1 {
+            return Err((current, format!("epoch {epoch} is neither the current nor the next epoch")));
         }
         let member = *self
             .registration_peers
@@ -359,31 +364,34 @@ impl Storage {
         let per_member = self.token_policy.lock().unwrap().1;
         let signed: Vec<G1> = {
             let mut issued = self.tokens_issued.lock().unwrap();
-            let entry = issued.entry(member).or_insert((current, 0));
-            if entry.0 != current {
-                *entry = (current, 0);
-            }
-            let n = blinded.len().min(per_member - entry.1);
-            entry.1 += n;
-            let key = self.epoch_key(current);
+            let per_epoch = issued.entry(member).or_default();
+            per_epoch.retain(|e, _| *e >= current);
+            let count = per_epoch.entry(epoch).or_insert(0);
+            let n = blinded.len().min(per_member - *count);
+            *count += n;
+            let key = self.epoch_key(epoch);
             blinded[..n]
                 .iter()
                 .map(|b| thressig::tokens::sign_blinded(&key, b))
                 .collect()
         };
         if signed.is_empty() {
-            return Err((current, format!("all {per_member} tokens of this epoch were issued")));
+            return Err((current, format!("all {per_member} tokens of epoch {epoch} were issued")));
         }
         self.to_file().map_err(|e| (current, e.to_string()))?;
-        let pubkey = thressig::tokens::epoch_pubkey(&self.grpkey.g_tilde, &self.epoch_key(current));
+        let pubkey = thressig::tokens::epoch_pubkey(&self.grpkey.g_tilde, &self.epoch_key(epoch));
         Ok((signed, pubkey))
     }
 
-    /// Accepts each token once, and only in its own epoch.
+    /// Accepts each token once. A new sharing peer needs a token of the current epoch.
     pub(crate) fn spend_token(&self, token: &Token) -> Result<(), String> {
         if token.epoch != self.current_epoch() {
-            return Err(format!("token of epoch {} has expired", token.epoch));
+            return Err(format!("token of epoch {} is not for the current epoch", token.epoch));
         }
+        self.spend(token)
+    }
+
+    fn spend(&self, token: &Token) -> Result<(), String> {
         if !thressig::tokens::verify_with_key(token, &self.epoch_key(token.epoch)) {
             return Err("token signature is invalid".to_string());
         }
@@ -391,6 +399,56 @@ impl Storage {
             return Err("token was already spent".to_string());
         }
         self.to_file().map_err(|e| e.to_string())
+    }
+
+    /// Records that a sharing peer's registration covers `epoch`.
+    pub(crate) fn register_peer_epoch(&self, peer: PeerId, epoch: u64) -> Result<(), MyStorageError> {
+        self.peer_epochs.lock().unwrap().insert(peer, epoch);
+        self.to_file()
+    }
+
+    /// Extends a registered sharing peer to the token's epoch, the current or the next one.
+    pub(crate) fn renew_peer(&self, peer: &PeerId, token: &Token) -> Result<u64, String> {
+        let current = self.current_epoch();
+        if !self.peer_epochs.lock().unwrap().contains_key(peer) {
+            return Err("not a registered sharing peer".to_string());
+        }
+        if token.epoch != current && token.epoch != current + 1 {
+            return Err(format!("token of epoch {} is neither the current nor the next epoch", token.epoch));
+        }
+        self.spend(token)?;
+        let until = {
+            let mut epochs = self.peer_epochs.lock().unwrap();
+            let until = epochs.entry(*peer).or_insert(0);
+            *until = (*until).max(token.epoch);
+            *until
+        };
+        self.to_file().map_err(|e| e.to_string())?;
+        Ok(until)
+    }
+
+    /// Sharing peers whose registration ended with an earlier epoch.
+    pub(crate) fn expired_peers(&self) -> Vec<PeerId> {
+        let current = self.current_epoch();
+        self.peer_epochs
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(_, until)| **until < current)
+            .map(|(peer, _)| *peer)
+            .collect()
+    }
+
+    /// Forgets expired peers. They stay in allowed_peers so old signatures can still be
+    /// opened to them.
+    pub(crate) fn forget_peers(&self, peers: &[PeerId]) -> Result<(), MyStorageError> {
+        {
+            let mut epochs = self.peer_epochs.lock().unwrap();
+            for peer in peers {
+                epochs.remove(peer);
+            }
+        }
+        self.to_file()
     }
 
     pub fn remove_n(&self, peer_id: &PeerId) -> Option<(G1, usize, String)> {
@@ -553,9 +611,9 @@ mod tests {
             ts.iter().map(|t| t.blinded.clone()).collect::<Vec<_>>()
         };
 
-        // Only a member's registration peer, and only for the current epoch.
+        // Only a member's registration peer, and only for the current or the next epoch.
         assert!(storage.issue_tokens(&PeerId::random(), epoch, &points(&blind(1))).is_err());
-        let refused = storage.issue_tokens(&member, epoch + 1, &points(&blind(1)));
+        let refused = storage.issue_tokens(&member, epoch + 2, &points(&blind(1)));
         assert_eq!(refused.unwrap_err().0, epoch);
 
         // At most k = 3 per member and epoch, however they are requested.
@@ -576,6 +634,47 @@ mod tests {
             ..token
         };
         assert!(storage.spend_token(&forged).is_err());
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn test_renewal_and_expiry() {
+        let dir = std::env::temp_dir().join(format!("dactie-expiry-test-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let (storage, _) = Storage::new(dir.join("storage.json"));
+        storage.set_token_policy(3600, 2);
+        let member = PeerId::random();
+        storage.registration_peers.lock().unwrap().insert(member, 7);
+        let epoch = storage.current_epoch();
+        let issue = |e: u64| {
+            let blinded = thressig::tokens::blind(e);
+            let (signed, pubkey) =
+                storage.issue_tokens(&member, e, &[blinded.blinded.clone()]).unwrap();
+            thressig::tokens::unblind(&blinded, &signed[0], &storage.grpkey.g_tilde, &pubkey)
+                .unwrap()
+        };
+
+        // Next-epoch tokens count against the next epoch's k, not the current one.
+        let next = issue(epoch + 1);
+        let current = issue(epoch);
+        issue(epoch);
+        issue(epoch + 1);
+        let blinded = thressig::tokens::blind(epoch);
+        assert!(storage.issue_tokens(&member, epoch, &[blinded.blinded]).is_err());
+
+        // A next-epoch token does not register a new peer, but renews a registered one.
+        assert!(storage.spend_token(&next).is_err());
+        let (stays, leaves, stranger) = (PeerId::random(), PeerId::random(), PeerId::random());
+        storage.register_peer_epoch(stays, epoch).unwrap();
+        storage.register_peer_epoch(leaves, epoch - 1).unwrap();
+        assert!(storage.renew_peer(&stranger, &current).is_err());
+        assert_eq!(storage.renew_peer(&stays, &next).unwrap(), epoch + 1);
+        assert!(storage.renew_peer(&stays, &next).is_err());
+
+        // Only the peer whose registration ended before the current epoch expires.
+        assert_eq!(storage.expired_peers(), vec![leaves]);
+        storage.forget_peers(&[leaves]).unwrap();
+        assert!(storage.expired_peers().is_empty());
         std::fs::remove_dir_all(dir).ok();
     }
 }

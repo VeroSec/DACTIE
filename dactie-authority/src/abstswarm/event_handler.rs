@@ -17,4 +17,7 @@ where
         storage: &Storage,
         event: SwarmEvent<Self::ToSwarm>,
     );
+
+    /// Called periodically: removes sharing peers whose registration has expired.
+    fn expire_peers(&mut self, my_open_mls: &MyOpenMls, storage: &Storage);
 }

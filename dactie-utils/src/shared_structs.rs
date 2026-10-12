@@ -94,10 +94,15 @@ pub enum RequestMessage {
         // one of the member's registration tokens for the current epoch
         token: Token,
     },
-    // Sent by a member's registration peer: blinded tokens for the AA to sign.
+    // Sent by a member's registration peer: blinded tokens for the AA to sign, for the
+    // current or the next epoch.
     RequestTokens {
         epoch: u64,
         blinded: Vec<thressig::G1>,
+    },
+    // Sent by a sharing peer: keeps its registration for the token's epoch.
+    RenewPeer {
+        token: Token,
     },
     RequestOpen {
         signature: Vec<u8>,
@@ -164,8 +169,16 @@ pub enum ResponseMessage {
     // The AA's signatures on blinded tokens, and the epoch key to check them against.
     Tokens {
         epoch: u64,
+        current_epoch: u64,
         signed: Vec<thressig::G1>,
         epoch_pubkey: thressig::G2,
+    },
+    // The peer stays registered until the end of this epoch.
+    PeerRenewed {
+        until_epoch: u64,
+    },
+    RenewRefused {
+        reason: String,
     },
     TokensRefused {
         current_epoch: u64,
@@ -289,6 +302,12 @@ pub enum Instruction {
     GetTokens {
         peer_id: PeerId,
         count: usize,
+        // tokens for the next epoch, to renew sharing peers before the current one ends
+        next: bool,
+    },
+    RenewPeer {
+        peer_id: PeerId,
+        sig_file_path: String,
     },
     ReqOpen {
         signature: Vec<u8>,

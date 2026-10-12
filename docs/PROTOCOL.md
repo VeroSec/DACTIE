@@ -132,8 +132,8 @@ A member can run further sharing peers under the same member key. Each new peer 
 
 **Registration tokens** (`thressig/src/tokens.rs`, blind BLS signatures). The AA is started with `--epoch-secs` (default 30 days) and `--peers-per-member` `k` (default 5), and derives one token key per epoch from a secret in its storage.
 
-- `get_tokens <AA PeerID> [count]` on the member's **registration peer**: the peer draws `count` random serials, blinds `H(epoch, serial)`, keeps the blinding factors in `tokens.json` in its key folder, and sends the unsigned `RequestTokens { epoch, blinded }`.
-- The AA answers only the PeerID the member registered from, and only for the current epoch; otherwise `TokensRefused { current_epoch }`, after which the peer asks again for that epoch. It signs at most `k` tokens per member and epoch and returns `Tokens { epoch, signed, epoch_pubkey }`. Because the tokens were blinded, it cannot recognize them later.
+- `get_tokens <AA PeerID> [count] [next]` on the member's **registration peer**, for the current epoch or, with `next`, the next one: the peer draws `count` random serials, blinds `H(epoch, serial)`, keeps the blinding factors in `tokens.json` in its key folder, and sends the unsigned `RequestTokens { epoch, blinded }`.
+- The AA answers only the PeerID the member registered from, and only for the current or the next epoch; otherwise `TokensRefused { current_epoch }`, after which the peer asks again. It signs at most `k` tokens per member and epoch and returns `Tokens { epoch, current_epoch, signed, epoch_pubkey }`. Because the tokens were blinded, it cannot recognize them later.
 - The peer unblinds the signatures, checks each against `epoch_pubkey`, and stores the tokens in `tokens.json`. A token signed with another key, e.g. one the AA keeps for this member to recognize it later, fails the check and is discarded. All members must see the same epoch key for this check to protect them.
 
 1. `get_opener_keys <AA PeerID>`: the new peer fetches the archives' keys and `t` (`RequestOpenerKeys` → group-signed `OpenerKeys`). If the peer was started with `--archive`, it confirms them as in step 3 above.
@@ -142,6 +142,8 @@ A member can run further sharing peers under the same member key. Each new peer 
 4. Each archive verifies the share and stores it in `peer_shares` under the new PeerID.
 
 Archives store `id_shares` per MemberID without any PeerID, and `peer_shares` per additional PeerID without any MemberID. Only an opening links the two.
+
+**Renewal and expiry.** A sharing peer's registration lasts until the end of its token's epoch. To stay, the sharing peer runs `renew <AA PeerID> <key_material.json of the registration peer>`: it takes a token for the next epoch (or the current one) from that `tokens.json` and sends the unsigned `RenewPeer { token }`. The AA accepts it from registered sharing peers only, spends the token, and replies `PeerRenewed { until_epoch }`. Every 5 s, the AA removes sharing peers whose registration ended with an earlier epoch from the common group with a commit; the admission check then excludes them from GossipSub on every node. Their `peer_shares` stay with the archives and their PeerIDs in the AA's `allowed_peers`, so their old messages can still be opened. Because a sharing peer in an epoch needs a token of that epoch, a member never has more than `k` sharing peers at once.
 
 ## 4. Publishing and receiving CTI
 

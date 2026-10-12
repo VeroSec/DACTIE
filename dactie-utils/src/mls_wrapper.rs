@@ -548,6 +548,7 @@ impl MyOpenMls {
     pub fn receive_tokens(
         &self,
         epoch: u64,
+        current_epoch: u64,
         signed: &[thressig::G1],
         epoch_pubkey: &thressig::G2,
     ) -> Result<(usize, usize), MyOpenMLSError> {
@@ -571,7 +572,7 @@ impl MyOpenMls {
                 None => failed += 1,
             }
         }
-        store.epoch = epoch;
+        store.epoch = current_epoch;
         store
             .save(&dir)
             .map_err(|e| SerializationError(e.to_string()))?;
@@ -649,6 +650,48 @@ impl MyOpenMls {
         );
 
         Ok((peer_ids, commit, welcome, epoch))
+    }
+
+    /// Removes members from a group this node owns and returns the commit to publish, like
+    /// add_group_members. The AA uses it to drop expired sharing peers from the common group.
+    pub fn remove_group_members(
+        &self,
+        group_id: GroupId,
+        peer_ids: &[PeerId],
+    ) -> Result<(Vec<u8>, u64), MyOpenMLSError> {
+        let mut map = self.group_store.lock().unwrap();
+        let group_store = map
+            .get_mut(&group_id)
+            .ok_or(GroupNotAvailable("".to_string()))?;
+        let epoch = group_store.group.epoch().as_u64();
+        let leaves: Vec<LeafNodeIndex> = group_store
+            .group
+            .members()
+            .filter(|m| {
+                peer_ids
+                    .iter()
+                    .any(|p| m.credential.serialized_content() == p.to_bytes())
+            })
+            .map(|m| m.index)
+            .collect();
+        if leaves.is_empty() {
+            return Err(RemoveGroupMemberError);
+        }
+        let (mls_message_out, _, _) = group_store
+            .group
+            .remove_members(&self.provider, &self.signer, &leaves)
+            .map_err(|_| RemoveGroupMemberError)?;
+        let commit = mls_message_out
+            .tls_serialize_detached()
+            .map_err(|e| SerializationError(e.to_string()))?;
+        group_store
+            .group
+            .merge_pending_commit(&self.provider)
+            .map_err(|e| CreateGroupError {
+                reason: e.to_string(),
+            })?;
+        group_store.update_cipher(&self.provider)?;
+        Ok((commit, epoch))
     }
 
     pub fn propose_add_group_member(

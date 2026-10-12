@@ -36,7 +36,7 @@ RUST_LOG=info cargo run --package dactie-peer --bin dactie-peer -- -K ./key_mate
 Only registered peers take part in GossipSub: a node that has not registered gets no messages, and once a node is registered itself, it closes connections of unregistered nodes after 60 s and keeps at most 5 of them open. Register within a minute of connecting, or the node reconnects when you send the request.
 
 ### Local end-to-end test
-`scripts/e2e_local.sh` runs the example above automatically and checks every step: registration, tokens, a second peer of the same member, a broadcast, an unregistered observer, and an opening. It needs Docker (for the two PostgreSQL databases), tmux, and `cargo build --release`, and takes about two minutes. Logs go to `target/e2e/`; the processes keep running in tmux session `camera` until you run `tmux kill-session -t camera; docker rm -f camera-pg1 camera-pg2`.
+`scripts/e2e_local.sh` runs the example above automatically and checks every step: registration, tokens, a second peer of the same member, a broadcast, an unregistered observer, and an opening. It needs Docker (for the two PostgreSQL databases), tmux, and `cargo build --release`, and takes about two minutes. `scripts/e2e_expiry.sh` runs 60-second epochs and checks that a renewed sharing peer stays while one that did not renew is removed and gets no more messages (about three minutes). Logs go to `target/e2e/`; the processes keep running in tmux session `camera` until you run `tmux kill-session -t camera; docker rm -f camera-pg1 camera-pg2`.
 
 ### Docker
 This section explains the docker setup. If docker is choosen the part above can be ignored
@@ -60,6 +60,8 @@ This also fixes the opening threshold: how many archives must approve before a s
 1. On Peer1, request registration tokens: `get_tokens <authorization_peer_id> [count]`. Each new peer uses one; the authority signs at most `--peers-per-member` per member and epoch (`--epoch-secs`).
 2. On Peer2, request the opener keys from the authority`get_opener_keys  <authorization_peer_id>`
 3. Register a new peer with an existing group key material: `peer_from_sig <authorization_peer_id> <save_file_path>`. It takes a token from the `tokens.json` next to that file.
+
+A sharing peer stays registered until its token's epoch ends. To keep it, request tokens for the next epoch on Peer1 with `get_tokens <authorization_peer_id> [count] next`, then run `renew <authorization_peer_id> <save_file_path>` on Peer2 before the epoch ends. The authority removes sharing peers that did not renew from the network; a removed peer can register again with `peer_from_sig`.
 
 ### Subscribe to Topics:
 1. `sub <topic>`
