@@ -6,6 +6,8 @@
 //!   DACTIE_BENCH_ARCHIVES     number of archives / openers (default 3)
 //!   DACTIE_BENCH_THRESHOLD    opening threshold t (default 3)
 //!   DACTIE_BENCH_MSG_BYTES    signed payload size in bytes (default 1024)
+//!   DACTIE_BENCH_PEERS_PER_MEMBER  sharing peers per member for opening (default 1: the
+//!                             peer a member joined from)
 
 use criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion};
 use dactie_benchmark::{join, Group};
@@ -68,27 +70,33 @@ fn member_join(c: &mut Criterion) {
     g.finish();
 }
 
-/// Opening a signature. Each archive computes one pairing per member because the
-/// signer is unknown; the combining step then checks every member, so both scale
-/// linearly with the group size.
+/// Opening a signature. Each archive computes one pairing per stored share, i.e. per
+/// member and per sharing peer, because the signer is unknown; the combining step then
+/// checks every member and every sharing peer, so both scale linearly with the shares.
 fn opening(c: &mut Criterion) {
     let (archives, threshold, msg_bytes) = params();
+    let peers_per_member = env_usize("DACTIE_BENCH_PEERS_PER_MEMBER", 1);
     let msg = vec![0xA5u8; msg_bytes];
     let mut g = c.benchmark_group("open");
     g.sample_size(10);
     g.measurement_time(Duration::from_secs(20));
     for n in group_sizes() {
-        let group = Group::new(n, archives, threshold);
+        let group = Group::with_peers(n, peers_per_member, archives, threshold);
+        eprintln!(
+            "open: {n} members, {peers_per_member} sharing peers each, {} stored shares",
+            group.stored_shares()
+        );
         let sig = group.sign(n / 2, &msg);
         let all_sj = group.collect_pairings(&sig);
-        let members = group.member_ids();
-        assert_eq!(thressig::open(&sig, &group.grpkey, &members, &all_sj), vec![n / 2]);
+        let (members, peers) = group.open(&sig, &all_sj);
+        assert_eq!(members, vec![n / 2]);
+        assert_eq!(peers.len(), peers_per_member);
 
         g.bench_with_input(BenchmarkId::new("archive_partial_open", n), &n, |b, _| {
             b.iter(|| group.archive_open_pairings(&sig, 0))
         });
         g.bench_with_input(BenchmarkId::new("combine", n), &n, |b, _| {
-            b.iter(|| thressig::open(&sig, &group.grpkey, &members, &all_sj))
+            b.iter(|| group.open(&sig, &all_sj))
         });
     }
     g.finish();

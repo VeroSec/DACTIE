@@ -2,8 +2,11 @@
 //!
 //! A [`Group`] is a fully joined DACTIE group: an authority, `n_openers` archives
 //! holding ElGamal opening keys, and `n_members` members whose secret keys are
-//! Shamir-shared to the archives with threshold `t`. Building it is slow for large
-//! groups, so the benchmarks build it once and only time the operation under test.
+//! Shamir-shared to the archives with threshold `t`. Each member also registered
+//! `peers_per_member` sharing peers, each with its own sharing of the member's key, as
+//! peer_from_sig does; every member has at least the sharing peer it joined from.
+//! Building it is slow for large groups, so the benchmarks build it once and only time
+//! the operation under test.
 
 use std::collections::{HashMap, HashSet};
 use thressig::structs::{EncShare, EncSharePairing, Grpkey, Memkey, Mgrkey, Signature};
@@ -20,6 +23,9 @@ pub struct Group {
     pub memkeys: Vec<Memkey>,
     /// `enc_shares[member][archive]`: the share of a member's key encrypted to an archive.
     pub enc_shares: Vec<Vec<EncShare>>,
+    /// `peer_shares[peer][archive]`: the shares registered with each sharing peer. Peer `i`
+    /// belongs to member `i / peers_per_member`.
+    pub peer_shares: Vec<Vec<EncShare>>,
 }
 
 /// Runs the complete join protocol for one member and returns its key and encrypted shares.
@@ -58,6 +64,15 @@ pub fn join(
 
 impl Group {
     pub fn new(n_members: usize, n_openers: usize, threshold: usize) -> Self {
+        Self::with_peers(n_members, 0, n_openers, threshold)
+    }
+
+    pub fn with_peers(
+        n_members: usize,
+        peers_per_member: usize,
+        n_openers: usize,
+        threshold: usize,
+    ) -> Self {
         assert!(threshold <= n_openers, "threshold must not exceed the number of archives");
         let (grpkey, mgrkey) = thressig::setup();
         let (opener_sec_keys, opener_pub_keys): (Vec<_>, Vec<_>) = (0..n_openers)
@@ -72,7 +87,30 @@ impl Group {
             memkeys.push(memkey);
             enc_shares.push(shares);
         }
-        Group { grpkey, mgrkey, threshold, opener_pub_keys, opener_sec_keys, gml, memkeys, enc_shares }
+        let mut peer_shares = Vec::with_capacity(n_members * peers_per_member);
+        for (id, memkey) in memkeys.iter().enumerate() {
+            for _ in 0..peers_per_member {
+                let (shares, _) = thressig::create_enc_shares(
+                    &id,
+                    &grpkey,
+                    threshold,
+                    &opener_pub_keys,
+                    &memkey.sk,
+                );
+                peer_shares.push(shares);
+            }
+        }
+        Group {
+            grpkey,
+            mgrkey,
+            threshold,
+            opener_pub_keys,
+            opener_sec_keys,
+            gml,
+            memkeys,
+            enc_shares,
+            peer_shares,
+        }
     }
 
     pub fn sign(&self, member: usize, msg: &[u8]) -> Signature {
@@ -80,30 +118,68 @@ impl Group {
     }
 
     /// Work of one archive when an opening is requested: since the signer is unknown,
-    /// it computes one pairing per member of the group.
-    pub fn archive_open_pairings(&self, sig: &Signature, archive: usize) -> Vec<(usize, EncSharePairing)> {
-        (0..self.enc_shares.len())
-            .map(|id| {
-                let share = self.enc_shares[id][archive].clone();
-                (id, thressig::create_open_pairing(sig, share, &self.opener_sec_keys[archive]))
-            })
-            .collect()
+    /// it computes one pairing per member and per sharing peer, i.e. per stored share.
+    pub fn archive_open_pairings(&self, sig: &Signature, archive: usize) -> Pairings {
+        let pair = |shares: &Vec<Vec<EncShare>>| {
+            shares
+                .iter()
+                .enumerate()
+                .map(|(i, s)| {
+                    let share = s[archive].clone();
+                    (i, thressig::create_open_pairing(sig, share, &self.opener_sec_keys[archive]))
+                })
+                .collect()
+        };
+        Pairings {
+            members: pair(&self.enc_shares),
+            peers: pair(&self.peer_shares),
+        }
     }
 
     /// Collects the partial openings of the first `threshold` archives in the shape
-    /// expected by [`thressig::open`].
-    pub fn collect_pairings(&self, sig: &Signature) -> HashMap<usize, Vec<(usize, GT)>> {
-        let mut all_sj: HashMap<usize, Vec<(usize, GT)>> = HashMap::new();
+    /// expected by [`thressig::open`], for members and sharing peers.
+    pub fn collect_pairings(&self, sig: &Signature) -> (AllSj, AllSj) {
+        let (mut members, mut peers): (AllSj, AllSj) = (HashMap::new(), HashMap::new());
         for archive in 0..self.threshold {
-            for (id, p) in self.archive_open_pairings(sig, archive) {
-                all_sj.entry(p.index).or_default().push((id, p.pairing));
+            let pairings = self.archive_open_pairings(sig, archive);
+            for (id, p) in pairings.members {
+                members.entry(p.index).or_default().push((id, p.pairing));
+            }
+            for (id, p) in pairings.peers {
+                peers.entry(p.index).or_default().push((id, p.pairing));
             }
         }
-        all_sj
+        (members, peers)
+    }
+
+    /// The AA's opening as in open_signature: the member, then all its sharing peers.
+    pub fn open(&self, sig: &Signature, all_sj: &(AllSj, AllSj)) -> (Vec<usize>, Vec<usize>) {
+        (
+            thressig::open(sig, &self.grpkey, &self.member_ids(), &all_sj.0),
+            thressig::open(sig, &self.grpkey, &self.peer_ids(), &all_sj.1),
+        )
     }
 
     pub fn member_ids(&self) -> HashSet<usize> {
         self.gml.keys().copied().collect()
+    }
+
+    pub fn peer_ids(&self) -> HashSet<usize> {
+        (0..self.peer_shares.len()).collect()
+    }
+}
+
+pub type AllSj = HashMap<usize, Vec<(usize, GT)>>;
+
+/// One archive's partial openings: one per member and one per sharing peer.
+pub struct Pairings {
+    pub members: Vec<(usize, EncSharePairing)>,
+    pub peers: Vec<(usize, EncSharePairing)>,
+}
+
+impl Group {
+    pub fn stored_shares(&self) -> usize {
+        self.enc_shares.len() + self.peer_shares.len()
     }
 }
 
@@ -117,7 +193,18 @@ mod tests {
         let msg = vec![7u8; 1024];
         let sig = group.sign(3, &msg);
         thressig::verify(&sig, &group.grpkey, &msg.as_slice()).expect("verify failed");
-        let opened = thressig::open(&sig, &group.grpkey, &group.member_ids(), &group.collect_pairings(&sig));
+        let opened = thressig::open(&sig, &group.grpkey, &group.member_ids(), &group.collect_pairings(&sig).0);
         assert_eq!(opened, vec![3]);
+    }
+
+    #[test]
+    fn opening_names_the_member_and_its_sharing_peers() {
+        let group = Group::with_peers(4, 2, 3, 3);
+        let sig = group.sign(1, &[7u8; 64]);
+        let (members, mut peers) = group.open(&sig, &group.collect_pairings(&sig));
+        peers.sort();
+        assert_eq!(members, vec![1]);
+        assert_eq!(peers, vec![2, 3]);
+        assert_eq!(group.stored_shares(), 12);
     }
 }

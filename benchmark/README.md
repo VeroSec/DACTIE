@@ -19,6 +19,7 @@ environment variables:
 | `DACTIE_BENCH_ARCHIVES` | `3` | archives (openers) |
 | `DACTIE_BENCH_THRESHOLD` | `3` | archives needed to open |
 | `DACTIE_BENCH_MSG_BYTES` | `1024` | signed payload size |
+| `DACTIE_BENCH_PEERS_PER_MEMBER` | `1` | sharing peers per member for the opening benchmarks; every member has at least the one it joined from |
 
 The defaults match AttriChain's evaluation (3 tracing members, threshold 3).
 
@@ -30,10 +31,12 @@ verifies and opens to the right member.
 - `per_message/sign`, `per_message/verify`: cost per published / received message.
 - `join/full_join`: member side, authority side and share verification for one member.
 - `open/archive_partial_open/<n>`: one archive's work for an opening request. The
-  signer is unknown, so the archive computes one pairing per member.
-- `open/combine/<n>`: combining the partial openings of `t` archives; checks every member.
+  signer is unknown, so the archive computes one pairing per stored share: one per member
+  and one per registered sharing peer.
+- `open/combine/<n>`: the AA combining the partial openings of `t` archives; checks every
+  member and every sharing peer, as `open_signature` does.
 
-## Results (2026-10-11)
+## Results (2026-10-11, one share per member, before the constants of `open` were hoisted)
 
 Release build, single thread, 3 archives, t = 3, 1 KiB payload. Signature size: 226 bytes.
 
@@ -54,9 +57,15 @@ instance) reports Sign ≈ 3.2 s, Trace 4.6 s and Collect 5.4 s; Huff and Li rep
 4.2 s per zk-SNARK proof and 28.5 ms per verification. The hardware differs, so
 treat these as order-of-magnitude comparisons.
 
-## Note
+## Results with sharing peers (2026-10-12, laptop)
 
-`thressig::open` recomputes two pairings and the Lagrange coefficients for every
-member, although they do not depend on the member. Hoisting them out of the loop
-would save two pairings per member in the combine step (not measured). The benchmark measures the code as used
-by DACTIE and leaves `thressig` unchanged.
+Laptop as above, 3 archives, t = 3, 500 members with one sharing peer each (1,000 stored shares):
+
+| Operation | Before hoisting | After hoisting |
+| --- | --- | --- |
+| archive partial open | 1.69 s | 1.71 s |
+| combine | 3.11 s | 0.88 s |
+
+`thressig::open` used to recompute two pairings and the Lagrange coefficients for every
+candidate, although they do not depend on it; it now computes them once. The archive's
+work is unchanged and still one pairing per stored share. Server numbers are pending.

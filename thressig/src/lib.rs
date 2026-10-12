@@ -695,6 +695,10 @@ where
     }
     let mut opener_ids: Vec<_> = all_sj.keys().copied().collect();
     opener_ids.sort();
+    // Independent of the member, so computed once rather than per candidate.
+    let pairing_left = GT::ate_pairing(&sig.sigma1, &grpkey.x_pub_tilde);
+    let pairing_right = GT::ate_pairing(&sig.sigma2, &grpkey.g_tilde);
+    let w_js = compute_lagrange_coefficients_at_zero(&opener_ids);
     for id in gml.iter() {
         let mut t_idj = Vec::new();
         let mut missing = false;
@@ -715,18 +719,12 @@ where
             continue;
         }
 
-        // Compute the pairing left-hand side
-        let pairing_left = GT::ate_pairing(&sig.sigma1, &grpkey.x_pub_tilde);
-
-        let w_js = compute_lagrange_coefficients_at_zero(&opener_ids);
-
         let mut t_combined = GT::one();
         for (t, w) in t_idj.iter().zip(w_js.iter()) {
             t_combined = t_combined * t.pow(w);
         }
 
-        let pairing_right = GT::ate_pairing(&sig.sigma2, &grpkey.g_tilde);
-        if pairing_left * t_combined == pairing_right {
+        if pairing_left.clone() * t_combined == pairing_right {
             res.push(id.clone());
         }
     }
