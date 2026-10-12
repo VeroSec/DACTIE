@@ -3,7 +3,8 @@
 # AA, two archives (PostgreSQL in Docker), member peer1, and peer2 as a second sharing peer
 # of the same member (peer_from_sig). peer2 publishes, both archives approve the opening,
 # and the AA must name peer1's member and list peer2's PeerID. An observer node that never
-# registered subscribes to the same topic and must not receive any gossip.
+# registered subscribes to the same topic and must not receive any gossip; the AA keeps at
+# most 5 such connections open and closes each after 60 s.
 # Needs Docker, tmux and `cargo build --release`. Logs go to target/e2e/.
 # Leaves tmux session "camera" and containers camera-pg1/2 running for inspection;
 # clean up with: tmux kill-session -t camera; docker rm -f camera-pg1 camera-pg2
@@ -14,7 +15,7 @@ W=${W:-$REPO/target/e2e}
 S=camera
 AA_PORT=10001
 
-rm -rf "$W"; mkdir -p "$W"/{aa,arc1,arc2,p1,p2,obs}
+rm -rf "$W"; mkdir -p "$W"/{aa,arc1,arc2,p1,p2,obs,obs2,obs3,obs4,obs5,obs6,obs7}
 tmux kill-session -t $S 2>/dev/null
 docker rm -f camera-pg1 camera-pg2 >/dev/null 2>&1
 
@@ -73,6 +74,7 @@ echo "OK peer_from_sig: AA accepted peer2's share link"
 
 # An unregistered node, connected like any other, subscribed to the same channel.
 run obs "$BIN/dactie-peer -K $W/obs -b $AA -B /ip4/127.0.0.1/tcp/$AA_PORT" "info,libp2p_swarm=debug"
+OBS_START=$(date +%s)
 sleep 4
 send obs "sub t"
 send p1 "sub t"
@@ -90,6 +92,19 @@ if grep -q 'Received gossipsub payload' "$W/obs.log"; then
     fail "an observer that never registered received gossip"
 fi
 echo "OK observer: an unregistered node received no gossip"
+
+# Six more unregistered nodes: with the observer that is 7, over the AA's budget of 5.
+for i in 2 3 4 5 6 7; do
+    run obs$i "$BIN/dactie-peer -K $W/obs$i -b $AA -B /ip4/127.0.0.1/tcp/$AA_PORT"
+done
+wait_count "$W/aa.log" 'Refusing connection from .*: not admitted' 2 30
+echo "OK budget: the AA refused unregistered connections beyond 5"
+
+OBS=$(grep -o 'Local PeerId: [A-Za-z0-9]*' "$W/obs.log" | head -1 | awk '{print $3}')
+left=$((OBS_START + 75 - $(date +%s)))
+[ "$left" -gt 0 ] && sleep "$left"
+grep -q "Closing connection to $OBS: not admitted" "$W/aa.log" || fail "the AA kept the observer connected past the grace period"
+echo "OK grace: the AA closed the observer's connection after 60 s"
 
 send aa "req_open $SIG"
 for i in 1 2; do

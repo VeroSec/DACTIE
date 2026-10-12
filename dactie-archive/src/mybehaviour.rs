@@ -68,6 +68,8 @@ pub(crate) struct MyBehaviour {
     /// In this case, RequestResponse behaviour is used to send direct messages to peers,
     /// this is used for the responding to peers update requests
     pub(crate) request_response: request_response::json::Behaviour<Request, Response>,
+    /// Limits connections of nodes outside the common MLS group.
+    pub(crate) gate: admission::Gate,
 }
 
 #[derive(sqlx::FromRow, Debug)]
@@ -172,6 +174,7 @@ impl MyBehaviour {
             identify,
             kademlia,
             request_response,
+            gate: admission::Gate::default(),
         })
     }
 
@@ -979,6 +982,12 @@ pub(crate) enum MyBehaviourEvent {
     KademliaEvent(()),
     IdentifyEvent(Box<identify::Event>),
     RequestResponseEvent(Box<request_response::Event<Request, Response>>),
+}
+
+impl From<std::convert::Infallible> for MyBehaviourEvent {
+    fn from(event: std::convert::Infallible) -> Self {
+        match event {}
+    }
 }
 
 impl From<gossipsub::Event> for MyBehaviourEvent {
