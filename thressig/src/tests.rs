@@ -197,3 +197,51 @@ fn test_opening_needs_threshold_openers() {
     assert_eq!(open(&sig, &grpkey, &members, &partial(threshold)), vec![id]);
     assert_eq!(open(&sig, &grpkey, &members, &partial(4)), vec![id]);
 }
+
+/// The signature a non-member gets after the network decodes sigma1 and sigma2 from bytes that
+/// are not curve points: the identity, with c hashing verify()'s own transcript.
+fn forged_identity_signature(grpkey: &Grpkey, msg: &[u8]) -> Signature {
+    let sigma1 = G1::identity();
+    let sigma2 = G1::identity();
+    let s = FieldElement::random();
+    let c = FieldElement::random();
+    // r_pub as verify() computes it; every pairing with the identity is 1
+    let r_pub = (GT::ate_pairing(&(&sigma1).neg(), &grpkey.x_pub_tilde)
+        * GT::ate_pairing(&sigma2, &grpkey.g_tilde)).pow(&c).inverse()
+        * GT::ate_pairing(&(&sigma1 * &s), &grpkey.y1_pub_tilde);
+    let mut transcript: Vec<u8> = Vec::new();
+    transcript.extend(grpkey.to_bytes());
+    transcript.extend(sigma1.to_bytes(false));
+    transcript.extend(sigma2.to_bytes(false));
+    transcript.extend(r_pub.to_bytes());
+    transcript.extend(bincode::serialize(&msg).unwrap());
+    Signature { sigma1, sigma2, c: FieldElement::from_msg_hash(&transcript), s }
+}
+
+#[test]
+fn test_identity_signature_rejected() {
+    let (grpkey, _) = setup();
+    let msg = "forged".as_bytes();
+    let forged = forged_identity_signature(&grpkey, msg);
+    assert!(verify(&forged, &grpkey, &msg).is_err(), "a non-member forged a valid group signature");
+    // Opening it must not name every member.
+    let members: HashSet<usize> = [1usize, 2, 3].into_iter().collect();
+    let all_sj: HashMap<usize, Vec<(usize, GT)>> =
+        (1..=3).map(|j| (j, members.iter().map(|m| (*m, GT::one())).collect())).collect();
+    assert!(open(&forged, &grpkey, &members, &all_sj).is_empty());
+}
+
+#[test]
+fn test_off_curve_signature_bytes_rejected() {
+    // [u64 len][sigma1][u64 len][sigma2][u64 len][c][u64 len][s]
+    let honest = Signature { sigma1: G1::random(), sigma2: G1::random(), c: FieldElement::one(), s: FieldElement::one() };
+    let mut bytes = bincode::serialize(&honest).unwrap();
+    assert!(bincode::deserialize::<Signature>(&bytes).is_ok());
+    let len = u64::from_le_bytes(bytes[0..8].try_into().unwrap()) as usize;
+    let off_curve = (1u8..=255)
+        .map(|x| { let mut b = vec![0u8; len]; b[0] = bytes[8]; b[len - 1] = x; b })
+        .find(|b| G1::from(amcl_wrapper::types::GroupG1::frombytes(b)).is_identity())
+        .expect("no off-curve encoding found");
+    bytes[8..8 + len].copy_from_slice(&off_curve);
+    assert!(bincode::deserialize::<Signature>(&bytes).is_err());
+}

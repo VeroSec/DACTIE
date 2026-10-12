@@ -27,7 +27,13 @@ mod g1_compressed {
         if v.len() != GroupG1_SIZE && v.len() != G1_COMP_BYTE_SIZE {
             return Err(D::Error::custom(format!("G1: unexpected length {}", v.len())));
         }
-        Ok(G1::from(GroupG1::frombytes(&v)))
+        // amcl decodes bytes that are not a curve point to the identity, where every pairing
+        // is 1. A signature with sigma1 = identity would verify without any member key.
+        let g = G1::from(GroupG1::frombytes(&v));
+        if g.is_identity() {
+            return Err(D::Error::custom("G1: not a point on the curve"));
+        }
+        Ok(g)
     }
 }
 

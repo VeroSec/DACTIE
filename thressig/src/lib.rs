@@ -434,6 +434,12 @@ pub fn verify<T: Serialize + ?Sized>(
 ) -> Result<(), ThressigError> {
     let msg = bincode::serialize(msg).map_err(|_| SerializationError)?;
 
+    // PS signatures require sigma1 != 1: with sigma1 = 1, every pairing below is 1 and any
+    // c that hashes the resulting transcript verifies without a member key.
+    if sig.sigma1.is_identity() {
+        return Err(SignatureInvalid);
+    }
+
     /* e1 = e(sigma1^-1,X) */
     let e1 = GT::ate_pairing(&(&sig.sigma1).neg(), &grpkey.x_pub_tilde);
     /* e2 = e(sigma2,gg) */
@@ -510,6 +516,10 @@ where
     K: Eq + Clone,
 {
     let mut res = Vec::new();
+    // With sigma1 = 1, both sides of the check below are 1 for every member.
+    if sig.sigma1.is_identity() {
+        return res;
+    }
     let mut opener_ids: Vec<_> = all_sj.keys().copied().collect();
     opener_ids.sort();
     for id in gml.iter() {
