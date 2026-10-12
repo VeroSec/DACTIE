@@ -79,6 +79,7 @@ pub(crate) async fn experiment_prop_peer_id(
     pub_interval: PubInterval,
     mesh: MeshConfig,
 ) -> Result<RunOutcome, Box<dyn Error>> {
+    let pub_interval = pub_interval.for_network(peer_n);
     let mut peers = Vec::new();
     let mut all_peers = Vec::new();
     let (control_tx, control_rx) = broadcast::channel::<ControlSignal>(peer_n);

@@ -15,7 +15,9 @@ Options:
   -S, --n-peers-step-size <N_PEERS_STEP_SIZE>
           Step Size of Series [default: 1]
   -i, --interval <INTERVAL>
-          How often Peers Should publish. Input can be fix=<secs> or random=>start,end> [default: fix=5]
+          Background traffic. rate=<msgs/s> sets a network-wide rate (each peer publishes every N/rate
+          seconds, starting at a random point); fix=<secs> or random=<start,end> set a per-peer
+          interval instead [default: rate=40]
   -t, --time <TIME>
           How long before measurement message is send [default: 10]
   -r, --repetitions <REPETITIONS>

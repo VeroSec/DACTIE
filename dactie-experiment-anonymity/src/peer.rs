@@ -151,6 +151,23 @@ pub(crate) enum ControlSignal {
 pub(crate) enum PubInterval {
     Fix(u64), //in seconds
     Random((usize, usize)),
+    /// Network-wide background messages per second. Resolved per run into each
+    /// peer's period of N / rate seconds, so the load stays the same whatever
+    /// the network size.
+    Rate(f64),
+    /// A peer's period in seconds, resolved from `Rate`. Each peer starts at a
+    /// random point within it, so publications arrive evenly rather than in bursts.
+    Period(f64),
+}
+
+impl PubInterval {
+    /// Resolve a network-wide rate into the per-peer period for `peer_n` peers.
+    pub(crate) fn for_network(&self, peer_n: usize) -> PubInterval {
+        match self {
+            PubInterval::Rate(rate) => PubInterval::Period(peer_n as f64 / rate.max(f64::MIN_POSITIVE)),
+            other => other.clone(),
+        }
+    }
 }
 
 // Implement FromStr for PubInterval to handle argument parsing
@@ -163,6 +180,11 @@ impl FromStr for PubInterval {
                 .parse::<u64>()
                 .map(PubInterval::Fix)
                 .map_err(|_| format!("Invalid number for Fix: '{fix_value}'"))
+        } else if let Some(rate) = s.strip_prefix("rate=") {
+            match rate.parse::<f64>() {
+                Ok(r) if r > 0.0 => Ok(PubInterval::Rate(r)),
+                _ => Err(format!("Invalid rate (messages per second): '{rate}'")),
+            }
         } else if let Some(random_values) = s.strip_prefix("random=") {
             let parts: Vec<&str> = random_values.split(',').collect();
             if parts.len() == 2 {
@@ -178,7 +200,7 @@ impl FromStr for PubInterval {
             }
         } else {
             Err(format!(
-                "Invalid interval type: '{s}'. Use 'fix=<number>' or 'random=<start,end>'."
+                "Invalid interval type: '{s}'. Use 'rate=<msgs/s>', 'fix=<number>' or 'random=<start,end>'."
             ))
         }
     }
@@ -370,11 +392,19 @@ impl Peer {
                     match signal {
                         ControlSignal::Run => {
                             if timer.is_none() {
-                                let secs = match pub_interval{
-                                    PubInterval::Fix(val) => val,
-                                    PubInterval::Random((min,max)) => rand::thread_rng().gen_range(min..=max).try_into().unwrap()
-                                };
-                                timer = Some(time::interval(Duration::from_secs(secs)));
+                                timer = Some(match pub_interval {
+                                    PubInterval::Fix(val) => time::interval(Duration::from_secs(val)),
+                                    PubInterval::Random((min, max)) => time::interval(Duration::from_secs(
+                                        rand::thread_rng().gen_range(min..=max).try_into().unwrap(),
+                                    )),
+                                    PubInterval::Period(secs) => {
+                                        let period = Duration::from_secs_f64(secs.max(0.001));
+                                        let phase = period.mul_f64(rand::thread_rng().gen::<f64>());
+                                        time::interval_at(Instant::now() + phase, period)
+                                    }
+                                    // Resolved into Period by the experiment before peers start
+                                    PubInterval::Rate(_) => unreachable!("Rate is resolved per run"),
+                                });
                             }
                         }
                         ControlSignal::Stop => {
@@ -553,5 +583,31 @@ mod tests {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod pub_interval_tests {
+    use super::PubInterval;
+    use std::str::FromStr;
+
+    #[test]
+    fn network_rate_resolves_to_per_peer_period() {
+        let rate = PubInterval::from_str("rate=40").unwrap();
+        match rate.for_network(800) {
+            PubInterval::Period(secs) => assert!((secs - 20.0).abs() < 1e-9),
+            other => panic!("expected a period, got {other:?}"),
+        }
+        match rate.for_network(50) {
+            PubInterval::Period(secs) => assert!((secs - 1.25).abs() < 1e-9),
+            other => panic!("expected a period, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn fixed_intervals_are_left_alone_and_bad_rates_rejected() {
+        assert!(matches!(PubInterval::from_str("fix=3").unwrap().for_network(800), PubInterval::Fix(3)));
+        assert!(PubInterval::from_str("rate=0").is_err());
+        assert!(PubInterval::from_str("rate=abc").is_err());
     }
 }

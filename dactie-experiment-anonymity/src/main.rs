@@ -33,8 +33,11 @@ struct Args {
     #[arg(short = 'S', long, default_value_t = 1)]
     n_peers_step_size: usize,
 
-    /// How often Peers Should publish. Input can be fix=<secs> or random=>start,end>
-    #[clap(short, long, default_value = "fix=5")]
+    /// Background traffic. rate=<msgs/s> sets a network-wide rate (each peer
+    /// publishes every N/rate seconds, starting at a random point); the default
+    /// of 40 msgs/s is the realistic CTI load the latency evaluation uses.
+    /// fix=<secs> or random=<start,end> set a per-peer interval instead.
+    #[clap(short, long, default_value = "rate=40")]
     interval: PubInterval,
 
     /// How long before measurement message is send
@@ -86,13 +89,13 @@ struct Args {
     #[clap(long, default_value_t = 100)]
     conn_high: usize,
 
-    /// Gossipsub heartbeat in seconds: mesh maintenance and IHAVE gossip run this often.
+    /// Gossipsub heartbeat in seconds (testing knob): mesh maintenance and IHAVE gossip run this often.
     #[clap(long, default_value_t = 1.0)]
     heartbeat_secs: f64,
 
-    /// Peers started per second; 0 starts all at once. Waves avoid the burst of
-    /// simultaneous dials and handshakes that large runs otherwise begin with.
-    #[clap(long, default_value_t = 0)]
+    /// Peers started per second (testing knob); 0 starts all at once. Waves avoid
+    /// the burst of simultaneous dials and handshakes large runs otherwise begin with.
+    #[clap(long, default_value_t = 50)]
     spawn_per_sec: u32,
 
     /// Use libp2p's plaintext transport instead of Noise. Saves Noise's
