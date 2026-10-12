@@ -3,6 +3,14 @@ This experiment can be used to test the source anonymity of a specific GossipSub
 It starts an experiment series that automatically increases the total peer number. The experiment output is saved to a csv file.
 The number of peers that received from the publisher, from other peers and the number of unique propagation peers is outputted.
 
+## How peers connect
+All peers run in one process and listen on 127.0.0.1. Each peer registers its address in a shared directory
+and, while it holds fewer than `--conn-low` connections (default 50), dials a uniform random sample of the
+other peers. A peer holding `--conn-high` connections (default 100) refuses new ones before the Noise
+handshake, and every 5 s it closes random connections that are older than 20 s and outside its GossipSub
+mesh, down to `--conn-low`. The connection graph is thus a random graph with 50 to 100 connections per
+peer; there is no Kademlia DHT. Peers start in waves of `--spawn-per-sec` (default 50).
+
 ## Configuration Parameters
 ```
 Usage: dactie-experiments [OPTIONS]

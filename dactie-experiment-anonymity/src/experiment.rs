@@ -1,5 +1,5 @@
 use crate::adversary::Observation;
-use crate::peer::{ControlSignal, MeshConfig, Peer, PubInterval};
+use crate::peer::{ControlSignal, Directory, MeshConfig, Peer, PubInterval};
 use futures::future::join_all;
 use libp2p::PeerId;
 use std::collections::HashSet;
@@ -85,28 +85,28 @@ pub(crate) async fn experiment_prop_peer_id(
     let (control_tx, control_rx) = broadcast::channel::<ControlSignal>(peer_n);
     let (response_tx, mut response_rx) = mpsc::unbounded_channel();
 
-    let mut boot_peer = Peer::new_bootstrap_peer(control_rx, response_tx.clone(), mesh)?;
+    let directory = Directory::default();
 
-    let boot_peer_id = boot_peer.get_peer_id();
-    all_peers.push(boot_peer_id);
+    let mut first_peer = Peer::new(control_rx, response_tx.clone(), mesh, directory.clone())?;
+    all_peers.push(first_peer.get_peer_id());
 
     let mut pub_interval_clone = pub_interval.clone();
 
     // Run the peer in its own asynchronous task
-    let boot_peer_task = tokio::spawn(async move {
-        boot_peer.run(pub_interval_clone).await;
+    let first_peer_task = tokio::spawn(async move {
+        first_peer.run(pub_interval_clone).await;
     });
 
-    peers.push(boot_peer_task);
+    peers.push(first_peer_task);
 
     sleep(Duration::from_secs(2)).await;
 
     for _ in 0..peer_n - 2 {
-        let mut peer = Peer::new_peer(
-            boot_peer_id,
+        let mut peer = Peer::new(
             control_tx.subscribe(),
             response_tx.clone(),
             mesh,
+            directory.clone(),
         )?;
         all_peers.push(peer.get_peer_id());
         pub_interval_clone = pub_interval.clone();
@@ -121,12 +121,7 @@ pub(crate) async fn experiment_prop_peer_id(
         }
     }
 
-    let mut stop_peer = Peer::new_peer(
-        boot_peer_id,
-        control_tx.subscribe(),
-        response_tx.clone(),
-        mesh,
-    )?;
+    let mut stop_peer = Peer::new(control_tx.subscribe(), response_tx.clone(), mesh, directory)?;
 
     let stop_peer_addr = stop_peer.get_peer_id();
     all_peers.push(stop_peer_addr);

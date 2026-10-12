@@ -1,15 +1,15 @@
 use crate::conn_cap::ConnCap;
 use futures::StreamExt;
 use libp2p::gossipsub::IdentTopic;
-use libp2p::kad::store::MemoryStore;
-use libp2p::kad::{Mode, PROTOCOL_NAME};
+use libp2p::swarm::dial_opts::{DialOpts, PeerCondition};
 use libp2p::swarm::{NetworkBehaviour, SwarmEvent};
-use libp2p::{gossipsub, identify, kad, noise, plaintext, tcp, yamux, Multiaddr, PeerId, Swarm};
+use libp2p::{gossipsub, noise, plaintext, tcp, yamux, Multiaddr, PeerId, Swarm};
 use rand::{distributions::Alphanumeric, seq::SliceRandom, Rng};
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::str::FromStr;
+use std::sync::{Arc, RwLock};
 use tokio::sync::broadcast;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::time::{self, Duration, Instant, Interval};
@@ -20,8 +20,7 @@ pub(crate) struct Peer {
     response_channel: UnboundedSender<PeerOut>,
     control_channel: broadcast::Receiver<ControlSignal>,
     mesh: MeshConfig,
-    /// None for the bootstrap peer itself, which every joining peer must reach.
-    boot_peer: Option<PeerId>,
+    directory: Directory,
     /// When each connection was established, so young ones are spared when trimming.
     conn_since: HashMap<PeerId, Instant>,
 }
@@ -29,6 +28,32 @@ pub(crate) struct Peer {
 /// New connections are not trimmed during their first seconds (go-libp2p's
 /// connection manager uses the same 20 s grace period).
 const CONN_GRACE: Duration = Duration::from_secs(20);
+
+/// Peer discovery of a run. Every peer registers its listen address here, and a
+/// peer below the low watermark dials a uniform random sample of the others, the
+/// way a discovery service hands out random node records (Ethereum's discv5).
+/// The connection graph is thus a random graph, without the bias towards
+/// XOR-close peers that Kademlia lookups give it, and without their bootstrap
+/// traffic, which dominated the CPU of large runs.
+#[derive(Clone, Default)]
+pub(crate) struct Directory(Arc<RwLock<Vec<(PeerId, Multiaddr)>>>);
+
+impl Directory {
+    fn register(&self, peer: PeerId, addr: Multiaddr) {
+        self.0.write().expect("directory lock").push((peer, addr));
+    }
+
+    /// Up to `k` random entries for which `skip` is false.
+    fn sample(&self, k: usize, skip: impl Fn(&PeerId) -> bool) -> Vec<(PeerId, Multiaddr)> {
+        let entries = self.0.read().expect("directory lock");
+        entries
+            .choose_multiple(&mut rand::thread_rng(), entries.len())
+            .filter(|(peer, _)| !skip(peer))
+            .take(k)
+            .cloned()
+            .collect()
+    }
+}
 
 /// The gossipsub mesh band a run is configured with.
 ///
@@ -51,9 +76,10 @@ pub(crate) struct MeshConfig {
     pub(crate) gossip_factor: f64,
     pub(crate) gossip_lazy: usize,
     /// Connection watermarks per peer. A peer never holds more than `conn_high`
-    /// connections; once full, it closes the oldest non-mesh ones down to
-    /// `conn_low`. Without a cap every peer connects to every other, and one
-    /// process cannot hold the N^2 connections of a large network.
+    /// connections; once full, it closes random non-mesh ones older than the
+    /// grace period down to `conn_low`, and below `conn_low` it dials random
+    /// peers from the directory. Without a cap every peer connects to every
+    /// other, and one process cannot hold the N^2 connections of a large network.
     pub(crate) conn_low: usize,
     pub(crate) conn_high: usize,
     /// Use the plaintext transport instead of Noise (experiments only).
@@ -210,50 +236,23 @@ impl FromStr for PubInterval {
 pub(crate) struct MyBehaviour {
     /// The Gossipsub pub/sub behaviour is used to send broadcast messages to peers.
     pub(crate) gossipsub: gossipsub::Behaviour,
-    /// Send more detailed identifying info to connected peers, a.o the listen_address.
-    /// This address can then be used to populate the Kademlia DHT.
-    pub(crate) identify: identify::Behaviour,
-    /// The Kademlia DHT used to discover peers
-    pub(crate) kademlia: kad::Behaviour<MemoryStore>,
     /// Caps established connections at the high watermark, refusing before the handshake
     pub(crate) limits: ConnCap,
 }
 
 impl Peer {
-    pub(crate) fn new_bootstrap_peer(
+    pub(crate) fn new(
         control_channel: broadcast::Receiver<ControlSignal>,
         response_channel: UnboundedSender<PeerOut>,
         mesh: MeshConfig,
+        directory: Directory,
     ) -> Result<Peer, Box<dyn Error>> {
-        let swarm = Self::create_swarm(None, mesh)?;
-
         Ok(Peer {
-            swarm,
+            swarm: Self::create_swarm(mesh)?,
             control_channel,
             response_channel,
             mesh,
-            boot_peer: None,
-            conn_since: HashMap::new(),
-        })
-    }
-
-    pub(crate) fn new_peer(
-        boot_peer_id: PeerId,
-        control_channel: broadcast::Receiver<ControlSignal>,
-        response_channel: UnboundedSender<PeerOut>,
-        mesh: MeshConfig,
-    ) -> Result<Peer, Box<dyn Error>> {
-        let swarm = Self::create_swarm(
-            Some((boot_peer_id, "/ip4/127.0.0.1/tcp/10001".parse()?)),
-            mesh,
-        )?;
-
-        Ok(Peer {
-            swarm,
-            control_channel,
-            response_channel,
-            mesh,
-            boot_peer: Some(boot_peer_id),
+            directory,
             conn_since: HashMap::new(),
         })
     }
@@ -286,14 +285,10 @@ impl Peer {
             .build()
     }
 
-    fn create_swarm(
-        bootstrap_peer: Option<(PeerId, Multiaddr)>,
-        mesh: MeshConfig,
-    ) -> Result<Swarm<MyBehaviour>, Box<dyn Error>> {
+    fn create_swarm(mesh: MeshConfig) -> Result<Swarm<MyBehaviour>, Box<dyn Error>> {
         let builder = libp2p::SwarmBuilder::with_new_identity().with_tokio();
         let swarm_config =
             |c: libp2p::swarm::Config| c.with_idle_connection_timeout(Duration::from_secs(60));
-        let boot = bootstrap_peer.clone();
         // Plaintext skips Noise, whose per-connection buffers dominate memory in
         // large single-process runs. Encryption does not affect who receives what
         // from whom and when, which is all the experiment measures.
@@ -306,36 +301,26 @@ impl Peer {
                     },
                     yamux::Config::default,
                 )?
-                .with_behaviour(|key| Self::build_behaviour(key, boot, mesh))?
+                .with_behaviour(|_| Self::build_behaviour(mesh))?
                 .with_swarm_config(swarm_config)
                 .build()
         } else {
             builder
                 .with_tcp(tcp::Config::default(), noise::Config::new, yamux::Config::default)?
-                .with_behaviour(|key| Self::build_behaviour(key, boot, mesh))?
+                .with_behaviour(|_| Self::build_behaviour(mesh))?
                 .with_swarm_config(swarm_config)
                 .build()
         };
 
-        swarm.behaviour_mut().kademlia.set_mode(Some(Mode::Server));
-
         // Loopback only: every peer runs in this process. Listening on all
         // interfaces made each peer advertise one address per interface, and every
         // dial then opened that many sockets and aborted all but one mid-handshake.
-        if bootstrap_peer.is_none() {
-            swarm.listen_on("/ip4/127.0.0.1/tcp/10001".parse()?)?;
-        } else {
-            swarm.listen_on("/ip4/127.0.0.1/tcp/0".parse()?)?;
-        }
+        swarm.listen_on("/ip4/127.0.0.1/tcp/0".parse()?)?;
 
         Ok(swarm)
     }
 
-    fn build_behaviour(
-        key: &libp2p::identity::Keypair,
-        bootstrap_peer: Option<(PeerId, Multiaddr)>,
-        mesh: MeshConfig,
-    ) -> Result<MyBehaviour, Box<dyn Error + Send + Sync>> {
+    fn build_behaviour(mesh: MeshConfig) -> Result<MyBehaviour, Box<dyn Error + Send + Sync>> {
         let gossipsub_config = Self::gossipsub_config(mesh).map_err(io::Error::other)?;
 
         let mut gossipsub = gossipsub::Behaviour::new(
@@ -345,33 +330,9 @@ impl Peer {
 
         gossipsub.subscribe(&IdentTopic::new("Test"))?;
 
-        let identify = identify::Behaviour::new(identify::Config::new(
-            identify::PROTOCOL_NAME.to_string(),
-            key.public(),
-        ));
-
-        let peer_id = key.public().to_peer_id();
-
-        let mut cfg = kad::Config::new(PROTOCOL_NAME);
-        cfg.set_query_timeout(Duration::from_secs(5 * 60));
-        let store = MemoryStore::new(peer_id);
-        let mut kademlia = kad::Behaviour::with_config(peer_id, store, cfg);
-
-        kademlia.set_mode(Some(Mode::Server));
-
-        if let Some((boot_peer_id, boot_peer_addr)) = bootstrap_peer.clone() {
-            // Add the bootnodes to the local routing table.
-            kademlia.add_address(&boot_peer_id, boot_peer_addr);
-        }
-
-        // The bootstrap peer stays uncapped: every joining peer dials it first.
-        let limits = ConnCap::new(bootstrap_peer.as_ref().map(|_| mesh.conn_high));
-
         Ok(MyBehaviour {
             gossipsub,
-            identify,
-            kademlia,
-            limits,
+            limits: ConnCap::new(Some(mesh.conn_high)),
         })
     }
 
@@ -384,7 +345,10 @@ impl Peer {
         let mut trim = time::interval(Duration::from_secs(5));
         loop {
             select! {
-                _ = trim.tick() => self.trim_connections(),
+                _ = trim.tick() => {
+                    self.trim_connections();
+                    self.top_up();
+                }
                 Ok(signal) = self.control_channel.recv() => {
                     match signal {
                         ControlSignal::Run => {
@@ -408,10 +372,23 @@ impl Peer {
                             break
                         },
                         ControlSignal::Pub(val) => {
-                            if val == self.get_peer_id(){
-                                 println!("Stopping");
+                            // Every peer reports its connections and mesh peers, so a run's
+                            // log shows whether the graph held 50 to 100 connections per peer.
+                            let topic = IdentTopic::new("Test");
+                            let connected = self.swarm.connected_peers().count();
+                            let mesh = self.swarm.behaviour().gossipsub.mesh_peers(&topic.hash()).count();
+                            println!("peer_state {connected} {mesh}");
+                            if val == self.get_peer_id() {
+                                println!("Stopping");
                                 let message = "Stop".repeat(30);
-                                let _ = self.swarm.behaviour_mut().gossipsub.publish(IdentTopic::new("Test"),message); //Not handled
+                                let result = self.swarm.behaviour_mut().gossipsub.publish(topic, message);
+                                println!(
+                                    "Publisher state: {connected} connections, {mesh} mesh peers, publish {}",
+                                    match result {
+                                        Ok(_) => "ok".to_string(),
+                                        Err(e) => format!("failed: {e:?}"),
+                                    }
+                                );
                             }
                         }
                     }
@@ -428,19 +405,15 @@ impl Peer {
     }
 
     /// Once a peer reaches the high watermark, close connections down to the low
-    /// watermark so that newcomers find free slots. Gossipsub mesh peers, the
-    /// bootstrap peer and connections younger than the grace period are kept.
+    /// watermark so that newcomers find free slots. Gossipsub mesh peers and
+    /// connections younger than the grace period are kept.
     fn trim_connections(&mut self) {
-        if self.boot_peer.is_none() {
-            return;
-        }
         let connected: Vec<PeerId> = self.swarm.connected_peers().copied().collect();
         if connected.len() < self.mesh.conn_high {
             return;
         }
-        let mut protected: HashSet<PeerId> =
+        let protected: HashSet<PeerId> =
             self.swarm.behaviour().gossipsub.all_mesh_peers().copied().collect();
-        protected.extend(self.boot_peer);
         let now = Instant::now();
         let mut candidates: Vec<PeerId> = connected
             .iter()
@@ -459,6 +432,28 @@ impl Peer {
         }
     }
 
+    /// Below the low watermark, dial random peers from the directory to make up
+    /// the difference. Dials to full peers are refused before the handshake and
+    /// retried with a fresh sample on the next tick.
+    fn top_up(&mut self) {
+        let connected = self.swarm.connected_peers().count();
+        if connected >= self.mesh.conn_low {
+            return;
+        }
+        let me = *self.swarm.local_peer_id();
+        let sample = self.directory.sample(self.mesh.conn_low - connected, |peer| {
+            *peer == me || self.swarm.is_connected(peer)
+        });
+        for (peer, addr) in sample {
+            let _ = self.swarm.dial(
+                DialOpts::peer_id(peer)
+                    .addresses(vec![addr])
+                    .condition(PeerCondition::DisconnectedAndNotDialing)
+                    .build(),
+            );
+        }
+    }
+
     fn handle_event(&mut self, event: SwarmEvent<MyBehaviourEvent>) {
         match event {
             SwarmEvent::ConnectionEstablished { peer_id, .. } => {
@@ -471,29 +466,10 @@ impl Peer {
             } => {
                 self.conn_since.remove(&peer_id);
             }
-            SwarmEvent::Behaviour(MyBehaviourEvent::Identify(e)) => {
-                log::debug!("Received identify::Event: {:?}", e);
-
-                if let identify::Event::Received {
-                    peer_id,
-                    info:
-                        identify::Info {
-                            listen_addrs,
-                            protocols,
-                            ..
-                        },
-                } = e
-                {
-                    if protocols.contains(&PROTOCOL_NAME) {
-                        for addr in listen_addrs {
-                            log::debug!("Adding received IdentifyInfo matching protocol  to the DHT. Peer: {}, addr: {}", peer_id, addr);
-                            self.swarm
-                                .behaviour_mut()
-                                .kademlia
-                                .add_address(&peer_id, addr);
-                        }
-                    }
-                }
+            SwarmEvent::NewListenAddr { address, .. } => {
+                let me = *self.swarm.local_peer_id();
+                self.directory.register(me, address);
+                self.top_up();
             }
             SwarmEvent::Behaviour(MyBehaviourEvent::Gossipsub(gossipsub::Event::Message {
                 propagation_source: peer_id,
@@ -536,6 +512,23 @@ fn generate_random_string(len: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The directory never hands out skipped peers (self, already connected) and
+    /// returns fewer than asked once the others run out.
+    #[test]
+    fn directory_samples_only_unskipped_peers() {
+        let directory = Directory::default();
+        let addr: Multiaddr = "/ip4/127.0.0.1/tcp/1".parse().unwrap();
+        let peers: Vec<PeerId> = (0..10).map(|_| PeerId::random()).collect();
+        for peer in &peers {
+            directory.register(*peer, addr.clone());
+        }
+        let skip: HashSet<PeerId> = peers[..4].iter().copied().collect();
+        let sample = directory.sample(5, |p| skip.contains(p));
+        assert_eq!(sample.len(), 5);
+        assert!(sample.iter().all(|(p, _)| !skip.contains(p)));
+        assert_eq!(directory.sample(100, |p| skip.contains(p)).len(), 6);
+    }
 
     /// Every D the command line can ask for must produce a config gossipsub
     /// accepts. D=2 previously failed with MeshParametersInvalid, because
