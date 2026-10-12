@@ -77,6 +77,15 @@ struct Args {
     #[clap(long, default_value_t = 6)]
     gossip_lazy: usize,
 
+    /// Low connection watermark per peer: trimming closes connections down to this.
+    #[clap(long, default_value_t = 50)]
+    conn_low: usize,
+
+    /// High connection watermark per peer: a peer never holds more connections.
+    /// Without a cap every peer connects to every other, and memory grows with N^2.
+    #[clap(long, default_value_t = 100)]
+    conn_high: usize,
+
     /// Colluding fractions f to evaluate the source-anonymity attack at. Each is
     /// converted to a coalition size of ceil(f * N), capped at the N-1 peers that
     /// are not the source.
@@ -168,7 +177,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .open(adv)?;
     writeln!(
         &adv_file,
-        "total_peers,mesh_n,mesh_n_low,mesh_n_high,gossip_factor,gossip_lazy,run,coalition_size,f_effective,estimator,success_rate,delivery_ratio,direct_receipts"
+        "total_peers,mesh_n,mesh_n_low,mesh_n_high,gossip_factor,gossip_lazy,run,coalition_size,f_effective,estimator,success_rate,delivery_ratio,direct_receipts,conn_low,conn_high"
     )?;
 
     start_experiment_series(StartExperimentSeriesArgs {
@@ -187,7 +196,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
             args.mesh_n_high,
             args.gossip_factor,
             args.gossip_lazy,
-        ),
+        )
+        .with_conn_limits(args.conn_low, args.conn_high),
         adversary_fractions: args.adversary_fractions,
         coalition_sizes: args.coalition_sizes,
         adversary_trials: args.adversary_trials,
@@ -360,7 +370,9 @@ async fn start_experiment_series(args: StartExperimentSeriesArgs) -> Result<(), 
                     println!("  attack c={c} (f={f_effective:.4}) {estimator}: {rate:.4}");
                     writeln!(
                         &args.adv_file,
-                        "{n_peers},{n},{low},{high},{gf},{gl},{run},{c},{f_effective},{estimator},{rate},{delivery},{correct_receiver}",
+                        "{n_peers},{n},{low},{high},{gf},{gl},{run},{c},{f_effective},{estimator},{rate},{delivery},{correct_receiver},{cl},{ch}",
+                        cl = args.mesh.conn_low,
+                        ch = args.mesh.conn_high,
                         n = args.mesh.n,
                         gf = args.mesh.gossip_factor,
                         gl = args.mesh.gossip_lazy,

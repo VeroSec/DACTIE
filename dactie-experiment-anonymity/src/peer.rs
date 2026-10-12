@@ -1,10 +1,12 @@
 use futures::StreamExt;
+use libp2p::connection_limits::{self, ConnectionLimits};
 use libp2p::gossipsub::IdentTopic;
 use libp2p::kad::store::MemoryStore;
 use libp2p::kad::{Mode, PROTOCOL_NAME};
 use libp2p::swarm::{NetworkBehaviour, SwarmEvent};
 use libp2p::{gossipsub, identify, kad, noise, tcp, yamux, Multiaddr, PeerId, Swarm};
-use rand::{distributions::Alphanumeric, Rng};
+use rand::{distributions::Alphanumeric, seq::SliceRandom, Rng};
+use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::str::FromStr;
@@ -17,7 +19,16 @@ pub(crate) struct Peer {
     swarm: Swarm<MyBehaviour>,
     response_channel: UnboundedSender<PeerOut>,
     control_channel: broadcast::Receiver<ControlSignal>,
+    mesh: MeshConfig,
+    /// None for the bootstrap peer itself, which every joining peer must reach.
+    boot_peer: Option<PeerId>,
+    /// When each connection was established, so young ones are spared when trimming.
+    conn_since: HashMap<PeerId, Instant>,
 }
+
+/// New connections are not trimmed during their first seconds (go-libp2p's
+/// connection manager uses the same 20 s grace period).
+const CONN_GRACE: Duration = Duration::from_secs(20);
 
 /// The gossipsub mesh band a run is configured with.
 ///
@@ -39,6 +50,12 @@ pub(crate) struct MeshConfig {
     /// direct exposure comes from the mesh rather than from answering IWANTs.
     pub(crate) gossip_factor: f64,
     pub(crate) gossip_lazy: usize,
+    /// Connection watermarks per peer. A peer never holds more than `conn_high`
+    /// connections; once full, it closes the oldest non-mesh ones down to
+    /// `conn_low`. Without a cap every peer connects to every other, and one
+    /// process cannot hold the N^2 connections of a large network.
+    pub(crate) conn_low: usize,
+    pub(crate) conn_high: usize,
 }
 
 impl MeshConfig {
@@ -73,7 +90,15 @@ impl MeshConfig {
             outbound_min,
             gossip_factor,
             gossip_lazy,
+            conn_low: 50,
+            conn_high: 100,
         }
+    }
+
+    pub(crate) fn with_conn_limits(mut self, low: usize, high: usize) -> Self {
+        self.conn_low = low.max(1);
+        self.conn_high = high.max(self.conn_low);
+        self
     }
 }
 
@@ -143,6 +168,8 @@ pub(crate) struct MyBehaviour {
     pub(crate) identify: identify::Behaviour,
     /// The Kademlia DHT used to discover peers
     pub(crate) kademlia: kad::Behaviour<MemoryStore>,
+    /// Caps established connections at the high watermark
+    pub(crate) limits: connection_limits::Behaviour,
 }
 
 impl Peer {
@@ -157,6 +184,9 @@ impl Peer {
             swarm,
             control_channel,
             response_channel,
+            mesh,
+            boot_peer: None,
+            conn_since: HashMap::new(),
         })
     }
 
@@ -175,6 +205,9 @@ impl Peer {
             swarm,
             control_channel,
             response_channel,
+            mesh,
+            boot_peer: Some(boot_peer_id),
+            conn_since: HashMap::new(),
         })
     }
 
@@ -248,10 +281,20 @@ impl Peer {
                     kademlia.add_address(&boot_peer_id, boot_peer_addr);
                 }
 
+                // The bootstrap peer stays uncapped: every joining peer dials it first.
+                let limits = if bootstrap_peer.is_none() {
+                    ConnectionLimits::default()
+                } else {
+                    ConnectionLimits::default()
+                        .with_max_established(Some(mesh.conn_high as u32))
+                        .with_max_established_per_peer(Some(1))
+                };
+
                 Ok(MyBehaviour {
                     gossipsub,
                     identify,
                     kademlia,
+                    limits: connection_limits::Behaviour::new(limits),
                 })
             })?
             .with_swarm_config(|c| c.with_idle_connection_timeout(Duration::from_secs(60)))
@@ -274,8 +317,10 @@ impl Peer {
 
     pub(crate) async fn run(mut self, pub_interval: PubInterval) {
         let mut timer: Option<Interval> = None;
+        let mut trim = time::interval(Duration::from_secs(5));
         loop {
             select! {
+                _ = trim.tick() => self.trim_connections(),
                 Ok(signal) = self.control_channel.recv() => {
                     match signal {
                         ControlSignal::Run => {
@@ -310,8 +355,50 @@ impl Peer {
         }
     }
 
+    /// Once a peer reaches the high watermark, close connections down to the low
+    /// watermark so that newcomers find free slots. Gossipsub mesh peers, the
+    /// bootstrap peer and connections younger than the grace period are kept.
+    fn trim_connections(&mut self) {
+        if self.boot_peer.is_none() {
+            return;
+        }
+        let connected: Vec<PeerId> = self.swarm.connected_peers().copied().collect();
+        if connected.len() < self.mesh.conn_high {
+            return;
+        }
+        let mut protected: HashSet<PeerId> =
+            self.swarm.behaviour().gossipsub.all_mesh_peers().copied().collect();
+        protected.extend(self.boot_peer);
+        let now = Instant::now();
+        let mut candidates: Vec<PeerId> = connected
+            .iter()
+            .filter(|p| !protected.contains(*p))
+            .filter(|p| {
+                self.conn_since
+                    .get(*p)
+                    .is_none_or(|since| now.duration_since(*since) >= CONN_GRACE)
+            })
+            .copied()
+            .collect();
+        candidates.shuffle(&mut rand::thread_rng());
+        let excess = connected.len() - self.mesh.conn_low;
+        for peer in candidates.into_iter().take(excess) {
+            let _ = self.swarm.disconnect_peer_id(peer);
+        }
+    }
+
     fn handle_event(&mut self, event: SwarmEvent<MyBehaviourEvent>) {
         match event {
+            SwarmEvent::ConnectionEstablished { peer_id, .. } => {
+                self.conn_since.entry(peer_id).or_insert_with(Instant::now);
+            }
+            SwarmEvent::ConnectionClosed {
+                peer_id,
+                num_established: 0,
+                ..
+            } => {
+                self.conn_since.remove(&peer_id);
+            }
             SwarmEvent::Behaviour(MyBehaviourEvent::Identify(e)) => {
                 log::debug!("Received identify::Event: {:?}", e);
 
