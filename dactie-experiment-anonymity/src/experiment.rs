@@ -115,6 +115,9 @@ pub(crate) async fn experiment_prop_peer_id(
             peer.run(pub_interval_clone).await;
         });
         peers.push(peer_task);
+        if mesh.spawn_per_sec > 0 {
+            sleep(Duration::from_secs_f64(1.0 / mesh.spawn_per_sec as f64)).await;
+        }
     }
 
     let mut stop_peer = Peer::new_peer(

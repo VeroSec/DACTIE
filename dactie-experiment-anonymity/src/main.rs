@@ -86,6 +86,15 @@ struct Args {
     #[clap(long, default_value_t = 100)]
     conn_high: usize,
 
+    /// Gossipsub heartbeat in seconds: mesh maintenance and IHAVE gossip run this often.
+    #[clap(long, default_value_t = 1.0)]
+    heartbeat_secs: f64,
+
+    /// Peers started per second; 0 starts all at once. Waves avoid the burst of
+    /// simultaneous dials and handshakes that large runs otherwise begin with.
+    #[clap(long, default_value_t = 0)]
+    spawn_per_sec: u32,
+
     /// Use libp2p's plaintext transport instead of Noise. Saves Noise's
     /// per-connection buffers in large single-process runs; encryption plays no
     /// role in what the experiment measures.
@@ -183,7 +192,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .open(adv)?;
     writeln!(
         &adv_file,
-        "total_peers,mesh_n,mesh_n_low,mesh_n_high,gossip_factor,gossip_lazy,run,coalition_size,f_effective,estimator,success_rate,delivery_ratio,direct_receipts,conn_low,conn_high"
+        "total_peers,mesh_n,mesh_n_low,mesh_n_high,gossip_factor,gossip_lazy,run,coalition_size,f_effective,estimator,success_rate,delivery_ratio,direct_receipts,conn_low,conn_high,heartbeat_ms"
     )?;
 
     start_experiment_series(StartExperimentSeriesArgs {
@@ -204,7 +213,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
             args.gossip_lazy,
         )
         .with_conn_limits(args.conn_low, args.conn_high)
-        .with_plaintext(args.plaintext),
+        .with_plaintext(args.plaintext)
+        .with_heartbeat(args.heartbeat_secs)
+        .with_spawn_rate(args.spawn_per_sec),
         adversary_fractions: args.adversary_fractions,
         coalition_sizes: args.coalition_sizes,
         adversary_trials: args.adversary_trials,
@@ -377,7 +388,8 @@ async fn start_experiment_series(args: StartExperimentSeriesArgs) -> Result<(), 
                     println!("  attack c={c} (f={f_effective:.4}) {estimator}: {rate:.4}");
                     writeln!(
                         &args.adv_file,
-                        "{n_peers},{n},{low},{high},{gf},{gl},{run},{c},{f_effective},{estimator},{rate},{delivery},{correct_receiver},{cl},{ch}",
+                        "{n_peers},{n},{low},{high},{gf},{gl},{run},{c},{f_effective},{estimator},{rate},{delivery},{correct_receiver},{cl},{ch},{hb}",
+                        hb = args.mesh.heartbeat.as_millis(),
                         cl = args.mesh.conn_low,
                         ch = args.mesh.conn_high,
                         n = args.mesh.n,

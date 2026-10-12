@@ -58,6 +58,11 @@ pub(crate) struct MeshConfig {
     pub(crate) conn_high: usize,
     /// Use the plaintext transport instead of Noise (experiments only).
     pub(crate) plaintext: bool,
+    /// Gossipsub heartbeat: how often peers maintain the mesh and emit IHAVE gossip.
+    pub(crate) heartbeat: Duration,
+    /// Peers started per second; 0 starts them all at once. Starting in waves avoids
+    /// a burst of simultaneous dials, handshakes and trims in large runs.
+    pub(crate) spawn_per_sec: u32,
 }
 
 impl MeshConfig {
@@ -95,7 +100,19 @@ impl MeshConfig {
             conn_low: 50,
             conn_high: 100,
             plaintext: false,
+            heartbeat: Duration::from_secs(1),
+            spawn_per_sec: 0,
         }
+    }
+
+    pub(crate) fn with_heartbeat(mut self, secs: f64) -> Self {
+        self.heartbeat = Duration::from_secs_f64(secs.max(0.1));
+        self
+    }
+
+    pub(crate) fn with_spawn_rate(mut self, per_sec: u32) -> Self {
+        self.spawn_per_sec = per_sec;
+        self
     }
 
     pub(crate) fn with_plaintext(mut self, plaintext: bool) -> Self {
@@ -232,7 +249,7 @@ impl Peer {
         };
 
         gossipsub::ConfigBuilder::default()
-            .heartbeat_interval(Duration::from_secs(1)) // This is set to aid debugging by not cluttering the log space
+            .heartbeat_interval(mesh.heartbeat)
             .validation_mode(gossipsub::ValidationMode::Permissive) // This sets the kind of message validation. The default is Strict (enforce message signing)
             .message_id_fn(message_id_fn) // content-address messages. No two messages of the same content will be propagated.
             .flood_publish(false)
