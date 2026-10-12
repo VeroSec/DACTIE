@@ -3,12 +3,15 @@
 # Needs Docker, tmux and `cargo build --release`. Logs go to target/e2e/.
 # Leaves tmux session "camera" and containers camera-pg1/2 running for inspection;
 # clean up with: tmux kill-session -t camera; docker rm -f camera-pg1 camera-pg2
+# To run next to another run, set E2E_SESSION (tmux session and container prefix),
+# E2E_AA_PORT and E2E_PG_PORT (PostgreSQL uses E2E_PG_PORT+1 and +2), and W (logs).
 set -uo pipefail
 REPO=${REPO:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}
 BIN=$REPO/target/release
 W=${W:-$REPO/target/e2e}
-S=camera
-AA_PORT=10001
+S=${E2E_SESSION:-camera}
+AA_PORT=${E2E_AA_PORT:-10001}
+PG_PORT=${E2E_PG_PORT:-55430}
 
 fail() { echo "FAIL: $*"; exit 1; }
 wait_count() { # file pattern count seconds
@@ -27,15 +30,15 @@ peer_id() { grep -o 'Local PeerId: [A-Za-z0-9]*' "$W/$1.log" | head -1 | awk '{p
 start_network() {
     rm -rf "$W"; mkdir -p "$W"
     tmux kill-session -t $S 2>/dev/null
-    docker rm -f camera-pg1 camera-pg2 >/dev/null 2>&1
+    docker rm -f $S-pg1 $S-pg2 >/dev/null 2>&1
     for i in 1 2; do
-        docker run -d --rm --name camera-pg$i -e POSTGRES_USER=archive -e POSTGRES_PASSWORD=archivepw \
+        docker run -d --rm --name $S-pg$i -e POSTGRES_USER=archive -e POSTGRES_PASSWORD=archivepw \
             -e POSTGRES_DB=archivedb -v "$REPO/init.sql:/docker-entrypoint-initdb.d/init.sql:ro" \
-            -p 5543$i:5432 postgres:16 >/dev/null || fail "postgres $i"
+            -p $((PG_PORT + i)):5432 postgres:16 >/dev/null || fail "postgres $i"
     done
     # During init the server listens on the socket only, so TCP readiness means init.sql ran.
     for i in 1 2; do
-        for _ in $(seq 1 60); do docker exec camera-pg$i pg_isready -q -h 127.0.0.1 -U archive && break; sleep 1; done
+        for _ in $(seq 1 60); do docker exec $S-pg$i pg_isready -q -h 127.0.0.1 -U archive && break; sleep 1; done
     done
 
     tmux new-session -d -s $S -n main "sleep infinity"
@@ -45,7 +48,7 @@ start_network() {
     AA=$(peer_id aa)
     echo "AA $AA"
     for i in 1 2; do
-        run arc$i "$BIN/dactie-archive -K $W/arc$i -u postgres://archive:archivepw@127.0.0.1:5543$i/archivedb -i archive$i -a $AA -B /ip4/127.0.0.1/tcp/$AA_PORT"
+        run arc$i "$BIN/dactie-archive -K $W/arc$i -u postgres://archive:archivepw@127.0.0.1:$((PG_PORT + i))/archivedb -i archive$i -a $AA -B /ip4/127.0.0.1/tcp/$AA_PORT"
     done
     sleep 8
     send aa end_init_archive
