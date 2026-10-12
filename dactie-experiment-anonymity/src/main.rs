@@ -142,10 +142,37 @@ struct Args {
     abort_after_low_delivery: usize,
 }
 
+/// All peers share this process, and a connection between two of them holds a
+/// descriptor at each end, so N peers with up to `conn_high` connections need
+/// about N * conn_high descriptors. Common soft limits (1024, 65536) are far
+/// below that for large runs, so raise the soft limit to the hard one.
+fn raise_fd_limit(needed: u64) {
+    let mut lim = libc::rlimit { rlim_cur: 0, rlim_max: 0 };
+    // SAFETY: getrlimit and setrlimit only read and write the struct passed in.
+    unsafe {
+        if libc::getrlimit(libc::RLIMIT_NOFILE, &mut lim) != 0 {
+            return;
+        }
+        if lim.rlim_cur < lim.rlim_max {
+            lim.rlim_cur = lim.rlim_max;
+            if libc::setrlimit(libc::RLIMIT_NOFILE, &lim) != 0 {
+                libc::getrlimit(libc::RLIMIT_NOFILE, &mut lim);
+            }
+        }
+    }
+    if (lim.rlim_cur as u64) < needed {
+        eprintln!(
+            "WARNING: open-file limit {} is below the ~{needed} this run needs; raise the hard limit (ulimit -Hn)",
+            lim.rlim_cur
+        );
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     println!("Starting Experiment");
     let args = Args::parse();
+    raise_fd_limit((args.n_peers_max * args.conn_high) as u64 * 5 / 4 + 1024);
 
     let mut x = args.out_path.clone();
     let mut avg = args.out_path.clone();
