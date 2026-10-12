@@ -1,6 +1,6 @@
 use crate::mybehaviour::MyBehaviourError::PubSubBehaviourError;
 use async_trait::async_trait;
-use dactie_utils::net::is_unroutable_addr;
+use dactie_utils::net::{is_unroutable_addr, MESH_N, MESH_N_HIGH, MESH_N_LOW};
 use dactie_utils::key_store;
 use libp2p::gossipsub::{IdentTopic, MessageAcceptance};
 use libp2p::identity::{Keypair, ParseError};
@@ -130,6 +130,9 @@ impl MyBehaviour {
             .validate_messages() // Allows validation of group signatures
             .message_id_fn(message_id_fn) // content-address messages. No two messages of the same content will be propagated.
             .flood_publish(false) //Flood Pub Deactivate to provide Source Anonymity
+            .mesh_n_low(MESH_N_LOW)
+            .mesh_n(MESH_N)
+            .mesh_n_high(MESH_N_HIGH)
             // Real CTI events are far larger than gossipsub's 65536-byte default,
             // which a 64KiB MISP event already exceeds once the group signature
             // and framing are added. Raised so the evaluation can carry actual

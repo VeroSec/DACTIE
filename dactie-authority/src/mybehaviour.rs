@@ -20,7 +20,7 @@ use crate::abstswarm::instruction_handler::InstructionHandler;
 use crate::abstswarm::AbstSwarmError::{MLSError, SendError};
 use crate::abstswarm::{AbstSwarmError, Notification};
 use crate::storage::{ReturnMemkeyArgs, Storage};
-use dactie_utils::net::is_unroutable_addr;
+use dactie_utils::net::{is_unroutable_addr, MESH_N, MESH_N_HIGH, MESH_N_LOW};
 use dactie_utils::mls_wrapper::MyOpenMLSError::SerializationError;
 use dactie_utils::mls_wrapper::{MyOpenMLSError, MyOpenMls};
 use dactie_utils::shared_structs::RequestMessage::RequestOpen;
@@ -62,6 +62,9 @@ impl MyBehaviour {
             // dropped on receipt.
             .max_transmit_size(8 * 1024 * 1024)
             .message_id_fn(message_id_fn) // content-address messages. No two messages of the same content will be propagated.
+            .mesh_n_low(MESH_N_LOW)
+            .mesh_n(MESH_N)
+            .mesh_n_high(MESH_N_HIGH)
             .build()
             .map_err(io::Error::other)
             .unwrap(); // Temporary hack because `build` does not return a proper `std::error::Error`.

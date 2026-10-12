@@ -1,6 +1,13 @@
 use libp2p::multiaddr::Protocol;
 use libp2p::Multiaddr;
 
+/// GossipSub mesh band of every node. GossipSub grafts new mesh peers only below MESH_N_LOW
+/// and prunes only above MESH_N_HIGH, so any degree in between is stable, and the paper's
+/// anonymity bound is evaluated at MESH_N_HIGH. The anonymity experiments use the same band.
+pub const MESH_N_LOW: usize = 10;
+pub const MESH_N: usize = 12;
+pub const MESH_N_HIGH: usize = 24;
+
 /// Returns true for addresses that must not be added to the DHT because no remote
 /// host can dial them.
 ///
