@@ -102,6 +102,25 @@ pub struct ShareLinkProof {
     pub s: FieldElement,
 }
 
+/// An unblinded registration token: the AA's BLS signature on H(epoch, serial). The AA signed
+/// it blinded, so it cannot tell which member it issued the token to.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct Token {
+    pub epoch: u64,
+    pub serial: Vec<u8>,
+    #[serde(with = "g1_compressed")]
+    pub sig: G1,
+}
+
+/// A token before issuance. The member keeps `serial` and `r` and sends only `blinded`.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct BlindedToken {
+    pub epoch: u64,
+    pub serial: Vec<u8>,
+    pub r: FieldElement,
+    pub blinded: G1,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Share {
     pub index: usize,

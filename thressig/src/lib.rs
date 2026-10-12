@@ -12,6 +12,7 @@ use structs::*;
 use thiserror::Error;
 mod spk_dlog;
 pub mod structs;
+pub mod tokens;
 
 #[cfg(test)]
 mod tests;
