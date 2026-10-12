@@ -25,13 +25,18 @@ This is an explanation of how to build the concept from source. For the Docker V
 6. Start two databases. Either use an own PostgresDB or start the docker container with `docker compose start db db2`
 
 In each terminal start:
-1. Start authorization authority(aa) with `RUST_LOG=info cargo run --package dactie-authority -- -K <folder aa_key_material>`
+1. Start authorization authority(aa) with `RUST_LOG=info cargo run --package dactie-authority -- -K <folder aa_key_material>`. Optional: `--peers-per-member <k>` (default 5) and `--epoch-secs <seconds>` (default 30 days) set how many sharing peers a member can register per epoch, see [Create new Peer with identity of Peer1](#create-new-peer-with-identity-of-peer1-peer2).
 2. Start archive1 with `RUST_LOG=info cargo run --package dactie-archive --bin dactie-archive -- -K <folder archive_key_material> -u "postgres://archive:archivepw@localhost/archivedb" -i archive1 -a <peer_id_aa> -B /ip4/127.0.0.1/tcp/10001`
 3. Start archive2 with `RUST_LOG=info cargo run --package dactie-archive --bin dactie-archive -- -K <folder archive_key_material> -u "postgres://archive:archivepw@localhost:5433/archivedb" -i archive2 -a <peer_id_aa> -B /ip4/127.0.0.1/tcp/10001`
 4. Start peer1 with `RUST_LOG=info cargo run --package dactie-peer --bin dactie-peer -- -K <folder peer1_key_material> -b <peer_id_aa> -B /ip4/127.0.0.1/tcp/10001`
 5. Start peer2 with `RUST_LOG=info cargo run --package dactie-peer --bin dactie-peer -- -K <folder peer2_key_material> -b <peer_id_aa> -B /ip4/127.0.0.1/tcp/10001`
 
 RUST_LOG=info cargo run --package dactie-peer --bin dactie-peer -- -K ./key_material/key_material_4 -b 12D3KooWLsUHkQfXqqC6DuGaKcZUqYB9bKLWMUgNdnwcRSKdHgBA -B /ip4/127.0.0.1/tcp/10001
+
+Only registered peers take part in GossipSub: a node that has not registered gets no messages, and once a node is registered itself, it closes connections of unregistered nodes after 60 s and keeps at most 5 of them open. Register within a minute of connecting, or the node reconnects when you send the request.
+
+### Local end-to-end test
+`scripts/e2e_local.sh` runs the example above automatically and checks every step: registration, tokens, a second peer of the same member, a broadcast, an unregistered observer, and an opening. It needs Docker (for the two PostgreSQL databases), tmux, and `cargo build --release`, and takes about two minutes. Logs go to `target/e2e/`; the processes keep running in tmux session `camera` until you run `tmux kill-session -t camera; docker rm -f camera-pg1 camera-pg2`.
 
 ### Docker
 This section explains the docker setup. If docker is choosen the part above can be ignored
