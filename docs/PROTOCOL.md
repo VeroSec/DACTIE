@@ -10,16 +10,18 @@ All statements describe the code in this repository. Message names refer to `dac
 | --- | --- | --- |
 | Authorization Authority (AA) | `dactie-authority` | Admits members and archives, fixes the opening threshold `t`, owns the common MLS group, and coordinates signature openings. It also joins as member `0` ("Authority"). |
 | Archive (ARC) | `dactie-archive` | Stores every message it receives, holds one ElGamal key pair, and stores one encrypted Shamir share of every member key. After its operator approves, it contributes a partial opening. An archive can verify group signatures but cannot create them. |
-| Sharing peer | `dactie-peer` | Publishes and receives CTI. A member can run several sharing peers, each with its own PeerID. |
+| Sharing peer | `dactie-peer` | Publishes and receives CTI. A member can run up to `k` sharing peers per epoch, each with its own PeerID, none of which the AA can link to the member. The node a member joins from becomes its first sharing peer; the join itself runs from a throwaway identity (section 2). |
 
 ## Identifiers and keys
 
 | Name | What it is | Held by |
 | --- | --- | --- |
 | PeerID | libp2p peer ID, derived from the node's Ed25519 key in its key-material folder | each node |
+| Throwaway join identity | Fresh libp2p key a peer joins from; the only PeerID the AA links to a name, used once and dropped (`dactie-peer/src/join_relay.rs`) | joining peer, briefly |
 | MemberID | Numeric ID derived by hashing the name a member registers with | AA (`gml`: MemberID → name) |
 | Group public key / manager key | Keys of the threshold dynamic group signature scheme (`thressig`, Camenisch et al. 2020, single-issuer variant) | AA (manager key); all nodes (group key) |
-| Member key | Member secret `sk` plus the AA's credential `(σ1, σ2, e1)` on it | member peers (`key_material.json`) |
+| Member key | Member secret `sk` plus the AA's credential `(σ1, σ2, e1)` on it, with `σ1 = g^{H0(MemberID)}`; signing randomizes the credential unless the message is attributed (section 4) | member peers (`key_material.json`) |
+| Slot tag | `H(epoch, slot)^sk` for one of a member's `k` slots per epoch; registers or renews one sharing peer, unlinkable to the member (section 3) | AA (used tags of the current epochs); member (`slots.json` next to `key_material.json`) |
 | Opener key | ElGamal key pair in G2, one per archive | archive (secret key); AA and peers (public key, with the archive's PeerID) |
 | MLS credential | MLS basic credential holding the PeerID bytes | each node |
 
@@ -157,6 +159,7 @@ A sharing peer's registration lasts until the end of its tag's epoch.
 | `sub <topic>` | none (subscribes to the topic's channel) | — | — |
 | `broad <topic> <msg>` | `BroadcastEnc { topic, data, nonce }` | AES-256-GCM with a random 96-bit nonce, under a key exported from the common MLS group's current epoch | all members (the common group) |
 | `enc_broad <group> <msg>` | `GroupEnc { group_id, enc_data, nonce }` | AES-256-GCM under a key exported from the private group's current epoch | members of that private group |
+| `attr_broad <topic> <msg>`, `attr_enc_broad <group> <msg>` | as above, with `attributed_to: MemberID` | as above | as above; receivers also see the sender's MemberID (see Attribution) |
 
 Topic and group ID travel unencrypted, so that peers can filter messages before decrypting them. The exported keys change with every MLS epoch. The sender signs the whole encoded body (topic or group ID, ciphertext, nonce) with its group signature and publishes it on the channel of the topic or group.
 
