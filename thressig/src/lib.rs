@@ -428,6 +428,34 @@ pub fn sign<T: Serialize>(
     grpkey: &Grpkey,
     msg: &T,
 ) -> Result<Signature, ThressigError> {
+    sign_with(memkey, grpkey, msg, true)
+}
+
+/**
+ * Like sign(), but without randomizing the credential: sigma1 stays h = g^{H0(id)}, which
+ * anyone can compute from the MemberID, so the signature shows which member made it
+ * (signed_by). For messages the sender wants attributed to it, e.g. to build reputation.
+ * Its other signatures stay unlinkable to this one under XDH.
+ **/
+pub fn sign_attributed<T: Serialize>(
+    memkey: &Memkey,
+    grpkey: &Grpkey,
+    msg: &T,
+) -> Result<Signature, ThressigError> {
+    sign_with(memkey, grpkey, msg, false)
+}
+
+/// True if `sig` was made with sign_attributed by member `id`. Check verify() as well.
+pub fn signed_by(sig: &Signature, grpkey: &Grpkey, id: usize) -> bool {
+    sig.sigma1 == &grpkey.g * h0(&id)
+}
+
+fn sign_with<T: Serialize>(
+    memkey: &Memkey,
+    grpkey: &Grpkey,
+    msg: &T,
+    randomize: bool,
+) -> Result<Signature, ThressigError> {
     let msg = bincode::serialize(msg).map_err(|_| SerializationError)?;
     let sigma1 = &memkey.clone().sigma1.ok_or(MemkeySetError {
         val: "sigma1".to_string(),
@@ -439,8 +467,12 @@ pub fn sign<T: Serialize>(
         val: "e1".to_string(),
     })?;
 
-    /* Randomize sigma1 and sigma2 */
-    let t = FieldElement::random();
+    /* Randomize sigma1 and sigma2, unless the signature is attributed */
+    let t = if randomize {
+        FieldElement::random()
+    } else {
+        FieldElement::one()
+    };
     let sigma1 = sigma1 * &t;
     let sigma2 = sigma2 * &t;
 

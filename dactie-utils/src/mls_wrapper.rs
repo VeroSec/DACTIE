@@ -1195,12 +1195,53 @@ impl MyOpenMls {
             .unwrap()
             .get_grpkey()
             .ok_or(GPKUndefinedError)?;
+        let attributed_to = message.attributed_to();
         let (body, signature) = message.into_parts();
         let signature = signature.ok_or(SignatureMissing)?;
-        thressig::verify(&signature, &grpkey, &body).map_err(|_| SignatureInvalid {
-            signature: Box::new(signature.clone()),
-        })?;
+        let valid = match attributed_to {
+            None => thressig::verify(&signature, &grpkey, &body).is_ok(),
+            Some(id) => {
+                thressig::verify(&signature, &grpkey, &(&body, id)).is_ok()
+                    && thressig::signed_by(&signature, &grpkey, id)
+            }
+        };
+        if !valid {
+            return Err(SignatureInvalid {
+                signature: Box::new(signature),
+            });
+        }
         Ok((body, signature))
+    }
+
+    /// Verifies a gossip message and returns the MemberID it is attributed to, if any.
+    pub fn verify_message(
+        &self,
+        message: shared_structs::Message,
+    ) -> Result<(shared_structs::MessageBody, Signature, Option<usize>), MyOpenMLSError> {
+        let attributed_to = message.attributed_to;
+        let (body, signature) = self.verify(message)?;
+        Ok((body, signature, attributed_to))
+    }
+
+    /// Signs a gossip message so that receivers see this member's MemberID.
+    pub fn sign_attributed(
+        &self,
+        body: shared_structs::MessageBody,
+    ) -> Result<shared_structs::Message, MyOpenMLSError> {
+        let (grpkey, memkey, id) = {
+            let key_store = self.key_store.lock().unwrap();
+            (
+                key_store.get_grpkey().ok_or(GPKUndefinedError)?,
+                key_store.get_memkey().ok_or(GSKUndefinedError)?,
+                key_store.get_id().ok_or(IDUndefinedError)?,
+            )
+        };
+        let signature = thressig::sign_attributed(&memkey, &grpkey, &(&body, id))?;
+        Ok(shared_structs::Message {
+            body,
+            signature,
+            attributed_to: Some(id),
+        })
     }
 
     pub fn verify_enc_share(

@@ -13,6 +13,10 @@ pub trait Signable {
 pub trait Verifiable {
     type Body;
     fn into_parts(self) -> (Self::Body, Option<Signature>);
+    /// The MemberID the sender attributed the message to, see thressig::sign_attributed.
+    fn attributed_to(&self) -> Option<usize> {
+        None
+    }
 }
 
 //A direct request to another peer without using gossipsub
@@ -195,12 +199,18 @@ impl Signable for ResponseMessage {
 pub struct Message {
     pub body: MessageBody,
     pub signature: Signature,
+    // Set when the sender attributes the message to itself: the signature then covers
+    // (body, MemberID) and names that member, so the MemberID can be neither forged nor removed.
+    pub attributed_to: Option<usize>,
 }
 
 impl Verifiable for Message {
     type Body = MessageBody;
     fn into_parts(self) -> (Self::Body, Option<Signature>) {
         (self.body, Some(self.signature))
+    }
+    fn attributed_to(&self) -> Option<usize> {
+        self.attributed_to
     }
 }
 
@@ -242,7 +252,11 @@ impl Signable for MessageBody {
     type Output = Message;
 
     fn new(body: Self, signature: Signature) -> Self::Output {
-        Message { body, signature }
+        Message {
+            body,
+            signature,
+            attributed_to: None,
+        }
     }
 }
 
@@ -251,6 +265,10 @@ impl Signable for MessageBody {
 pub enum Instruction {
     /// Instruct the network to send a message
     Send {
+        message: MessageBody,
+    },
+    // Send, signed so that receivers see the sender's MemberID.
+    SendAttributed {
         message: MessageBody,
     },
     Subscribe(Vec<u8>),

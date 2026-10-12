@@ -383,3 +383,35 @@ fn test_slot_tags() {
     let received: SlotTag = bincode::deserialize(&bincode::serialize(&tag).unwrap()).unwrap();
     assert_eq!(received, tag);
 }
+
+#[test]
+fn test_attributed_signature() {
+    let (grpkey, mgrkey, pks, opener_sks, n) = join_setup(3);
+    let (id, other) = (11usize, 12usize);
+    let material = join_mem1(id, n.clone(), &grpkey, 2, &pks);
+    let (_, _, _, _, _, sk, enc_shares, commits) = &material;
+    let memkey = join_mem2(sk, &try_join(id, &grpkey, &mgrkey, &pks, &n, &material, enc_shares, commits).unwrap());
+    let msg = ("indicator", id);
+
+    // Attributed: verifies like any signature and names its member.
+    let sig = sign_attributed(&memkey, &grpkey, &msg).unwrap();
+    assert!(verify(&sig, &grpkey, &msg).is_ok());
+    assert!(signed_by(&sig, &grpkey, id));
+    assert!(!signed_by(&sig, &grpkey, other));
+    // Claiming another MemberID breaks the signature over (body, MemberID).
+    assert!(verify(&sig, &grpkey, &("indicator", other)).is_err());
+
+    // Anonymous signatures name no member.
+    let anon = sign(&memkey, &grpkey, &msg).unwrap();
+    assert!(verify(&anon, &grpkey, &msg).is_ok());
+    assert!(!signed_by(&anon, &grpkey, id));
+
+    // An attributed signature can still be opened by a threshold of archives.
+    let mut all_sj = HashMap::new();
+    for j in 0..2 {
+        let p = create_open_pairing(&sig, enc_shares[j].clone(), &opener_sks[j]);
+        all_sj.insert(p.index, vec![(id, p.pairing)]);
+    }
+    let members: HashSet<usize> = [id].into_iter().collect();
+    assert_eq!(open(&sig, &grpkey, &members, &all_sj), vec![id]);
+}

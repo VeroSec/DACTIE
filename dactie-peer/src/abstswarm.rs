@@ -115,6 +115,8 @@ pub(crate) enum Notification {
         propagation_source: PeerId,
         message_body: MessageBody,
         signature: Vec<u8>,
+        // MemberID of an attributed message, verified against its signature
+        attributed_to: Option<usize>,
     },
     Err(AbstSwarmError),
 }

@@ -1,5 +1,6 @@
 #!/bin/bash
-# Local end-to-end run: join, sharing peers with slot tags, a broadcast, and an opening.
+# Local end-to-end run: join, sharing peers with slot tags, an anonymous and an attributed
+# broadcast, and an opening.
 # AA, two archives (PostgreSQL in Docker), and member peer1, which joins from a throwaway
 # identity and then registers its own PeerID with slot 1 of the member's k = 3 slots. peer2 is a
 # second sharing peer of the same member (peer_from_sig, slot 2); the AA refuses a slot twice,
@@ -63,7 +64,15 @@ send p2 "broad t camera-ready-e2e"
 wait_count "$W/p1.log" 'camera-ready-e2e' 1 30
 SIG=$(grep -A6 "camera-ready-e2e" "$W/p1.log" | grep -A1 '^Signature:' | tail -1 | tr -d '[:space:]')
 [ -n "$SIG" ] || fail "no signature printed by peer1"
-echo "OK broadcast: peer1 received peer2's message"
+grep -A6 "camera-ready-e2e" "$W/p1.log" | grep -q 'Sender: anonymous' || fail "the broadcast was not shown as anonymous"
+echo "OK broadcast: peer1 received peer2's message, sender anonymous"
+
+# Attributed: the signature names peer1's member, whose MemberID only the AA logged.
+MID=$(grep -o 'Created Key Material for member [0-9]*' "$W/aa.log" | head -1 | awk '{print $NF}')
+send p2 "attr_broad t attributed-e2e"
+wait_count "$W/p1.log" 'attributed-e2e' 1 30
+grep -A6 "attributed-e2e" "$W/p1.log" | grep -q "Attributed to member: $MID" || fail "the attributed broadcast did not name member $MID"
+echo "OK attribution: peer1 saw the attributed message as from member $MID"
 sleep 3
 grep -q "Connection established peer=$AA" "$W/obs.log" \
     || fail "observer never connected to the AA, so the check below proves nothing"

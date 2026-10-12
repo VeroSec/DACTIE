@@ -266,6 +266,20 @@ impl MyClient {
         } else if input.starts_with("unsub") && split.len() > 1 {
             let topic = split[1].to_string();
             Self::send_unsubscribe(topic, self.instruction_tx.clone()).await?;
+        } else if input.starts_with("attr_broad") && split.len() > 2 {
+            let message = MessageBody::Broadcast {
+                topic: split[1].to_string(),
+                data: split[2..].join(" ").into_bytes(),
+            };
+            self.instruction_tx
+                .send(Instruction::SendAttributed { message })?;
+        } else if input.starts_with("attr_enc_broad") && split.len() > 2 {
+            let message = MessageBody::Group {
+                group_number: split[1].parse::<usize>()?,
+                data: split[2..].join(" ").into_bytes(),
+            };
+            self.instruction_tx
+                .send(Instruction::SendAttributed { message })?;
         } else if input.starts_with("broad") && split.len() > 2 {
             let topic = split[1];
             let message = split[2..].join(" ");
@@ -390,6 +404,8 @@ impl MyClient {
         - sub <topic>: Subscribes to a topic
         - unsub <topic>: Unsubscribes from a topic
         - broad <topic> <msg>: Sends a public available message to the group
+        - attr_broad <topic> <msg>: Like broad, but receivers see this member's MemberID
+        - attr_enc_broad <group_number> <msg>: Like enc_broad, but receivers see this member's MemberID
         - add_group_member <group_number> <peer_id>: Adds a new Group Member
         - remove_group_member <group_number> <peer_id>: Removes peer from group, except group owner,
         - delete_group_for_all <group_number>: Deletes Group for all peers, only callable by owner
@@ -411,7 +427,7 @@ impl MyClient {
                 propagation_source: peer_id,
                 message_body,
                 signature,
-                ..
+                attributed_to,
             } => match message_body {
                 MessageBody::Broadcast { topic, data } => {
                     let s = String::from_utf8_lossy(&data);
@@ -434,7 +450,7 @@ impl MyClient {
                         let latency_ms = now.saturating_sub(ts_ms);
                         println!("BENCH_RX topic={topic} via={peer_id} seq={seq} latency_ms={} sig={}", latency_ms, hex::encode(&signature));
                     } else {
-                        println!("Got Broadcastmessage: \n'{}'\nTopic: '{topic}'\nPropagating Peer: {peer_id}\nSignature:\n{}", s, hex::encode(&signature));
+                        println!("Got Broadcastmessage: \n'{}'\nTopic: '{topic}'\nPropagating Peer: {peer_id}\n{}\nSignature:\n{}", s, sender(attributed_to), hex::encode(&signature));
                     }
                 }
                 MessageBody::Group { group_number, data } => {
@@ -457,7 +473,7 @@ impl MyClient {
                         let latency_ms = now.saturating_sub(ts_ms);
                         println!("BENCH_RX group={} via={peer_id} seq={seq} latency_ms={} sig={}", group_number, latency_ms, hex::encode(&signature));
                     } else {
-                        println!("Got Groupmessage: \n'{}'\nGroup number: '{group_number}'\nPropagating Peer: {peer_id}\nSignature:\n{}", s, hex::encode(&signature));
+                        println!("Got Groupmessage: \n'{}'\nGroup number: '{group_number}'\nPropagating Peer: {peer_id}\n{}\nSignature:\n{}", s, sender(attributed_to), hex::encode(&signature));
                     }
                 }
                 MessageBody::GroupEnc { .. } | MessageBody::BroadcastEnc { .. } => {
@@ -669,5 +685,13 @@ impl MyClient {
         log::info!("GetOpenerKeys Instruction sent to Abstswarm");
 
         Ok(())
+    }
+}
+
+/// "Attributed to member X" for attributed messages, whose signature proves the MemberID.
+fn sender(attributed_to: Option<usize>) -> String {
+    match attributed_to {
+        Some(id) => format!("Attributed to member: {id}"),
+        None => "Sender: anonymous".to_string(),
     }
 }

@@ -265,6 +265,17 @@ impl MyBehaviour {
 
     // Send a message over gossipsub
     fn send(&mut self, body: MessageBody, my_open_mls: &MyOpenMls) -> Result<(), AbstSwarmError> {
+        self.send_signed(body, my_open_mls, false)
+    }
+
+    /// Encrypts and publishes a message; `attributed` signs it so that receivers see this
+    /// member's MemberID.
+    fn send_signed(
+        &mut self,
+        body: MessageBody,
+        my_open_mls: &MyOpenMls,
+        attributed: bool,
+    ) -> Result<(), AbstSwarmError> {
         let (body, channel) = match body.clone() {
             MessageBody::Broadcast { ref topic, data } => (
                 self.send_to_topic(topic, data, my_open_mls)?,
@@ -283,7 +294,11 @@ impl MyBehaviour {
             }
         };
 
-        let message = my_open_mls.sign(body)?;
+        let message = if attributed {
+            my_open_mls.sign_attributed(body)?
+        } else {
+            my_open_mls.sign(body)?
+        };
 
         let to_send =
             bincode::serialize(&message).map_err(|e| SerializationError(e.to_string()))?;
@@ -787,7 +802,7 @@ impl MyBehaviour {
                 log::info!("Received gossipsub payload: {} bytes", message.data.len());
                 let message: Message = bincode::deserialize(&message.data)
                     .map_err(|e| SerializationError(e.to_string()))?;
-                let (message_body, signature) = match my_open_mls.verify(message) {
+                let (message_body, signature, attributed_to) = match my_open_mls.verify_message(message) {
                     Ok(message) => {
                         self.gossipsub
                             .report_message_validation_result(
@@ -832,7 +847,7 @@ impl MyBehaviour {
                             Ok((group_number_option, data)) => {
                                 let group_number = group_number_option.ok_or(GroupNotAvailable("".to_string()))?;
                                 let message_body = MessageBody::Group {group_number, data};
-                                Self::notify(notification_tx, Notification::Data{propagation_source:peer_id, message_body, signature:signature.to_bytes()})
+                                Self::notify(notification_tx, Notification::Data{propagation_source:peer_id, message_body, signature:signature.to_bytes(), attributed_to})
                             }
                             Err(e) => match e {
                                 GroupNotAvailable(_) => {}, //Do nothing, because not my group
@@ -855,6 +870,7 @@ impl MyBehaviour {
                                     propagation_source: peer_id,
                                     message_body: message_body.clone(),
                                     signature: signature.to_bytes(),
+                                    attributed_to,
                                 },
                             )
                         } else {
@@ -1347,6 +1363,11 @@ impl InstructionHandler for MyBehaviour {
         match instruction {
             Instruction::Send { message } => {
                 if let Err(error) = self.send(message, my_open_mls) {
+                    Self::notify(notification_tx, Notification::Err(error));
+                }
+            }
+            Instruction::SendAttributed { message } => {
+                if let Err(error) = self.send_signed(message, my_open_mls, true) {
                     Self::notify(notification_tx, Notification::Err(error));
                 }
             }

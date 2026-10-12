@@ -162,7 +162,9 @@ Topic and group ID travel unencrypted, so that peers can filter messages before 
 
 A receiver validates the signature (see [Gossip messages and validation](#gossip-messages-and-validation)). It then decrypts a `BroadcastEnc` only if it subscribed to the topic, and a `GroupEnc` only if it is a member of the group. It ignores all other messages, but still forwards them.
 
-Messages are anonymous: neither the gossip message nor the group signature identifies the sender. A sender who wants attribution writes its MemberID into the payload, where the group signature protects it against modification in transit.
+Messages are anonymous: neither the gossip message nor the group signature identifies the sender.
+
+**Attribution.** A sender who wants a message attributed to it, e.g. to build reputation, uses `attr_broad <topic> <msg>` or `attr_enc_broad <group> <msg>`. The peer then signs `(body, MemberID)` without randomizing its credential (`thressig::sign_attributed`): `σ1` stays `h = g^{H0(MemberID)}`, which anyone can compute from the MemberID, and only the member holding that credential can sign with it. The gossip message carries the MemberID in `attributed_to`. Receivers verify the signature over `(body, MemberID)` and check `σ1 = h` (`thressig::signed_by`), so the MemberID can be neither forged nor removed, and print `Attributed to member: <MemberID>`; anonymous messages print `Sender: anonymous`. An attributed signature reveals the member's credential `(σ1, σ2)`; its anonymous signatures stay unlinkable to it under XDH, the assumption their anonymity already rests on. Archives store the message without the attribution.
 
 ## 5. MLS groups
 
