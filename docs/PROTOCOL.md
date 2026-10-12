@@ -143,7 +143,14 @@ A member can run further sharing peers under the same member key. Each new peer 
 
 Archives store `id_shares` per MemberID without any PeerID, and `peer_shares` per additional PeerID without any MemberID. Only an opening links the two.
 
-**Renewal and expiry.** A sharing peer's registration lasts until the end of its token's epoch. To stay, the sharing peer runs `renew <AA PeerID> <key_material.json of the registration peer>`: it takes a token for the next epoch (or the current one) from that `tokens.json` and sends the unsigned `RenewPeer { token }`. The AA accepts it from registered sharing peers only, spends the token, and replies `PeerRenewed { until_epoch }`. Every 5 s, the AA removes sharing peers whose registration ended with an earlier epoch from the common group with a commit; the admission check then excludes them from GossipSub on every node. Their `peer_shares` stay with the archives and their PeerIDs in the AA's `allowed_peers`, so their old messages can still be opened. Because a sharing peer in an epoch needs a token of that epoch, a member never has more than `k` sharing peers at once.
+### Renewal and expiry
+
+A sharing peer's registration lasts until the end of its token's epoch.
+
+- **Renewal.** On the registration peer, `get_tokens <AA PeerID> [count] next` requests tokens for the next epoch. The sharing peer then runs `renew <AA PeerID> <key_material.json of the registration peer>` before the epoch ends: it takes a next-epoch token (or else a current one) from that `tokens.json` and sends the unsigned `RenewPeer { token }`. The AA accepts it only from registered sharing peers, spends the token, and replies `PeerRenewed { until_epoch }`.
+- **Expiry.** Every 5 s, the AA removes sharing peers whose registration ended with an earlier epoch from the common group with a commit. The admission check then excludes them from GossipSub on every node. A removed peer can register again with `peer_from_sig` and a token of the current epoch.
+- **Openings.** The archives keep the `peer_shares` of removed peers, and the AA keeps their PeerIDs in `allowed_peers`, so their old messages can still be opened to them.
+- **Cap across epochs.** A new sharing peer needs a token of the current epoch, and a renewal uses one of the next epoch's `k` tokens. A member therefore never has more than `k` sharing peers registered for any epoch, also at the epoch boundary.
 
 ## 4. Publishing and receiving CTI
 
