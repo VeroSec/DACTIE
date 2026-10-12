@@ -59,15 +59,18 @@ start_peer() { # window [RUST_LOG]
     run "$1" "$BIN/dactie-peer -K $W/$1 -b $AA -B /ip4/127.0.0.1/tcp/$AA_PORT" "${2:-info}"
 }
 
-# Registers a member from a new peer node.
+# Registers a member from a new peer node. The node joins from a throwaway identity and then
+# registers its own PeerID as a sharing peer.
 join_member() { # window name
-    local shares
+    local shares added
     shares=$(grep -c 'Got a new ID Share' "$W/arc1.log")
+    added=$(grep -c 'Adding new peer from existing member' "$W/aa.log")
     start_peer "$1"
     sleep 4
     send "$1" "register_identity $AA $2"
     wait_count "$W/arc1.log" 'Got a new ID Share' $((shares + 1)) 30
     wait_count "$W/arc2.log" 'Got a new ID Share' $((shares + 1)) 30
+    wait_count "$W/aa.log" 'Adding new peer from existing member' $((added + 1)) 30
 }
 
 # Starts a peer node and registers it as a sharing peer of the member in window $2.

@@ -81,28 +81,31 @@ The AA keeps the archives' KeyPackages in memory only, so do not restart it betw
 
 Console: `register_identity <AA PeerID> <name>`.
 
+The AA sees the member's name together with the PeerID a join comes from. So that it cannot link the node's own PeerID to the member, the peer sends the messages of the join from a **throwaway identity** (`dactie-peer/src/join_relay.rs`): a fresh libp2p key, used only for this join and dropped once the member key has arrived. The throwaway identity dials the AA at `-B` and the archives at their `--archive` addresses. Afterwards, the node registers its own PeerID as a sharing peer like any other (section 3), which does not reveal the member.
+
 ```mermaid
 sequenceDiagram
-    participant P as Peer
+    participant T as Peer (throwaway identity)
+    participant P as Peer (own PeerID)
     participant AA as Authority
     participant A as Archive i
-    P->>AA: VerifyIdentity {name}
-    AA->>P: IdentityVerified {id, n, group key, (archive PeerID, opener key)*, t}
+    T->>AA: VerifyIdentity {name}
+    AA->>T: IdentityVerified {id, n, group key, (archive PeerID, opener key)*, t, epoch length, k}
     opt peer started with --archive
-        P->>A: RequestOpenerKeys
-        A->>P: ArchiveOpenerKey {elgamal_pk}
+        T->>A: RequestOpenerKeys
+        A->>T: ArchiveOpenerKey {elgamal_pk}
     end
-    P->>AA: JoinKeyMaterial {g^sk, h^sk, π1, π2, π3, encrypted shares, commitments, KeyPackage}
+    T->>AA: JoinKeyMaterial {g^sk, h^sk, π1, π2, π3, encrypted shares, commitments}
     AA->>A: AddIDShare {id, encrypted share i, commitments} (group-signed)
     A->>A: verify share, store in id_shares
-    AA->>P: JoinGroup {welcome, ratchet tree} (group-signed)
-    AA-->>A: Commit adding P to the common group (gossip)
-    AA->>P: MemKey {σ1, σ2, e1} (group-signed)
+    AA->>T: MemKey {σ1, σ2, e1} (group-signed)
+    Note over T: throwaway identity dropped
+    P->>AA: AddPeerToSig with slot 1 (section 3)
 ```
 
-1. **Identity.** The peer sends `VerifyIdentity { name, with_signature: true }`. In a deployment, this is where the AA would vet the organization out of band. The prototype accepts any new name. The AA derives the MemberID from the name, draws a random nonce `n`, and remembers `(n, MemberID, name)` under the requesting PeerID until the join completes.
-2. **Join parameters.** The AA replies `IdentityVerified` with the MemberID, `n`, the group public key, every archive's opener key paired with its PeerID, and `t`.
-3. **Archive key check.** If the peer was started with `--archive <multiaddr>/p2p/<PeerID>` (repeatable), it asks each listed archive for its key directly (`RequestOpenerKeys` → `ArchiveOpenerKey`) and compares it with the key the AA sent. On a mismatch, the peer abandons the join. This keeps a dishonest AA from substituting archive keys it controls. Without `--archive`, the peer logs a warning and trusts the AA's keys.
+1. **Identity.** The peer sends `VerifyIdentity { name, with_signature: true }`. In a deployment, this is where the AA would vet the organization out of band. The prototype accepts any new name. The AA derives the MemberID from the name, draws a random nonce `n`, and remembers `(n, MemberID, name)` under the requesting (throwaway) PeerID until the join completes.
+2. **Join parameters.** The AA replies `IdentityVerified` with the MemberID, `n`, the group public key, every archive's opener key paired with its PeerID, `t`, the epoch length and `k`.
+3. **Archive key check.** If the peer was started with `--archive <multiaddr>/p2p/<PeerID>` (repeatable), it asks each listed archive for its key directly (`RequestOpenerKeys` → `ArchiveOpenerKey`), also from the throwaway identity, and compares it with the key the AA sent. On a mismatch, the peer abandons the join. This keeps a dishonest AA from substituting archive keys it controls. Without `--archive`, the peer logs a warning and trusts the AA's keys.
 4. **Key material** (`thressig::join_mem1`, `create_enc_shares`). The peer
    - chooses its secret `sk` and computes `g^sk` and `h^sk` with `h = g^{H0(MemberID)}`;
    - proves knowledge of both discrete logarithms, bound to `n` (`π1`, `π2`);
@@ -110,7 +113,7 @@ sequenceDiagram
    - encrypts share `i` with archive `i`'s ElGamal key and attaches a proof that the ciphertext matches the commitments;
    - proves that the first commitment hides the same `sk` as `h^sk` (`π3`, equality of discrete logarithms, bound to `n`).
 
-   It sends all of this, together with an MLS KeyPackage, in `JoinKeyMaterial`. `sk` never leaves the peer.
+   It sends all of this in `JoinKeyMaterial`. `sk` never leaves the peer.
 5. **AA checks** (`thressig::join_mgr2`). The AA checks:
    - the number of commitments equals `t`, and the number of shares equals the number of archives;
    - the MemberID is new;
@@ -121,10 +124,9 @@ sequenceDiagram
 
    It then issues the credential `(σ1, σ2, e1)` on `sk` without learning `sk`, and records `MemberID → name` in `gml`.
 6. **Shares to archives.** The AA sends archive `i` a group-signed `AddIDShare { id, enc_share_i, commitments }`. The message carries no PeerID. The archive verifies the AA's signature and the share against its own key, then stores it in `id_shares`.
-7. **Common MLS group.** The AA checks that the KeyPackage's credential matches the requesting PeerID. It then adds the peer to the common group with a commit, which it publishes on the group's channel, and sends the peer a group-signed `JoinGroup` welcome.
-8. **Member key.** The AA sends `MemKey { σ1, σ2, e1 }`. The peer combines it with `sk` and can now sign.
+7. **Member key.** The AA sends `MemKey { σ1, σ2, e1 }`. It does not add the joining PeerID to the common group. The peer combines the credential with `sk` and can now sign, drops the throwaway identity, and registers its own PeerID as a sharing peer with slot 1 of the current epoch.
 
-**What the AA learns.** The AA learns the member's name and MemberID. Because the request arrives over the peer's libp2p connection, the AA also sees the PeerID the member registered from. After the join, the AA keeps `gml` (MemberID → name) and the list of admitted PeerIDs separately. It never sees `sk` or any share in the clear.
+**What the AA learns.** The AA learns the member's name and MemberID, and the throwaway PeerID they came from, which is never used again. After the join, the AA keeps `gml` (MemberID → name) and the list of admitted sharing PeerIDs separately; no sharing PeerID is linked to a name. It never sees `sk` or any share in the clear. The AA still sees the IP address of the join; joining from another network location, or through Tor, hides that too. It could also link a join and a sharing peer that registers right after it by timing.
 
 ## 3. Additional sharing peers
 

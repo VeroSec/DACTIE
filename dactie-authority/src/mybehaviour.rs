@@ -483,6 +483,8 @@ impl MyBehaviour {
                             identity.hash(&mut hasher);
                             let id = hasher.finish() as usize;
                             if !identity.is_empty() && !storage.id_exists(&id) {
+                                log::info!("Verified identity {identity} from {peer}");
+                                let (epoch_secs, peers_per_member) = storage.get_epoch_policy();
                                 let (n, group_key) = storage.return_new_n(peer, id, identity);
                                 //Archives can only be created in the init phase
                                 let res = if with_signature && !storage.get_archive_init_mode() {
@@ -493,6 +495,8 @@ impl MyBehaviour {
                                         group_key,
                                         opener_pubkeys: Some(opener_pubkeys),
                                         threshold: storage.get_threshold(),
+                                        epoch_secs,
+                                        peers_per_member,
                                     }
                                 } else {
                                     ResponseMessage::IdentityVerified {
@@ -501,6 +505,8 @@ impl MyBehaviour {
                                         group_key,
                                         opener_pubkeys: None,
                                         threshold: None,
+                                        epoch_secs,
+                                        peers_per_member,
                                     }
                                 };
                                 log::info!("Verified Identity sending out response...");
@@ -529,7 +535,6 @@ impl MyBehaviour {
                             pi3,
                             enc_shares,
                             commits,
-                            keypackage,
                         } => {
                             if !Self::shares_match_network(storage, &enc_shares, &commits) {
                                 log::warn!("Rejecting join from {peer}: its shares do not match the archives and threshold");
@@ -552,24 +557,9 @@ impl MyBehaviour {
                                 &enc_shares,
                                 &commits,
                             )?;
-                            let keypackage: KeyPackage = bincode::deserialize(&keypackage)
-                                .map_err(|x| SerializationError(x.to_string()))?;
-                            log::info!("Created Key Material adding peer to common group...");
-                            storage.allow_peer(&keypackage, peer)?;
-                            let group_id = my_open_mls.get_common_group_id()?;
-                            let (_, commit, welcome_option, epoch) = my_open_mls
-                                .add_group_members(
-                                    group_id.clone(),
-                                    &[(peer, keypackage.clone())],
-                                )?;
-                            self.publish_commit(
-                                my_open_mls,
-                                group_id.to_vec(),
-                                vec![peer],
-                                commit,
-                                welcome_option,
-                                epoch,
-                            )?;
+                            // The joining PeerID is linked to the member's name, so it does not
+                            // join the common group: sharing peers register with a slot tag.
+                            log::info!("Created Key Material for member {id}");
                             let res = ResponseMessage::MemKey {
                                 partial_memkey: Some(partial_memkey), /* welcome: welcome_option.unwrap(), ratchet_tree: my_open_mls.get_ratchet_tree(&group_id.to_vec())?*/
                             };

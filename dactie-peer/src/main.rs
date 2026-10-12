@@ -22,6 +22,7 @@ use dactie_utils::mls_wrapper::MyOpenMls;
 use libp2p::PeerId;
 
 mod abstswarm;
+mod join_relay;
 mod mybehaviour;
 mod myclient;
 
@@ -130,6 +131,16 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .collect::<Result<Vec<_>, _>>()?;
     mybehaviour::archive_keys::TRUSTED
         .set(archives.iter().map(|(peer_id, _)| *peer_id).collect())
+        .expect("set once at startup");
+    // A join reaches the authority and the archives from a throwaway identity, so it dials
+    // them by these addresses.
+    let mut relay_addresses: std::collections::HashMap<PeerId, Multiaddr> =
+        archives.iter().cloned().collect();
+    if let Some(authority) = args.authority_peer_id {
+        relay_addresses.insert(authority, args.bootstrap_addr.clone());
+    }
+    join_relay::ADDRESSES
+        .set(relay_addresses)
         .expect("set once at startup");
 
     let behaviour = MyBehaviour::new(

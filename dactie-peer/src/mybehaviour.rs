@@ -1,6 +1,7 @@
 use crate::mybehaviour::MyBehaviourError::PubSubBehaviourError;
 use async_trait::async_trait;
 use dactie_utils::net::{is_unroutable_addr, MESH_N, MESH_N_HIGH, MESH_N_LOW};
+use crate::join_relay;
 use dactie_utils::admission;
 use dactie_utils::key_store;
 use dactie_utils::slot_store::SlotStore;
@@ -464,13 +465,15 @@ impl MyBehaviour {
 
     // Register new identity at authority
     //This Function does not sign the Request, Since no Keys are available
+    // The join goes through the relay, from a throwaway identity, see join_relay.
     fn register_identity(
         &mut self,
         peer_id: PeerId,
         identity: String,
     ) -> Result<(), AbstSwarmError> {
-        self.request_response.send_request(
-            &peer_id,
+        join_relay::start();
+        join_relay::send(
+            peer_id,
             Request {
                 body: RequestMessage::VerifyIdentity {
                     identity,
@@ -503,10 +506,7 @@ impl MyBehaviour {
         sig_file_path: String,
     ) -> Result<(), AbstSwarmError> {
         let path = PathBuf::from_str(&sig_file_path).map_err(|_| KeyMaterialFileError)?;
-        // Each sharing peer uses one of the member's k slots of the current epoch.
-        let (epoch, k) = my_open_mls.epoch_policy().ok_or(AbstSwarmError::NoEpochPolicy)?;
         let member_dir = path.parent().map(PathBuf::from).unwrap_or_default();
-        let slot = Self::claim_slot(&member_dir, epoch, k)?;
         let new_key_store =
             key_store::StoredKeyMaterial::from_file(path).map_err(|_| KeyMaterialFileError)?;
         my_open_mls.set_grpkey(
@@ -522,7 +522,28 @@ impl MyBehaviour {
                 .to_bytes(),
         )?;
         my_open_mls.set_id(new_key_store.get_id().ok_or(KeyMaterialFileError)?)?;
+        self.send_peer_registration(my_open_mls, peer_id, &member_dir)
+    }
 
+    /// Registers this node's own PeerID as a sharing peer of the member it just joined as.
+    fn register_self(
+        &mut self,
+        my_open_mls: &MyOpenMls,
+        authority: PeerId,
+    ) -> Result<(), AbstSwarmError> {
+        self.send_peer_registration(my_open_mls, authority, &my_open_mls.key_dir())
+    }
+
+    /// Registers this node as a sharing peer with one of the member's k slots of the current
+    /// epoch, recorded in the slots.json in `member_dir`.
+    fn send_peer_registration(
+        &mut self,
+        my_open_mls: &MyOpenMls,
+        peer_id: PeerId,
+        member_dir: &Path,
+    ) -> Result<(), AbstSwarmError> {
+        let (epoch, k) = my_open_mls.epoch_policy().ok_or(AbstSwarmError::NoEpochPolicy)?;
+        let slot = Self::claim_slot(member_dir, epoch, k)?;
         let keypackage = my_open_mls.generate_key_package()?;
         let keypackage =
             bincode::serialize(&keypackage).map_err(|x| SerializationError(x.to_string()))?;
@@ -967,13 +988,17 @@ impl MyBehaviour {
             }
         }
         for (archive, _) in &keys {
-            self.request_response.send_request(
-                archive,
-                Request {
-                    body: RequestMessage::RequestOpenerKeys,
-                    signature: None,
-                },
-            );
+            let request = Request {
+                body: RequestMessage::RequestOpenerKeys,
+                signature: None,
+            };
+            // During a join, the archives would otherwise see this node's PeerID ask just as
+            // the AA sees the member join.
+            if join.is_some() {
+                join_relay::send(*archive, request);
+            } else {
+                self.request_response.send_request(archive, request);
+            }
         }
         *archive_keys::pending().lock().unwrap() = Some(archive_keys::Pending {
             keys,
@@ -1043,11 +1068,8 @@ impl MyBehaviour {
         let (g_sk, h_sk, pi1, pi2, pi3, enc_shares, commits) =
             my_open_mls.generate_join_key_material(join.id, join.n, join.group_key)?;
         my_open_mls.set_id(join.id)?;
-        let keypackage = my_open_mls.generate_key_package()?;
-        let keypackage =
-            bincode::serialize(&keypackage).map_err(|x| SerializationError(x.to_string()))?;
-        self.request_response.send_request(
-            &join.authority,
+        join_relay::send(
+            join.authority,
             Request {
                 body: RequestMessage::JoinKeyMaterial {
                     g_sk,
@@ -1057,7 +1079,6 @@ impl MyBehaviour {
                     pi3,
                     enc_shares,
                     commits,
-                    keypackage,
                 },
                 signature: None,
             },
@@ -1140,113 +1161,138 @@ impl MyBehaviour {
                     request_id: _request_id,
                     ..
                 } => {
-                    match response.body {
-                        ResponseMessage::KeyPackage(ref val) => {
-                            //Only Verify KPs
-                            if let Err(e) = my_open_mls.verify(response.clone()) {
-                                return match e {
-                                    MyOpenMLSError::SignatureInvalid { signature: mysig } => {
-                                        log::debug!(
-                                            "Got a Response with Invalid Signature: {}",
-                                            hex::encode(mysig.as_ref().to_bytes())
-                                        );
-                                        Ok(())
-                                    }
-                                    e => Err(MLSError(e)),
-                                };
-                            };
-                            log::info!("Response with KeyPackage from {}", peer.to_string());
-                            let keypackage: KeyPackage = bincode::deserialize(val)
-                                .map_err(|x| SerializationError(x.to_string()))?;
-                            my_open_mls.insert_foreign_kp(peer, keypackage)
-                        }
-                        ResponseMessage::JoinGroup => {
-                            //Nothing to do for now
-                        }
-                        ResponseMessage::AddPeerShare => {
-                            //Nothing to do for now
-                        }
-                        ResponseMessage::OpenPending | ResponseMessage::OpenPairingsReceived => {} //Archive and authority only
-                        ResponseMessage::EncSharePairings { .. } => {
-                            //Nothing to do for now
-                        }
-                        ResponseMessage::ResUpdate { group_id, messages } => {
-                            log::info!(
-                                "Got an update for group ´{group_id:?}´ with {} messages",
-                                messages.len()
+                    // Round trip of an archive query, measured in bench builds only.
+                    #[cfg(feature = "bench")]
+                    let rtt = archive_query_timing::finished(&_request_id);
+                    #[cfg(not(feature = "bench"))]
+                    let rtt: Option<std::time::Duration> = None;
+                    self.handle_response(peer, response, rtt, my_open_mls)?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Responses from the main identity, or relayed from the join's throwaway identity.
+    fn handle_response(
+        &mut self,
+        peer: PeerId,
+        response: Response,
+        _rtt: Option<std::time::Duration>,
+        my_open_mls: &MyOpenMls,
+    ) -> Result<(), AbstSwarmError> {
+        match response.body {
+            ResponseMessage::KeyPackage(ref val) => {
+                //Only Verify KPs
+                if let Err(e) = my_open_mls.verify(response.clone()) {
+                    return match e {
+                        MyOpenMLSError::SignatureInvalid { signature: mysig } => {
+                            log::debug!(
+                                "Got a Response with Invalid Signature: {}",
+                                hex::encode(mysig.as_ref().to_bytes())
                             );
-                            #[cfg(feature = "bench")]
-                            if let Some(rtt) = archive_query_timing::finished(&_request_id) {
-                                // Round trip as the querying peer sees it: request
-                                // out, archive's Postgres lookup, response back.
-                                println!(
-                                    "ARCHIVE_QUERY_RX messages={} latency_ms={}",
-                                    messages.len(),
-                                    rtt.as_millis()
-                                );
-                            }
-                            self.handle_update(my_open_mls, group_id, messages)?;
+                            Ok(())
                         }
-                        ResponseMessage::IdentityVerified {
-                            id,
-                            n,
-                            group_key,
-                            opener_pubkeys,
-                            threshold,
-                        } => {
-                            log::info!("Identity was verified, proceeding with memkey creation.");
-                            let (Some(n), Some(opener_pubkeys), Some(threshold)) =
-                                (n, opener_pubkeys, threshold)
-                            else {
-                                return Ok(());
-                            };
-                            let join = archive_keys::PendingJoin {
-                                authority: peer,
-                                id,
-                                n,
-                                group_key,
-                            };
-                            self.verify_archive_keys(
-                                opener_pubkeys,
-                                threshold,
-                                Some(join),
-                                my_open_mls,
-                            )?;
-                        }
-                        ResponseMessage::MemKey { partial_memkey } => {
-                            if let Some(memkey) = partial_memkey {
-                                my_open_mls.add_partial_memkey(memkey)?;
-                            }
-                        }
-                        ResponseMessage::PeerAdded => {}
-                        ResponseMessage::OpenerKeys {
-                            opener_pubkeys,
-                            threshold,
-                            epoch_secs,
-                            peers_per_member,
-                        } => {
-                            log::info!("Got Opener Keys.");
-                            my_open_mls.set_epoch_policy(epoch_secs, peers_per_member);
-                            let Some(threshold) = threshold else {
-                                log::error!("Authority sent no opening threshold; end its archive init phase first");
-                                return Ok(());
-                            };
-                            self.verify_archive_keys(opener_pubkeys, threshold, None, my_open_mls)?;
-                        }
-                        ResponseMessage::ArchiveOpenerKey { elgamal_pk } => {
-                            self.confirm_archive_key(peer, elgamal_pk, my_open_mls)?;
-                        }
-                        ResponseMessage::PeerRefused { reason } => {
-                            log::warn!("Authority refused this peer: {reason}");
-                        }
-                        ResponseMessage::PeerRenewed { until_epoch } => {
-                            log::info!("Registration renewed until epoch {until_epoch}");
-                        }
-                        ResponseMessage::RenewRefused { reason } => {
-                            log::warn!("Authority refused to renew this peer: {reason}");
-                        }
+                        e => Err(MLSError(e)),
+                    };
+                };
+                log::info!("Response with KeyPackage from {}", peer.to_string());
+                let keypackage: KeyPackage = bincode::deserialize(val)
+                    .map_err(|x| SerializationError(x.to_string()))?;
+                my_open_mls.insert_foreign_kp(peer, keypackage)
+            }
+            ResponseMessage::JoinGroup => {
+                //Nothing to do for now
+            }
+            ResponseMessage::AddPeerShare => {
+                //Nothing to do for now
+            }
+            ResponseMessage::OpenPending | ResponseMessage::OpenPairingsReceived => {} //Archive and authority only
+            ResponseMessage::EncSharePairings { .. } => {
+                //Nothing to do for now
+            }
+            ResponseMessage::ResUpdate { group_id, messages } => {
+                log::info!(
+                    "Got an update for group ´{group_id:?}´ with {} messages",
+                    messages.len()
+                );
+                #[cfg(feature = "bench")]
+                if let Some(rtt) = _rtt {
+                    // Round trip as the querying peer sees it: request
+                    // out, archive's Postgres lookup, response back.
+                    println!(
+                        "ARCHIVE_QUERY_RX messages={} latency_ms={}",
+                        messages.len(),
+                        rtt.as_millis()
+                    );
+                }
+                self.handle_update(my_open_mls, group_id, messages)?;
+            }
+            ResponseMessage::IdentityVerified {
+                id,
+                n,
+                group_key,
+                opener_pubkeys,
+                threshold,
+                epoch_secs,
+                peers_per_member,
+            } => {
+                log::info!("Identity was verified, proceeding with memkey creation.");
+                my_open_mls.set_epoch_policy(epoch_secs, peers_per_member);
+                let (Some(n), Some(opener_pubkeys), Some(threshold)) =
+                    (n, opener_pubkeys, threshold)
+                else {
+                    return Ok(());
+                };
+                let join = archive_keys::PendingJoin {
+                    authority: peer,
+                    id,
+                    n,
+                    group_key,
+                };
+                self.verify_archive_keys(
+                    opener_pubkeys,
+                    threshold,
+                    Some(join),
+                    my_open_mls,
+                )?;
+            }
+            ResponseMessage::MemKey { partial_memkey } => {
+                if let Some(memkey) = partial_memkey {
+                    my_open_mls.add_partial_memkey(memkey)?;
+                    if join_relay::active() {
+                        join_relay::finish();
+                        log::info!("Joined as a member; registering this node as a sharing peer");
+                        self.register_self(my_open_mls, peer)?;
                     }
                 }
+            }
+            ResponseMessage::PeerAdded => {}
+            ResponseMessage::OpenerKeys {
+                opener_pubkeys,
+                threshold,
+                epoch_secs,
+                peers_per_member,
+            } => {
+                log::info!("Got Opener Keys.");
+                my_open_mls.set_epoch_policy(epoch_secs, peers_per_member);
+                let Some(threshold) = threshold else {
+                    log::error!("Authority sent no opening threshold; end its archive init phase first");
+                    return Ok(());
+                };
+                self.verify_archive_keys(opener_pubkeys, threshold, None, my_open_mls)?;
+            }
+            ResponseMessage::ArchiveOpenerKey { elgamal_pk } => {
+                self.confirm_archive_key(peer, elgamal_pk, my_open_mls)?;
+            }
+            ResponseMessage::PeerRefused { reason } => {
+                log::warn!("Authority refused this peer: {reason}");
+            }
+            ResponseMessage::PeerRenewed { until_epoch } => {
+                log::info!("Registration renewed until epoch {until_epoch}");
+            }
+            ResponseMessage::RenewRefused { reason } => {
+                log::warn!("Authority refused to renew this peer: {reason}");
             }
         }
         Ok(())
@@ -1440,6 +1486,18 @@ impl EventHandler for MyBehaviour {
             Self::notify_error(notification_tx, e);
         }
         admission::update(&mut self.gossipsub, my_open_mls, connected.as_ref());
+    }
+
+    async fn handle_relayed_response(
+        &mut self,
+        notification_tx: &mpsc::UnboundedSender<Notification>,
+        my_open_mls: &MyOpenMls,
+        peer: PeerId,
+        response: Response,
+    ) {
+        if let Err(e) = self.handle_response(peer, response, None, my_open_mls) {
+            Self::notify_error(notification_tx, e);
+        }
     }
 }
 

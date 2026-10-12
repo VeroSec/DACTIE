@@ -79,7 +79,6 @@ pub enum RequestMessage {
         pi3: (thressig::FieldElement, thressig::FieldElement),
         enc_shares: Vec<EncShare>,
         commits: Vec<thressig::G1>,
-        keypackage: Vec<u8>,
     },
     JoinKeyPackage {
         keypackage: Vec<u8>,
@@ -140,6 +139,9 @@ pub enum ResponseMessage {
         opener_pubkeys: Option<Vec<(PeerId, thressig::G2)>>,
         // Number of archives needed to open a signature; members split their key accordingly.
         threshold: Option<usize>,
+        // epoch length and slots per member and epoch, for registering sharing peers
+        epoch_secs: u64,
+        peers_per_member: usize,
     },
     MemKey {
         partial_memkey: Option<Vec<u8>>,

@@ -1,30 +1,31 @@
 #!/bin/bash
 # Local end-to-end run: join, sharing peers with slot tags, a broadcast, and an opening.
-# AA, two archives (PostgreSQL in Docker), member peer1, and peer2 as a second sharing peer
-# of the same member (peer_from_sig) with slot 1 of the member's k = 2 slots; the AA refuses a
-# slot twice, and a member cannot register more than k. peer2 publishes, both archives approve
-# the opening,
+# AA, two archives (PostgreSQL in Docker), and member peer1, which joins from a throwaway
+# identity and then registers its own PeerID with slot 1 of the member's k = 3 slots. peer2 is a
+# second sharing peer of the same member (peer_from_sig, slot 2); the AA refuses a slot twice,
+# and a member cannot register more than k. peer2 publishes, both archives approve the opening,
 # and the AA must name peer1's member and list peer2's PeerID. An observer node that never
 # registered subscribes to the same topic and must not receive any gossip; the AA keeps at
 # most 5 such connections open and closes each after 60 s.
 # Run with the setup in e2e_common.sh, which also describes the requirements.
 source "$(dirname "$0")/e2e_common.sh"
 
-start_network --peers-per-member 2
+start_network --peers-per-member 3
 join_member p1 peer1
-echo "OK join: both archives stored peer1's share"
+P1=$(peer_id p1)
+JOINED_FROM=$(grep -o 'Verified identity peer1 from [A-Za-z0-9]*' "$W/aa.log" | awk '{print $NF}')
+[ -n "$JOINED_FROM" ] && [ "$JOINED_FROM" != "$P1" ] || fail "the AA saw peer1's own PeerID at the join"
+grep -q "Joining from throwaway identity $JOINED_FROM" "$W/p1.log" || fail "the join did not come from peer1's throwaway identity"
+echo "OK join: the AA linked the name only to throwaway $JOINED_FROM; peer1 then registered its own PeerID"
 
-start_peer p2
-sleep 4
-send p2 "get_opener_keys $AA"
-sleep 3
-send p2 "peer_from_sig $AA $W/p1/key_material.json"
-wait_count "$W/aa.log" 'Adding new peer from existing member' 1 30
-wait_count "$W/arc1.log" 'Got a new Peer Share' 1 30
-wait_count "$W/arc2.log" 'Got a new Peer Share' 1 30
-echo "OK peer_from_sig: AA accepted peer2's shares and slot tag"
+# Counted from here: peer1's own registration is the first.
+add_sharing_peer p2 p1
+grep -q 'Registering with slot 2 ' "$W/p2.log" || fail "peer2 did not take slot 2"
+wait_count "$W/arc1.log" 'Got a new Peer Share' 2 30
+wait_count "$W/arc2.log" 'Got a new Peer Share' 2 30
+echo "OK peer_from_sig: AA accepted peer2's shares and slot tag (slot 2)"
 
-# The member forgets which slots it used and tries slot 1 again for a third peer.
+# The member forgets which slots it used and tries slots 1 and 2 again for a third peer.
 rm "$W/p1/slots.json"
 start_peer p3
 sleep 4
@@ -33,19 +34,22 @@ sleep 3
 send p3 "peer_from_sig $AA $W/p1/key_material.json"
 wait_count "$W/aa.log" 'slot 1 of epoch [0-9]* was already used by this member' 1 30
 wait_count "$W/p3.log" 'Authority refused this peer' 1 30
-[ "$(grep -c 'Adding new peer from existing member' "$W/aa.log")" -eq 1 ] || fail "the AA admitted a peer with a used slot"
-echo "OK slot reuse: the AA refused slot 1 a second time"
-
-# Slot 2 is free, and then the member has used both of its k = 2 slots.
 send p3 "peer_from_sig $AA $W/p1/key_material.json"
-wait_count "$W/aa.log" 'Adding new peer from existing member' 2 30
+wait_count "$W/aa.log" 'slot 2 of epoch [0-9]* was already used by this member' 1 30
+wait_count "$W/p3.log" 'Authority refused this peer' 2 30
+[ "$(grep -c 'Adding new peer from existing member' "$W/aa.log")" -eq 2 ] || fail "the AA admitted a peer with a used slot"
+echo "OK slot reuse: the AA refused slots 1 and 2 a second time"
+
+# Slot 3 is free, and then the member has used all of its k = 3 slots.
+send p3 "peer_from_sig $AA $W/p1/key_material.json"
+wait_count "$W/aa.log" 'Adding new peer from existing member' 3 30
 start_peer p5
 sleep 4
 send p5 "get_opener_keys $AA"
 sleep 3
 send p5 "peer_from_sig $AA $W/p1/key_material.json"
 wait_count "$W/p5.log" 'All slots of epoch [0-9]* are used by this member' 1 30
-echo "OK cap: slot 2 registered peer3, a third sharing peer found no free slot"
+echo "OK cap: slot 3 registered peer3, a fourth sharing peer found no free slot"
 
 # An unregistered node, connected like any other, subscribed to the same channel.
 start_peer obs "info,libp2p_swarm=debug"

@@ -46,6 +46,7 @@ where
     swarm: Swarm<TBehaviour>,
     my_open_mls: Arc<MyOpenMls>,
     metrics: Option<lp2p_metrics::Metrics>,
+    join_relay: crate::join_relay::JoinRelay,
 }
 
 impl<TBehaviour> AbstSwarm<TBehaviour>
@@ -67,6 +68,7 @@ where
             my_open_mls,
             group_commit_rx,
             metrics,
+            join_relay: Default::default(),
         }
     }
 
@@ -92,12 +94,15 @@ where
                     self.swarm.behaviour_mut().handle_event(&self.notification_tx,&self.my_open_mls, event).await
                 },
                 Some(instruction) = self.instruction_rx.recv() =>  self.swarm.behaviour_mut().handle_instruction(&self.notification_tx, &self.my_open_mls,instruction).await,
+                (peer, response) = self.join_relay.next_response() => self.swarm.behaviour_mut().handle_relayed_response(&self.notification_tx, &self.my_open_mls, peer, response).await,
                 else => {
                     log::warn!("Both swarm and instruction receiver closed. Ending event loop");
                     break
 
                 }
             }
+            // Handlers queue the messages of a join for the throwaway identity.
+            self.join_relay.flush();
         }
     }
 }

@@ -56,6 +56,8 @@ This also fixes the opening threshold: how many archives must approve before a s
 ### Register Identity for each peer (Peer1):
 1. `register_identity <peer_id_aa> <peer_name>`, peer name can be anything for example peer1 peer2
 
+The join runs from a throwaway identity, so the authority never links this node's own PeerID to the name. Afterwards, the node registers its own PeerID as a sharing peer, which uses one of the member's slots (see below). The authority must be reachable at `-B`, and archives at their `--archive` addresses.
+
 ### Create new Peer with identity of Peer1 (Peer2):
 1. Request the opener keys from the authority`get_opener_keys  <authorization_peer_id>`. This also fetches the epoch length and how many sharing peers a member may register per epoch (`--peers-per-member`, `--epoch-secs` on the authority).
 2. Register a new peer with an existing group key material: `peer_from_sig <authorization_peer_id> <save_file_path>`. It uses one of the member's slots of the current epoch and records it in the `slots.json` next to that file. When all slots are used, the peer reports it.
