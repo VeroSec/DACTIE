@@ -356,7 +356,7 @@ impl MyBehaviour {
             );
             let (n, group_key) = storage.return_new_n(peer, id, "Authority".to_string());
             my_open_mls.add_opener_pubkeys(pubkeys)?;
-            let (g_sk, h_sk, pi1, pi2, enc_shares, commits) =
+            let (g_sk, h_sk, pi1, pi2, pi3, enc_shares, commits) =
                 my_open_mls.generate_join_key_material(id, n.unwrap(), group_key)?; // n.unwrap should be safe
             let (_, partial_memkey) = storage.return_memkey(ReturnMemkeyArgs {
                 peer_id: &my_open_mls.get_peerid(),
@@ -366,6 +366,7 @@ impl MyBehaviour {
                 enc_shares: &enc_shares,
                 pi1,
                 pi2,
+                pi3,
             })?;
             my_open_mls.add_partial_memkey(partial_memkey)?;
 
@@ -493,6 +494,7 @@ impl MyBehaviour {
                             h_sk,
                             pi1,
                             pi2,
+                            pi3,
                             enc_shares,
                             commits,
                             keypackage,
@@ -509,6 +511,7 @@ impl MyBehaviour {
                                 enc_shares: &enc_shares,
                                 pi1,
                                 pi2,
+                                pi3,
                             })?;
                             self.send_out_id_enc_shares(
                                 my_open_mls,
@@ -586,6 +589,7 @@ impl MyBehaviour {
                             keypackage,
                             enc_shares,
                             commits,
+                            share_link,
                         } => {
                             log::info!("Got Request to add new peer from existing member");
                             match my_open_mls.verify(request) {
@@ -605,6 +609,18 @@ impl MyBehaviour {
                             };
 
                             let mut verified = true;
+                            // The shares must hide the key of the member who asks, or opening
+                            // a signature would never expose this peer.
+                            if !my_open_mls.verify_share_link(
+                                &share_link,
+                                &enc_shares,
+                                &commits,
+                                storage.get_opener_pubkeys().len(),
+                                &keypackage,
+                            ) {
+                                verified = false;
+                                log::info!("Verification of new Peer from existing Sig failed, shares do not hide the member key");
+                            }
                             //Verify Keypackage belongs to Peer
                             let keypackage: KeyPackage = bincode::deserialize(&keypackage)
                                 .map_err(|x| SerializationError(x.to_string()))?;

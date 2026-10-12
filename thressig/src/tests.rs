@@ -27,7 +27,7 @@ fn test_flow() {
     }
     let n = join_mgr1();
     let id = 0usize;
-    let (g_sk, h_sk, pi1, pi2, sk, enc_shares, commits) =
+    let (g_sk, h_sk, pi1, pi2, pi3, sk, enc_shares, commits) =
         join_mem1(id, n.clone(), &grpkey, 3, &opener_pub_keys);
     let partial_memkey = join_mgr2(
         id,
@@ -43,6 +43,7 @@ fn test_flow() {
             commits: &commits,
             pi1,
             pi2,
+            pi3,
             enc_shares: &enc_shares,
         },
     )
@@ -160,7 +161,7 @@ fn test_opening_needs_threshold_openers() {
     let threshold = 3;
     let n = join_mgr1();
     let id = 7usize;
-    let (g_sk, h_sk, pi1, pi2, sk, enc_shares, commits) =
+    let (g_sk, h_sk, pi1, pi2, pi3, sk, enc_shares, commits) =
         join_mem1(id, n.clone(), &grpkey, threshold, &opener_pub_keys);
     let partial_memkey = join_mgr2(
         id,
@@ -176,6 +177,7 @@ fn test_opening_needs_threshold_openers() {
             commits: &commits,
             pi1,
             pi2,
+            pi3,
             enc_shares: &enc_shares,
         },
     )
@@ -244,4 +246,113 @@ fn test_off_curve_signature_bytes_rejected() {
         .expect("no off-curve encoding found");
     bytes[8..8 + len].copy_from_slice(&off_curve);
     assert!(bincode::deserialize::<Signature>(&bytes).is_err());
+}
+
+/// An authority with `n` openers and a fresh nonce, as join_mgr2 sees it.
+fn join_setup(n: usize) -> (Grpkey, Mgrkey, Vec<G2>, Vec<FieldElement>, G1) {
+    let (grpkey, mgrkey) = setup();
+    let (sks, pks): (Vec<_>, Vec<_>) = (0..n).map(|_| elgamal_keygen(&grpkey.g_tilde)).unzip();
+    (grpkey, mgrkey, pks, sks, join_mgr1())
+}
+
+fn try_join(
+    id: usize,
+    grpkey: &Grpkey,
+    mgrkey: &Mgrkey,
+    opener_pub_keys: &[G2],
+    n: &G1,
+    material: &JoinMem1Output,
+    enc_shares: &[EncShare],
+    commits: &[G1],
+) -> Result<Memkey, String> {
+    let (g_sk, h_sk, pi1, pi2, pi3, _, _, _) = material;
+    let mut gml = HashMap::new();
+    join_mgr2(
+        id,
+        JoinMgr2Args {
+            gml: &mut gml,
+            name: "member".to_string(),
+            mgrkey,
+            grpkey,
+            n,
+            g_sk,
+            h_sk,
+            opener_pubkeys: opener_pub_keys,
+            commits,
+            pi1: pi1.clone(),
+            pi2: pi2.clone(),
+            pi3: pi3.clone(),
+            enc_shares,
+        },
+    )
+}
+
+#[test]
+fn test_join_rejects_shares_of_another_secret() {
+    let (grpkey, mgrkey, pks, _, n) = join_setup(4);
+    let id = 3usize;
+    let material = join_mem1(id, n.clone(), &grpkey, 3, &pks);
+    let (_, _, _, _, _, _, enc_shares, commits) = &material;
+    assert!(try_join(id, &grpkey, &mgrkey, &pks, &n, &material, enc_shares, commits).is_ok());
+
+    // Valid shares and share proofs, but of a secret the member does not sign with:
+    // the archives could never open this member.
+    let (other_shares, other_commits) =
+        create_enc_shares(&id, &grpkey, 3, &pks, &FieldElement::random());
+    assert!(try_join(id, &grpkey, &mgrkey, &pks, &n, &material, &other_shares, &other_commits).is_err());
+}
+
+#[test]
+fn test_join_rejects_shares_that_cannot_be_interpolated() {
+    let (grpkey, mgrkey, pks, _, n) = join_setup(4);
+    let id = 5usize;
+    let material = join_mem1(id, n.clone(), &grpkey, 3, &pks);
+    let (_, _, _, _, _, sk, enc_shares, commits) = &material;
+
+    // Every archive gets a correctly proven share at index 1 of a sharing of sk, so no t
+    // distinct indices exist and no opening can ever interpolate sk.
+    let h_blind = enc_shares[0].h_blind.clone();
+    let (s, c) = shamir_feldman_share(sk, 3, 4, &h_blind);
+    let same_index: Vec<EncShare> =
+        pks.iter().map(|pk| prove_enc_share(&grpkey, &s[0], pk, &h_blind, &c)).collect();
+    assert!(same_index.iter().zip(&pks).all(|(e, pk)| verify_enc_share_correctness(e, &grpkey, pk, &c)));
+    assert!(try_join(id, &grpkey, &mgrkey, &pks, &n, &material, &same_index, &c).is_err());
+
+    // Too few shares for the archives.
+    assert!(try_join(id, &grpkey, &mgrkey, &pks, &n, &material, &enc_shares[..3], commits).is_err());
+}
+
+#[test]
+fn test_share_link_for_additional_peer() {
+    let (grpkey, mgrkey, pks, opener_sks, n) = join_setup(4);
+    let id = 9usize;
+    let material = join_mem1(id, n.clone(), &grpkey, 3, &pks);
+    let (_, _, _, _, _, sk, enc_shares, commits) = &material;
+    let memkey = join_mem2(sk, &try_join(id, &grpkey, &mgrkey, &pks, &n, &material, enc_shares, commits).unwrap());
+
+    // The member shares its key again, under a fresh base, for a new sharing peer.
+    let (peer_shares, peer_commits) = create_enc_shares(&id, &grpkey, 3, &pks, &memkey.sk);
+    let h_blind = check_share_layout(&peer_shares, &peer_commits, pks.len()).unwrap();
+    let context = b"keypackage of the new peer";
+    let proof = prove_share_link(&memkey, &grpkey, &h_blind, &peer_commits[0], context).unwrap();
+    let proof: ShareLinkProof = bincode::deserialize(&bincode::serialize(&proof).unwrap()).unwrap();
+    assert!(verify_share_link(&proof, &grpkey, &h_blind, &peer_commits[0], context));
+    assert!(!verify_share_link(&proof, &grpkey, &h_blind, &peer_commits[0], b"another peer"));
+
+    // Shares of another secret cannot be linked.
+    let (bad_shares, bad_commits) = create_enc_shares(&id, &grpkey, 3, &pks, &FieldElement::random());
+    let bad_h = check_share_layout(&bad_shares, &bad_commits, pks.len()).unwrap();
+    let bad_proof = prove_share_link(&memkey, &grpkey, &bad_h, &bad_commits[0], context).unwrap();
+    assert!(!verify_share_link(&bad_proof, &grpkey, &bad_h, &bad_commits[0], context));
+
+    // The linked peer shares open the member's signatures.
+    let sig = sign(&memkey, &grpkey, &"msg".as_bytes()).unwrap();
+    let peer = "new-peer".to_string();
+    let mut all_sj = HashMap::new();
+    for j in 0..3 {
+        let p = create_open_pairing(&sig, peer_shares[j].clone(), &opener_sks[j]);
+        all_sj.insert(p.index, vec![(peer.clone(), p.pairing)]);
+    }
+    let peers: HashSet<String> = [peer.clone()].into_iter().collect();
+    assert_eq!(open(&sig, &grpkey, &peers, &all_sj), vec![peer]);
 }

@@ -258,6 +258,29 @@ pub fn verify_enc_share_correctness(
     *c == c_check
 }
 
+/// The share proofs check each share against the commitments under that share's own base.
+/// Opening also needs all shares under one base, and share i at index i + 1 for opener i, so
+/// that any t openers interpolate the committed secret. Returns that base.
+pub fn check_share_layout(
+    enc_shares: &[EncShare],
+    commits: &[G1],
+    n_openers: usize,
+) -> Result<G1, String> {
+    if enc_shares.len() != n_openers || commits.is_empty() {
+        return Err(String::from("Wrong number of shares or commitments"));
+    }
+    let h_blind = enc_shares[0].h_blind.clone();
+    if h_blind.is_identity() {
+        return Err(String::from("Share base is the identity"));
+    }
+    for (i, enc_share) in enc_shares.iter().enumerate() {
+        if enc_share.h_blind != h_blind || enc_share.index != i + 1 {
+            return Err(String::from("Shares do not belong to one polynomial"));
+        }
+    }
+    Ok(h_blind)
+}
+
 /**
  * Executes part 1 of the member-side join of the PS16 scheme.
  * Member generates sk and provides ZKP.
@@ -265,6 +288,7 @@ pub fn verify_enc_share_correctness(
 pub type JoinMem1Output = (
     G1,
     G1,
+    (FieldElement, FieldElement),
     (FieldElement, FieldElement),
     (FieldElement, FieldElement),
     FieldElement,
@@ -288,8 +312,17 @@ pub fn join_mem1(
     let h_sk = &h * &sk;
     let pi1 = spk_dlog::sign(&g_sk, &grpkey.g, &n.to_bytes(false), &sk);
     let pi2 = spk_dlog::sign(&h_sk, &h, &n.to_bytes(false), &sk);
+    // The first commitment hides the same sk as h_sk, so the archives' shares open this member.
+    let pi3 = spk_dlog::sign_eq(
+        &h_sk,
+        &h,
+        &commits[0],
+        &enc_shares[0].h_blind,
+        &n.to_bytes(false),
+        &sk,
+    );
 
-    (g_sk, h_sk, pi1, pi2, sk, enc_shares, commits)
+    (g_sk, h_sk, pi1, pi2, pi3, sk, enc_shares, commits)
 }
 
 /**
@@ -327,6 +360,7 @@ pub struct JoinMgr2Args<'a> {
     pub commits: &'a [G1],
     pub pi1: (FieldElement, FieldElement),
     pub pi2: (FieldElement, FieldElement),
+    pub pi3: (FieldElement, FieldElement),
     pub enc_shares: &'a [EncShare],
 }
 
@@ -343,6 +377,7 @@ pub fn join_mgr2(id: usize, args: JoinMgr2Args) -> Result<Memkey, String> {
         commits,
         pi1,
         pi2,
+        pi3,
         enc_shares,
     } = args;
     //Check if ID is already in gml
@@ -358,6 +393,12 @@ pub fn join_mgr2(id: usize, args: JoinMgr2Args) -> Result<Memkey, String> {
 
     if !spk_dlog::verify(h_sk, &h, pi2, &n.to_bytes(false)) {
         return Err(String::from("error"));
+    }
+
+    // Without this, a member could share a different secret and could never be opened.
+    let h_blind = check_share_layout(enc_shares, commits, opener_pubkeys.len())?;
+    if !spk_dlog::verify_eq(h_sk, &h, &commits[0], &h_blind, pi3, &n.to_bytes(false)) {
+        return Err(String::from("Shares do not hide the member key"));
     }
 
     for (i, enc_share) in enc_shares.iter().enumerate() {
@@ -464,6 +505,102 @@ pub fn verify<T: Serialize + ?Sized>(
     } else {
         Err(SignatureInvalid)
     }
+}
+
+fn share_link_transcript(
+    grpkey: &Grpkey,
+    proof_sigma1: &G1,
+    proof_sigma2: &G1,
+    h_blind: &G1,
+    c0: &G1,
+    r1: &GT,
+    r2: &G1,
+    msg: &[u8],
+) -> Vec<u8> {
+    let mut msg_to_send: Vec<u8> = Vec::new();
+    msg_to_send.extend_from_slice(b"share-link|");
+    msg_to_send.extend(grpkey.to_bytes());
+    msg_to_send.extend(proof_sigma1.to_bytes(false));
+    msg_to_send.extend(proof_sigma2.to_bytes(false));
+    msg_to_send.extend(h_blind.to_bytes(false));
+    msg_to_send.extend(c0.to_bytes(false));
+    msg_to_send.extend(r1.to_bytes());
+    msg_to_send.extend(r2.to_bytes(false));
+    msg_to_send.extend_from_slice(msg);
+    msg_to_send
+}
+
+/**
+ * Proves that shares committed under h_blind with first commitment c0 hide the sk of this
+ * member's credential, without revealing the member. Used when a member adds a sharing peer.
+ **/
+pub fn prove_share_link(
+    memkey: &Memkey,
+    grpkey: &Grpkey,
+    h_blind: &G1,
+    c0: &G1,
+    msg: &[u8],
+) -> Result<ShareLinkProof, ThressigError> {
+    let sigma1 = memkey.sigma1.as_ref().ok_or(MemkeySetError {
+        val: "sigma1".to_string(),
+    })?;
+    let sigma2 = memkey.sigma2.as_ref().ok_or(MemkeySetError {
+        val: "sigma2".to_string(),
+    })?;
+    let e1 = memkey.e1.as_ref().ok_or(MemkeySetError {
+        val: "e1".to_string(),
+    })?;
+
+    /* Randomize the credential as in sign() */
+    let t = FieldElement::random();
+    let sigma1 = sigma1 * &t;
+    let sigma2 = sigma2 * &t;
+
+    let k = FieldElement::random();
+    let r1 = e1.pow(&(&k * &t)); // e(sigma1', Y1~)^k
+    let r2 = h_blind * &k;
+    let c = FieldElement::from_msg_hash(&share_link_transcript(
+        grpkey, &sigma1, &sigma2, h_blind, c0, &r1, &r2, msg,
+    ));
+    let s = (&c * &memkey.sk) + &k;
+
+    Ok(ShareLinkProof {
+        sigma1,
+        sigma2,
+        c,
+        s,
+    })
+}
+
+pub fn verify_share_link(
+    proof: &ShareLinkProof,
+    grpkey: &Grpkey,
+    h_blind: &G1,
+    c0: &G1,
+    msg: &[u8],
+) -> bool {
+    if proof.sigma1.is_identity() || h_blind.is_identity() {
+        return false;
+    }
+    /* e(sigma2', g~) / e(sigma1', X~) = e(sigma1', Y1~)^sk */
+    let cred = GT::ate_pairing(&proof.sigma2, &grpkey.g_tilde)
+        * GT::ate_pairing(&(&proof.sigma1).neg(), &grpkey.x_pub_tilde);
+    let r1 = cred.pow(&proof.c).inverse()
+        * GT::ate_pairing(&(&proof.sigma1 * &proof.s), &grpkey.y1_pub_tilde);
+    /* c0 = h_blind^sk */
+    let r2 = (h_blind * &proof.s) - (c0 * &proof.c);
+
+    proof.c
+        == FieldElement::from_msg_hash(&share_link_transcript(
+            grpkey,
+            &proof.sigma1,
+            &proof.sigma2,
+            h_blind,
+            c0,
+            &r1,
+            &r2,
+            msg,
+        ))
 }
 
 pub fn create_open_pairing(

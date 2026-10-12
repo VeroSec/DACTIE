@@ -13,6 +13,7 @@ pub type JoinKeyMaterial = (
     thressig::G1,
     (FieldElement, FieldElement),
     (FieldElement, FieldElement),
+    (FieldElement, FieldElement),
     Vec<EncShare>,
     Vec<thressig::G1>,
 );
@@ -92,7 +93,7 @@ impl StoredKeyMaterial {
         threshold: usize,
     ) -> JoinKeyMaterial {
         let grpkey = Grpkey::from_bytes(&grpkey);
-        let (g_sk, h_sk, pi1, pi2, sk, enc_shares, commits) =
+        let (g_sk, h_sk, pi1, pi2, pi3, sk, enc_shares, commits) =
             join_mem1(id, n, &grpkey, threshold, opener_pubkeys);
         self.memkey = Some(Memkey {
             sk,
@@ -101,7 +102,7 @@ impl StoredKeyMaterial {
             e1: None,
         });
         self.grpkey = Some(grpkey);
-        (g_sk, h_sk, pi1, pi2, enc_shares, commits) //Return everything except sk
+        (g_sk, h_sk, pi1, pi2, pi3, enc_shares, commits) //Return everything except sk
     }
 
     pub fn generate_enc_shares(

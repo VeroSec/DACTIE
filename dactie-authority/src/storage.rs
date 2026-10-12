@@ -54,6 +54,7 @@ pub(crate) struct ReturnMemkeyArgs<'a> {
     pub enc_shares: &'a [EncShare],
     pub pi1: (FieldElement, FieldElement),
     pub pi2: (FieldElement, FieldElement),
+    pub pi3: (FieldElement, FieldElement),
 }
 
 impl Storage {
@@ -346,6 +347,7 @@ impl Storage {
                 commits: args.commits,
                 pi1: args.pi1,
                 pi2: args.pi2,
+                pi3: args.pi3,
                 enc_shares: args.enc_shares,
             },
         )

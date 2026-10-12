@@ -32,7 +32,7 @@ pub fn join(
     gml: &mut HashMap<usize, String>,
 ) -> (Memkey, Vec<EncShare>) {
     let n = thressig::join_mgr1();
-    let (g_sk, h_sk, pi1, pi2, sk, enc_shares, commits) =
+    let (g_sk, h_sk, pi1, pi2, pi3, sk, enc_shares, commits) =
         thressig::join_mem1(id, n.clone(), grpkey, threshold, opener_pub_keys);
     let partial_memkey = thressig::join_mgr2(
         id,
@@ -48,6 +48,7 @@ pub fn join(
             commits: &commits,
             pi1,
             pi2,
+            pi3,
             enc_shares: &enc_shares,
         },
     )

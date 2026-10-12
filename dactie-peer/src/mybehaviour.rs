@@ -497,15 +497,15 @@ impl MyBehaviour {
         )?;
         my_open_mls.set_id(new_key_store.get_id().ok_or(KeyMaterialFileError)?)?;
 
-        let (enc_shares, commits) = my_open_mls.generate_enc_shares()?;
-
         let keypackage = my_open_mls.generate_key_package()?;
         let keypackage =
             bincode::serialize(&keypackage).map_err(|x| SerializationError(x.to_string()))?;
+        let (enc_shares, commits, share_link) = my_open_mls.generate_enc_shares(&keypackage)?;
         let body = RequestMessage::AddPeerToSig {
             keypackage,
             enc_shares,
             commits,
+            share_link,
         };
         self.request_response
             .send_request(&peer_id, my_open_mls.sign(body)?);
@@ -986,7 +986,7 @@ impl MyBehaviour {
         join: archive_keys::PendingJoin,
         my_open_mls: &MyOpenMls,
     ) -> Result<(), AbstSwarmError> {
-        let (g_sk, h_sk, pi1, pi2, enc_shares, commits) =
+        let (g_sk, h_sk, pi1, pi2, pi3, enc_shares, commits) =
             my_open_mls.generate_join_key_material(join.id, join.n, join.group_key)?;
         my_open_mls.set_id(join.id)?;
         let keypackage = my_open_mls.generate_key_package()?;
@@ -1000,6 +1000,7 @@ impl MyBehaviour {
                     h_sk,
                     pi1,
                     pi2,
+                    pi3,
                     enc_shares,
                     commits,
                     keypackage,

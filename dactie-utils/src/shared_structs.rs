@@ -1,7 +1,7 @@
 use libp2p::PeerId;
 use openmls::group::GroupId;
 use serde::{Deserialize, Serialize};
-use thressig::structs::{EncShare, Signature};
+use thressig::structs::{EncShare, ShareLinkProof, Signature};
 
 //Trait that defines a message before it has been signed with the group signature
 pub trait Signable {
@@ -75,6 +75,8 @@ pub enum RequestMessage {
         h_sk: thressig::G1,
         pi1: (thressig::FieldElement, thressig::FieldElement),
         pi2: (thressig::FieldElement, thressig::FieldElement),
+        // proves that the shares hide the same sk as h_sk
+        pi3: (thressig::FieldElement, thressig::FieldElement),
         enc_shares: Vec<EncShare>,
         commits: Vec<thressig::G1>,
         keypackage: Vec<u8>,
@@ -87,6 +89,8 @@ pub enum RequestMessage {
         keypackage: Vec<u8>,
         enc_shares: Vec<EncShare>,
         commits: Vec<thressig::G1>,
+        // proves that the shares hide the requesting member's sk, bound to the keypackage
+        share_link: ShareLinkProof,
     },
     RequestOpen {
         signature: Vec<u8>,

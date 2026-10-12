@@ -86,7 +86,7 @@ sequenceDiagram
         P->>A: RequestOpenerKeys
         A->>P: ArchiveOpenerKey {elgamal_pk}
     end
-    P->>AA: JoinKeyMaterial {g^sk, h^sk, π1, π2, encrypted shares, commitments, KeyPackage}
+    P->>AA: JoinKeyMaterial {g^sk, h^sk, π1, π2, π3, encrypted shares, commitments, KeyPackage}
     AA->>A: AddIDShare {id, encrypted share i, commitments} (group-signed)
     A->>A: verify share, store in id_shares
     AA->>P: JoinGroup {welcome, ratchet tree} (group-signed)
@@ -101,13 +101,16 @@ sequenceDiagram
    - chooses its secret `sk` and computes `g^sk` and `h^sk` with `h = g^{H0(MemberID)}`;
    - proves knowledge of both discrete logarithms, bound to `n` (`π1`, `π2`);
    - blinds `h` with a random `α` and Shamir-shares `sk` with a polynomial of degree `t − 1`, publishing `t` Feldman commitments under the blinded base;
-   - encrypts share `i` with archive `i`'s ElGamal key and attaches a proof that the ciphertext matches the commitments.
+   - encrypts share `i` with archive `i`'s ElGamal key and attaches a proof that the ciphertext matches the commitments;
+   - proves that the first commitment hides the same `sk` as `h^sk` (`π3`, equality of discrete logarithms, bound to `n`).
 
    It sends all of this, together with an MLS KeyPackage, in `JoinKeyMaterial`. `sk` never leaves the peer.
 5. **AA checks** (`thressig::join_mgr2`). The AA checks:
    - the number of commitments equals `t`, and the number of shares equals the number of archives;
    - the MemberID is new;
    - `π1` and `π2` against `n`;
+   - that all shares use one base and share `i` has index `i + 1`, so any `t` archives can interpolate;
+   - `π3`, so the shares hide the `sk` the credential is issued on. Otherwise a member could share another secret and never be opened;
    - every encrypted share against its archive's key and the commitments.
 
    It then issues the credential `(σ1, σ2, e1)` on `sk` without learning `sk`, and records `MemberID → name` in `gml`.
@@ -122,8 +125,8 @@ sequenceDiagram
 A member can run further sharing peers under the same member key. Each new peer has its own PeerID and MLS credential.
 
 1. `get_opener_keys <AA PeerID>`: the new peer fetches the archives' keys and `t` (`RequestOpenerKeys` → group-signed `OpenerKeys`). If the peer was started with `--archive`, it confirms them as in step 3 above.
-2. `peer_from_sig <AA PeerID> <key_material.json of an existing peer>`: the new peer loads the member key, shares the same `sk` again with fresh blinding and a fresh polynomial, and sends a **group-signed** `AddPeerToSig { keypackage, enc_shares, commitments }`. Because the request is group-signed, the AA learns only that the requester is some admitted member, not which one.
-3. The AA checks the KeyPackage credential against the requesting PeerID, the share count, and every encrypted share. It then sends archive `i` a group-signed `AddPeerShare { peer_id, enc_share_i, commitments }`, adds the peer to the common group, and replies `PeerAdded`.
+2. `peer_from_sig <AA PeerID> <key_material.json of an existing peer>`: the new peer loads the member key, shares the same `sk` again with fresh blinding and a fresh polynomial, and sends a **group-signed** `AddPeerToSig { keypackage, enc_shares, commitments, share_link }`. Because the request is group-signed, the AA learns only that the requester is some admitted member, not which one. `share_link` proves that the shares hide the `sk` of a valid member credential: a freshly randomized credential and one Schnorr proof for both the credential equation and the first commitment, bound to the KeyPackage. It reveals no more about the member than a group signature.
+3. The AA checks `share_link` and the share layout, the KeyPackage credential against the requesting PeerID, the share count, and every encrypted share. It then sends archive `i` a group-signed `AddPeerShare { peer_id, enc_share_i, commitments }`, adds the peer to the common group, and replies `PeerAdded`.
 4. Each archive verifies the share and stores it in `peer_shares` under the new PeerID.
 
 Archives store `id_shares` per MemberID without any PeerID, and `peer_shares` per additional PeerID without any MemberID. Only an opening links the two.
@@ -181,4 +184,4 @@ Sharing peers cannot request openings. A peer that observes misbehavior reports 
 
 ## Relation to the Camenisch et al. scheme
 
-DACTIE uses the Short Threshold Dynamic Group Signatures of Camenisch, Drijvers, Lehmann, Neven and Towa (2020), with one issuer, the AA, instead of a distributed issuer and a public ledger. The member list (`gml`) lives at the AA, and the per-member opening shares live in the archives' databases. Joining follows the scheme's `GJoin` protocol: the member proves knowledge of `sk`, Shamir-shares it to the openers under ElGamal encryption, and receives a credential on `sk`. The prototype adds one step: the member may first confirm the openers' keys with the openers themselves. Signing and verification are unchanged.
+DACTIE uses the Short Threshold Dynamic Group Signatures of Camenisch, Drijvers, Lehmann, Neven and Towa (2020), with one issuer, the AA, instead of a distributed issuer and a public ledger. The member list (`gml`) lives at the AA, and the per-member opening shares live in the archives' databases. Joining follows the scheme's `GJoin` protocol: the member proves knowledge of `sk`, Shamir-shares it to the openers under ElGamal encryption, and receives a credential on `sk`. The prototype adds two steps: the member may first confirm the openers' keys with the openers themselves, and a member adding a sharing peer proves with `share_link` that the new shares hide its key, since the issuer cannot see which member asks. Signing and verification are unchanged.

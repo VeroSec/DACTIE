@@ -21,7 +21,7 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 use std::path::PathBuf;
 use std::sync::Mutex;
 use thiserror::Error;
-use thressig::structs::{EncShare, EncSharePairing, Signature};
+use thressig::structs::{EncShare, EncSharePairing, ShareLinkProof, Signature};
 use tokio::sync::mpsc;
 use tokio::time::{sleep, Duration};
 use MyOpenMLSError::*;
@@ -129,16 +129,51 @@ impl MyOpenMls {
         Ok(res)
     }
 
+    /// Shares the member key again for an additional sharing peer, with a proof that the
+    /// shares hide the key of this member's credential. `context` binds the proof to the peer.
     pub fn generate_enc_shares(
         &self,
-    ) -> Result<(Vec<EncShare>, Vec<thressig::G1>), MyOpenMLSError> {
+        context: &[u8],
+    ) -> Result<(Vec<EncShare>, Vec<thressig::G1>, ShareLinkProof), MyOpenMLSError> {
         let opener_pubkeys = self.opener_pubkeys.lock().unwrap().clone();
         let mut key_store = self.key_store.lock().unwrap();
         let grpkey = key_store.get_grpkey().ok_or(GPKUndefinedError)?;
-        let sk = key_store.get_memkey().ok_or(GSKUndefinedError)?.sk;
+        let memkey = key_store.get_memkey().ok_or(GSKUndefinedError)?;
         let id = key_store.get_id().ok_or(IDUndefinedError)?;
         let threshold = self.get_opener_threshold()?;
-        Ok(key_store.generate_enc_shares(grpkey, sk, id, &opener_pubkeys, threshold))
+        let (enc_shares, commits) = key_store.generate_enc_shares(
+            grpkey.clone(),
+            memkey.sk.clone(),
+            id,
+            &opener_pubkeys,
+            threshold,
+        );
+        let h_blind = &enc_shares.first().ok_or(ElgamalUndefinedError)?.h_blind;
+        let share_link =
+            thressig::prove_share_link(&memkey, &grpkey, h_blind, &commits[0], context)?;
+        Ok((enc_shares, commits, share_link))
+    }
+
+    /// Checks that a new peer's shares form one polynomial over the archives and hide the key
+    /// of some member's credential, without learning which member.
+    pub fn verify_share_link(
+        &self,
+        share_link: &ShareLinkProof,
+        enc_shares: &[EncShare],
+        commits: &[thressig::G1],
+        n_openers: usize,
+        context: &[u8],
+    ) -> bool {
+        let grpkey = match self.key_store.lock().unwrap().get_grpkey() {
+            Some(v) => v,
+            None => return false,
+        };
+        match thressig::check_share_layout(enc_shares, commits, n_openers) {
+            Ok(h_blind) => {
+                thressig::verify_share_link(share_link, &grpkey, &h_blind, &commits[0], context)
+            }
+            Err(_) => false,
+        }
     }
 
     //Generate Keypair used for encryption of the shares

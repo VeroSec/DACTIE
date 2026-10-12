@@ -86,6 +86,22 @@ pub struct Signature {
     pub s: FieldElement,
 }
 
+/// Proves that the shares of an additional peer hide the sk of some member's credential,
+/// without revealing which member: a randomized credential (sigma1, sigma2) and one Schnorr
+/// proof that sk satisfies both e(sigma2, g~) = e(sigma1, X~) e(sigma1, Y1~)^sk and
+/// C0 = h_blind^sk, where C0 is the first Feldman commitment.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ShareLinkProof {
+    #[serde(with = "g1_compressed")]
+    pub sigma1: G1,
+    #[serde(with = "g1_compressed")]
+    pub sigma2: G1,
+    #[serde(with = "fr_bytes")]
+    pub c: FieldElement,
+    #[serde(with = "fr_bytes")]
+    pub s: FieldElement,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Share {
     pub index: usize,
