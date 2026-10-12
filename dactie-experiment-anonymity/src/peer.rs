@@ -4,7 +4,7 @@ use libp2p::gossipsub::IdentTopic;
 use libp2p::kad::store::MemoryStore;
 use libp2p::kad::{Mode, PROTOCOL_NAME};
 use libp2p::swarm::{NetworkBehaviour, SwarmEvent};
-use libp2p::{gossipsub, identify, kad, noise, tcp, yamux, Multiaddr, PeerId, Swarm};
+use libp2p::{gossipsub, identify, kad, noise, plaintext, tcp, yamux, Multiaddr, PeerId, Swarm};
 use rand::{distributions::Alphanumeric, seq::SliceRandom, Rng};
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
@@ -56,6 +56,8 @@ pub(crate) struct MeshConfig {
     /// process cannot hold the N^2 connections of a large network.
     pub(crate) conn_low: usize,
     pub(crate) conn_high: usize,
+    /// Use the plaintext transport instead of Noise (experiments only).
+    pub(crate) plaintext: bool,
 }
 
 impl MeshConfig {
@@ -92,7 +94,13 @@ impl MeshConfig {
             gossip_lazy,
             conn_low: 50,
             conn_high: 100,
+            plaintext: false,
         }
+    }
+
+    pub(crate) fn with_plaintext(mut self, plaintext: bool) -> Self {
+        self.plaintext = plaintext;
+        self
     }
 
     pub(crate) fn with_conn_limits(mut self, low: usize, high: usize) -> Self {
@@ -243,62 +251,32 @@ impl Peer {
         bootstrap_peer: Option<(PeerId, Multiaddr)>,
         mesh: MeshConfig,
     ) -> Result<Swarm<MyBehaviour>, Box<dyn Error>> {
-        let mut swarm = libp2p::SwarmBuilder::with_new_identity()
-            .with_tokio()
-            .with_tcp(
-                tcp::Config::default(),
-                noise::Config::new,
-                yamux::Config::default,
-            )?
-            .with_behaviour(|key| {
-                let gossipsub_config = Self::gossipsub_config(mesh)
-                    .map_err(io::Error::other)
-                    .unwrap(); // Temporary hack because `build` does not return a proper `std::error::Error`.
-
-                let mut gossipsub = gossipsub::Behaviour::new(
-                    gossipsub::MessageAuthenticity::Anonymous,
-                    gossipsub_config,
-                )?;
-
-                gossipsub.subscribe(&IdentTopic::new("Test"))?;
-
-                let identify = identify::Behaviour::new(identify::Config::new(
-                    identify::PROTOCOL_NAME.to_string(),
-                    key.public(),
-                ));
-
-                let peer_id = key.public().to_peer_id();
-
-                let mut cfg = kad::Config::new(PROTOCOL_NAME);
-                cfg.set_query_timeout(Duration::from_secs(5 * 60));
-                let store = MemoryStore::new(peer_id);
-                let mut kademlia = kad::Behaviour::with_config(peer_id, store, cfg);
-
-                kademlia.set_mode(Some(Mode::Server));
-
-                if let Some((boot_peer_id, boot_peer_addr)) = bootstrap_peer.clone() {
-                    // Add the bootnodes to the local routing table.
-                    kademlia.add_address(&boot_peer_id, boot_peer_addr);
-                }
-
-                // The bootstrap peer stays uncapped: every joining peer dials it first.
-                let limits = if bootstrap_peer.is_none() {
-                    ConnectionLimits::default()
-                } else {
-                    ConnectionLimits::default()
-                        .with_max_established(Some(mesh.conn_high as u32))
-                        .with_max_established_per_peer(Some(1))
-                };
-
-                Ok(MyBehaviour {
-                    gossipsub,
-                    identify,
-                    kademlia,
-                    limits: connection_limits::Behaviour::new(limits),
-                })
-            })?
-            .with_swarm_config(|c| c.with_idle_connection_timeout(Duration::from_secs(60)))
-            .build();
+        let builder = libp2p::SwarmBuilder::with_new_identity().with_tokio();
+        let swarm_config =
+            |c: libp2p::swarm::Config| c.with_idle_connection_timeout(Duration::from_secs(60));
+        let boot = bootstrap_peer.clone();
+        // Plaintext skips Noise, whose per-connection buffers dominate memory in
+        // large single-process runs. Encryption does not affect who receives what
+        // from whom and when, which is all the experiment measures.
+        let mut swarm = if mesh.plaintext {
+            builder
+                .with_tcp(
+                    tcp::Config::default(),
+                    |key: &libp2p::identity::Keypair| {
+                        Ok::<_, std::convert::Infallible>(plaintext::Config::new(key))
+                    },
+                    yamux::Config::default,
+                )?
+                .with_behaviour(|key| Self::build_behaviour(key, boot, mesh))?
+                .with_swarm_config(swarm_config)
+                .build()
+        } else {
+            builder
+                .with_tcp(tcp::Config::default(), noise::Config::new, yamux::Config::default)?
+                .with_behaviour(|key| Self::build_behaviour(key, boot, mesh))?
+                .with_swarm_config(swarm_config)
+                .build()
+        };
 
         swarm.behaviour_mut().kademlia.set_mode(Some(Mode::Server));
 
@@ -309,6 +287,56 @@ impl Peer {
         }
 
         Ok(swarm)
+    }
+
+    fn build_behaviour(
+        key: &libp2p::identity::Keypair,
+        bootstrap_peer: Option<(PeerId, Multiaddr)>,
+        mesh: MeshConfig,
+    ) -> Result<MyBehaviour, Box<dyn Error + Send + Sync>> {
+        let gossipsub_config = Self::gossipsub_config(mesh).map_err(io::Error::other)?;
+
+        let mut gossipsub = gossipsub::Behaviour::new(
+            gossipsub::MessageAuthenticity::Anonymous,
+            gossipsub_config,
+        )?;
+
+        gossipsub.subscribe(&IdentTopic::new("Test"))?;
+
+        let identify = identify::Behaviour::new(identify::Config::new(
+            identify::PROTOCOL_NAME.to_string(),
+            key.public(),
+        ));
+
+        let peer_id = key.public().to_peer_id();
+
+        let mut cfg = kad::Config::new(PROTOCOL_NAME);
+        cfg.set_query_timeout(Duration::from_secs(5 * 60));
+        let store = MemoryStore::new(peer_id);
+        let mut kademlia = kad::Behaviour::with_config(peer_id, store, cfg);
+
+        kademlia.set_mode(Some(Mode::Server));
+
+        if let Some((boot_peer_id, boot_peer_addr)) = bootstrap_peer.clone() {
+            // Add the bootnodes to the local routing table.
+            kademlia.add_address(&boot_peer_id, boot_peer_addr);
+        }
+
+        // The bootstrap peer stays uncapped: every joining peer dials it first.
+        let limits = if bootstrap_peer.is_none() {
+            ConnectionLimits::default()
+        } else {
+            ConnectionLimits::default()
+                .with_max_established(Some(mesh.conn_high as u32))
+                .with_max_established_per_peer(Some(1))
+        };
+
+        Ok(MyBehaviour {
+            gossipsub,
+            identify,
+            kademlia,
+            limits: connection_limits::Behaviour::new(limits),
+        })
     }
 
     pub(crate) fn get_peer_id(&mut self) -> PeerId {

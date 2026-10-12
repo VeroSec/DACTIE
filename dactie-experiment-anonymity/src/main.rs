@@ -86,6 +86,12 @@ struct Args {
     #[clap(long, default_value_t = 100)]
     conn_high: usize,
 
+    /// Use libp2p's plaintext transport instead of Noise. Saves Noise's
+    /// per-connection buffers in large single-process runs; encryption plays no
+    /// role in what the experiment measures.
+    #[clap(long, default_value_t = false)]
+    plaintext: bool,
+
     /// Colluding fractions f to evaluate the source-anonymity attack at. Each is
     /// converted to a coalition size of ceil(f * N), capped at the N-1 peers that
     /// are not the source.
@@ -197,7 +203,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
             args.gossip_factor,
             args.gossip_lazy,
         )
-        .with_conn_limits(args.conn_low, args.conn_high),
+        .with_conn_limits(args.conn_low, args.conn_high)
+        .with_plaintext(args.plaintext),
         adversary_fractions: args.adversary_fractions,
         coalition_sizes: args.coalition_sizes,
         adversary_trials: args.adversary_trials,
