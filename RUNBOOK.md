@@ -134,7 +134,7 @@ docker compose --profile node116 --profile node117 --profile node118 --profile n
 mkdir -p key_material/key_material_{0..9}
 docker run --rm -v "$PWD/key_material:/km" busybox sh -c \
   'rm -f /km/key_material_[0-9]*/key_material.json /km/key_material_[0-9]*/storage.json /km/key_material_[0-9]*/slots.json; rm -rf /km/key_material_[0-9]*/group_saves'
-find key_material -name 'key_material.json' -o -name 'storage.json' -o -name group_saves   # expect no output
+find key_material/key_material_[0-9]* \( -name key_material.json -o -name storage.json -o -name slots.json -o -name group_saves \)   # expect no output
 ```
 
 **minerva2** and **minerva3** additionally empty the archive's database, which still holds the
