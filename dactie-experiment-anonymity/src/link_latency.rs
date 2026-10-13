@@ -88,6 +88,11 @@ impl std::fmt::Display for LatencyRange {
     }
 }
 
+/// Bytes a connection may hold in delay. Beyond it the socket is left alone,
+/// so TCP's flow control slows the sender as it would without the delay;
+/// reading everything at once let a CPU-bound run pile up seconds of backlog.
+const QUEUE_LIMIT: usize = 64 * 1024;
+
 /// A stream whose reads lag `delay` behind the socket.
 pub(crate) struct Delayed<S> {
     inner: S,
@@ -96,6 +101,8 @@ pub(crate) struct Delayed<S> {
     queue: VecDeque<(Instant, Vec<u8>)>,
     /// How much of the front chunk was already passed on.
     offset: usize,
+    /// Bytes in `queue` not yet passed on.
+    queued: usize,
     /// The socket's end of stream or error, passed on after the same delay.
     ended: Option<(Instant, Option<io::Error>)>,
     sleep: Pin<Box<Sleep>>,
@@ -109,6 +116,7 @@ impl<S> Delayed<S> {
             delay,
             queue: VecDeque::new(),
             offset: 0,
+            queued: 0,
             ended: None,
             sleep: Box::pin(tokio::time::sleep(Duration::ZERO)),
             scratch: Box::new([0; 16 * 1024]),
@@ -123,13 +131,15 @@ impl<S: AsyncRead + Unpin> AsyncRead for Delayed<S> {
         buf: &mut [u8],
     ) -> Poll<io::Result<usize>> {
         let this = self.get_mut();
-        // Take in everything the socket has, stamped with its release time.
-        while this.ended.is_none() {
+        // Take in what the socket has, stamped with its release time.
+        while this.ended.is_none() && this.queued < QUEUE_LIMIT {
             match Pin::new(&mut this.inner).poll_read(cx, &mut this.scratch[..]) {
                 Poll::Ready(Ok(0)) => this.ended = Some((Instant::now() + this.delay, None)),
-                Poll::Ready(Ok(n)) => this
-                    .queue
-                    .push_back((Instant::now() + this.delay, this.scratch[..n].to_vec())),
+                Poll::Ready(Ok(n)) => {
+                    this.queued += n;
+                    this.queue
+                        .push_back((Instant::now() + this.delay, this.scratch[..n].to_vec()));
+                }
                 Poll::Ready(Err(e)) => this.ended = Some((Instant::now() + this.delay, Some(e))),
                 Poll::Pending => break,
             }
@@ -138,7 +148,8 @@ impl<S: AsyncRead + Unpin> AsyncRead for Delayed<S> {
             let release = match (this.queue.front(), &this.ended) {
                 (Some((at, _)), _) => *at,
                 (None, Some((at, _))) => *at,
-                // The socket registered the waker when it returned Pending.
+                // The socket registered the waker when it returned Pending; with
+                // the queue empty it was polled, as the limit was not reached.
                 (None, None) => return Poll::Pending,
             };
             if Instant::now() < release {
@@ -152,6 +163,7 @@ impl<S: AsyncRead + Unpin> AsyncRead for Delayed<S> {
                 let n = buf.len().min(chunk.len() - this.offset);
                 buf[..n].copy_from_slice(&chunk[this.offset..this.offset + n]);
                 this.offset += n;
+                this.queued -= n;
                 if this.offset == chunk.len() {
                     this.queue.pop_front();
                     this.offset = 0;
@@ -224,6 +236,19 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// A full queue stops reading from the socket until its bytes are passed on.
+    #[tokio::test]
+    async fn stops_reading_when_the_queue_is_full() {
+        let data: Vec<u8> = (0..3 * QUEUE_LIMIT).map(|i| i as u8).collect();
+        let mut stream = Delayed::new(futures::io::Cursor::new(data.clone()), Duration::ZERO);
+        let mut buf = [0u8; 10];
+        stream.read_exact(&mut buf).await.unwrap();
+        assert!(stream.queued < QUEUE_LIMIT + 16 * 1024);
+        let mut rest = Vec::new();
+        stream.read_to_end(&mut rest).await.unwrap();
+        assert_eq!([&buf[..], &rest[..]].concat(), data);
     }
 
     /// Bytes arrive in order and no earlier than the delay, then end of stream.
