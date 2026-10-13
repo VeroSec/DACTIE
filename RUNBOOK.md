@@ -182,6 +182,23 @@ done
 
 Then rerun the [Helpers](#helpers) block in every minerva shell, so `$AA` is set there.
 
+In each of your four minerva terminals (minerva2–4), not the AA, paste these lines:
+
+```bash
+cd /opt/vero/dactie
+export AA=$(sed -n 's/^BOOT_PEER_ID=//p' key_material/boot_id.env)
+echo $AA
+```
+
+Or the helpers block again:
+
+```bash
+cd /opt/vero/dactie
+dsend() { { printf '%s\r\n' "$2"; sleep 10; } | timeout 5 script -qfec "docker attach --sig-proxy=false $1" /dev/null >/dev/null 2>&1; }
+logs()  { docker logs "$@" 2>&1 | sed 's/\x1b\[[0-9;]*m//g'; }
+[ -f key_material/boot_id.env ] && export AA=$(sed -n 's/^BOOT_PEER_ID=//p' key_material/boot_id.env)
+```
+
 ## Phase 5 — Archives
 
 **minerva2:**
@@ -324,7 +341,7 @@ dsend dactie-peer_2-1 "attr_broad Test signed-by-peer2"
 **minerva2:**
 
 ```bash
-logs --since 1m dactie-peer_1-1 | grep -A4 "signed-by-peer2"
+logs --since 1m dactie-peer_1-1 | grep -A5 "signed-by-peer2"
 ```
 
 Expect `Attributed to member: <MemberID>`, the MemberID that minerva1 logged as `Created Key
@@ -366,8 +383,20 @@ logs dactie-peer_3-1 | grep -c "Closing connection to $OBS"      # expect 1
 docker rm -f dactie-observer
 ```
 
-**minerva1** (paste `$OBS`): `logs dactie-authority_node-1 | grep "Closing connection to"` shows
-`Closing connection to <OBS>: not admitted within 60s`.
+**minerva4:** print the observer's PeerId and copy it:
+
+```bash
+echo $OBS
+```
+
+**minerva1:** paste it and look for the authority's line about it:
+
+```bash
+export OBS=<PeerId from minerva4>
+logs dactie-authority_node-1 | grep "Closing connection to $OBS"
+```
+
+Expect `Closing connection to <OBS>: not admitted within 60s`.
 
 ### 9.6 Opening
 
