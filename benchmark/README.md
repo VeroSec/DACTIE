@@ -66,6 +66,18 @@ Laptop as above, 3 archives, t = 3, 500 members with one sharing peer each (1,00
 | archive partial open | 1.69 s | 1.71 s |
 | combine | 3.11 s | 0.88 s |
 
+Server (AMD EPYC 7763), 2026-10-13, single core (`taskset -c 4`), after hoisting,
+commit `fa0827f`:
+
+| Operation | n = 10 | n = 100 | n = 500 |
+| --- | --- | --- | --- |
+| archive partial open | 50.6 ms | 509 ms | 2.58 s |
+| combine | 27.2 ms | 207 ms | 1.01 s |
+
+with one sharing peer per member, i.e. 2n stored shares: about 2.6 ms per share per archive
+plus 1.0 ms per share to combine, so 3.6 s in total for 500 members. Sign 2.66 ms, verify
+7.58 ms, signature 226 bytes.
+
 `thressig::open` used to recompute two pairings and the Lagrange coefficients for every
 candidate, although they do not depend on it; it now computes them once. The archive's
-work is unchanged and still one pairing per stored share. Server numbers are pending.
+work is unchanged and still one pairing per stored share.
