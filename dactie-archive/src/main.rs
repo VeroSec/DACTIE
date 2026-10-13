@@ -29,7 +29,7 @@ struct Args {
     #[arg(short, long)]
     port: Option<usize>,
 
-    /// Port to run service on
+    /// PostgreSQL URL of this archive's database, e.g. postgres://archive:archivepw@127.0.0.1:5432/archivedb
     #[arg(short, long)]
     url: String,
 
@@ -41,11 +41,11 @@ struct Args {
     #[arg(short, long)]
     aa_id: PeerId,
 
-    /// Address of a Authorization Node
+    /// Multiaddr of the authority; set it, the default port is not the authority's 10001
     #[arg(short='B', long, default_value_t = Multiaddr::from_str("/ip4/127.0.0.1/tcp/20011").unwrap())]
     aa_addr: Multiaddr,
 
-    /// Identity of Archive
+    /// Name this archive registers with at the authority, e.g. archive1; must be unique
     #[arg(short, long)]
     identity: String,
 

@@ -29,11 +29,11 @@ mod myclient;
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
-    /// PeerID of a Bootsrap Node, if none is given, the peer starts as Bootstrap Node on Port 10001
+    /// PeerID of the authority (required)
     #[arg(short='b', long, default_value = None)]
     authority_peer_id: Option<PeerId>,
 
-    /// IPADDR of a Bootsrap Node, if none is given, the peer starts as Bootstrap Node on Port 10001
+    /// Multiaddr of the authority, also used by a join's throwaway identity; set it, the default port is not the authority's 10001
     #[arg(short='B', long, default_value_t = Multiaddr::from_str("/ip4/127.0.0.1/tcp/5005").unwrap())]
     bootstrap_addr: Multiaddr,
 
@@ -41,7 +41,7 @@ struct Args {
     #[arg(short = 'K', long)]
     km_dir: String,
 
-    /// Number of Memberkeys to genereate
+    /// Not used
     #[arg(short, long, default_value_t = 1)]
     n_memkey: usize,
 
@@ -49,7 +49,7 @@ struct Args {
     #[arg(short, long)]
     port: Option<usize>,
 
-    /// Load_file, for stored groups and subscribed topics
+    /// Not used: groups and subscribed topics are restored from --km-dir
     #[arg(short, long)]
     load_file: Option<String>,
 

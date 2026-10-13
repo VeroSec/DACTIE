@@ -29,7 +29,7 @@ struct Args {
     #[arg(short, long)]
     port: Option<usize>,
 
-    /// Load_file, for stored groups and subscribed topics
+    /// Not used: groups and subscribed topics are restored from --km-dir
     #[arg(short, long)]
     load_file: Option<String>,
 

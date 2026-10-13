@@ -25,6 +25,72 @@ All statements describe the code in this repository. Message names refer to `dac
 | Opener key | ElGamal key pair in G2, one per archive | archive (secret key); AA and peers (public key, with the archive's PeerID) |
 | MLS credential | MLS basic credential holding the PeerID bytes | each node |
 
+## Running the nodes
+
+Each node is one binary. It takes its options on the command line and reads console commands from stdin (with Docker: `docker attach <container>`, detach with Ctrl-P Ctrl-Q). `RUST_LOG=info` shows the log lines this document refers to. Multiaddrs have the form `/ip4/<address>/tcp/<port>`.
+
+### dactie-authority
+
+```text
+dactie-authority -K <dir> [-p <port>] [--advertise-addr <multiaddr>]
+                 [--threshold <t>] [--epoch-secs <seconds>] [--peers-per-member <k>]
+```
+
+| Option | Default | What it does |
+| --- | --- | --- |
+| `-K, --km-dir <dir>` | required | Folder of the AA's state: `key_material.json` (its libp2p key and the group manager key) and `storage.json` (members, archives, threshold, used slot tags, registered sharing peers). The AA keeps its PeerID only if both files exist; delete them together to start a new network. |
+| `-p, --port <port>` | `10001` | TCP port the AA listens on, on all interfaces. Archives and peers reach it at `-B /ip4/<host>/tcp/<port>`. |
+| `--advertise-addr <multiaddr>` | none | Address the AA announces to others, e.g. `/ip4/10.244.192.116/tcp/10001`, for hosts with several interfaces or behind NAT. Ignored for `127.0.0.1`. |
+| `--threshold <t>` | strict majority, `⌊n/2⌋ + 1` | How many of the `n` archives must approve before a signature can be opened. It takes effect when `end_init_archive` closes the init phase, and is fixed from then on, because every member shares its key for it; a different value on a later start is ignored with a warning. Allowed: `1 ≤ t ≤ n`. The AA warns at `t ≤ n/2` (a minority of archives can open signatures) and at `t = n` (one unavailable archive blocks every opening). |
+| `--epoch-secs <seconds>` | `2592000` (30 days) | Epoch length. A sharing peer's registration lasts until the end of its slot tag's epoch; epochs start at multiples of this length in Unix time. Shorter epochs remove unused sharing peers sooner, but members must renew more often. |
+| `--peers-per-member <k>` | `5` | Slots per member and epoch: the most sharing peers a member can have registered at once, including the node it joined from. `m` colluding members run at most `m·k` sharing peers. |
+| `-l, --load-file <file>` | | Not used. |
+
+Console: `end_init_archive` closes the init phase (section 1); `req_open <signature hex>` and `open <signature hex>` open a signature (section 7).
+
+### dactie-archive
+
+```text
+dactie-archive -K <dir> -u <postgres-url> -a <AA PeerID> -B <AA multiaddr> -i <name>
+               [-p <port>] [--advertise-addr <multiaddr>] [--auto-approve-open]
+```
+
+| Option | Default | What it does |
+| --- | --- | --- |
+| `-K, --km-dir <dir>` | required | Folder of the archive's `key_material.json`: its libp2p key, its ElGamal opening key, and the group key. The archive registers with the AA whenever this file holds no group key yet. |
+| `-u, --url <url>` | required | PostgreSQL URL of this archive's own database, e.g. `postgres://archive:archivepw@127.0.0.1:5432/archivedb`. The tables are in `init.sql`. The archive exits at startup if the database is unreachable. |
+| `-a, --aa-id <PeerID>` | required | The AA's PeerID, as in the AA's log line `Local PeerId`. |
+| `-B, --aa-addr <multiaddr>` | `/ip4/127.0.0.1/tcp/20011` | The AA's address. Set it explicitly: the default port is not the AA's default `10001`. |
+| `-i, --identity <name>` | required | The name this archive registers with at the AA, e.g. `archive1`. Free text, unrelated to Docker profiles or container names. The AA derives the archive's ID from it and refuses empty names and names it has already registered, so every archive needs its own. It is used only for registration and shows in the AA's log as `Verified identity <name> from <PeerID>`. |
+| `-p, --port <port>` | random | TCP port the archive listens on. |
+| `--advertise-addr <multiaddr>` | none | As for the AA. |
+| `--auto-approve-open` | off | Answers every opening request without asking the operator. For automated tests only: with it, the AA alone could open any signature. |
+
+Console: `pending`, `approve <id>`, `deny <id>` (section 7).
+
+### dactie-peer
+
+```text
+dactie-peer -K <dir> -b <AA PeerID> -B <AA multiaddr> [-p <port>] [--advertise-addr <multiaddr>]
+            [--archive <multiaddr>/p2p/<PeerID>]... [--conn-low <n>] [--conn-high <n>]
+            [--metrics-addr <ip:port>]
+```
+
+| Option | Default | What it does |
+| --- | --- | --- |
+| `-K, --km-dir <dir>` | required | Folder of the peer's state: `key_material.json` (libp2p key and member key), `slots.json` (the slots its member has used) and `group_saves/` (MLS groups and subscribed topics, restored on restart). Other sharing peers of the same member point `peer_from_sig` and `renew` at this `key_material.json`. |
+| `-b, --authority-peer-id <PeerID>` | required | The AA's PeerID. |
+| `-B, --bootstrap-addr <multiaddr>` | `/ip4/127.0.0.1/tcp/5005` | The AA's address. The peer finds other peers through it, and a join's throwaway identity connects to it. Set it explicitly: the default port is not the AA's default `10001`. |
+| `-p, --port <port>` | random | TCP port the peer listens on. |
+| `--advertise-addr <multiaddr>` | none | As for the AA. |
+| `--archive <multiaddr>/p2p/<PeerID>` | none | A trusted archive, configured out of band; repeat for each archive. Before the peer uses the archive keys the AA hands out (join, `get_opener_keys`), it asks each archive for its own key and refuses on a mismatch, so a dishonest AA cannot substitute keys it holds. Without it, the peer logs a warning and uses the AA's keys unverified. |
+| `--conn-high <n>` | `100` | The most connections the peer holds; further ones are refused before the handshake. Incoming connections take at most 80% of them, so the peer can always still dial out, and at most 32 incoming handshakes may be in progress. |
+| `--conn-low <n>` | `50` | Once the peer reaches `--conn-high`, it closes random connections older than 20 s down to this number, never its GossipSub mesh peers, the AA or trusted archives. |
+| `--metrics-addr <ip:port>` | off | Serves Prometheus metrics, e.g. `127.0.0.1:9898`. The endpoint is unauthenticated: bind it to loopback unless the network is trusted. |
+| `-n, --n-memkey <n>`, `-l, --load-file <file>` | | Not used. |
+
+Console: `register_identity` (section 2); `get_opener_keys`, `peer_from_sig`, `renew` (section 3); `sub`, `unsub`, `broad`, `attr_broad`, `enc_broad`, `attr_enc_broad` (section 4); `req_kps`, `create_group`, `ls_groups`, `add_group_member`, `remove_group_member`, `delete_group_for_all`, `update_key_material`, `update_groups` (sections 5 and 6); `peer_id`. A peer prints the list on any unknown command.
+
 ## Network layer
 
 All nodes use libp2p over TCP with Noise and Yamux. GossipSub is configured as follows (`mybehaviour.rs` of each crate):
@@ -65,8 +131,8 @@ Direct requests (libp2p request-response) carry an optional group signature. Whi
 
 Archives must register before any member joins, because every member splits its key into one share per archive.
 
-1. Start the AA, optionally with `--threshold <t>`.
-2. Each archive starts with `-i <name>`. If its key file holds no group key, it sends an unsigned `VerifyIdentity { identity: name, with_signature: false }` to the AA.
+1. Start the AA (options: [dactie-authority](#dactie-authority)). Choose `--threshold` now: `end_init_archive` fixes it below.
+2. Each archive starts with its own name, `-i <name>` (any unique text such as `archive1`; see [dactie-archive](#dactie-archive)). If its key file holds no group key, it sends an unsigned `VerifyIdentity { identity: name, with_signature: false }` to the AA.
 3. The AA derives the MemberID from the name and rejects empty or already registered names. It replies `IdentityVerified { id, group_key }`.
 4. The archive generates its ElGamal key pair and an MLS KeyPackage, and sends `JoinKeyPackage { keypackage, elgamal_pk }`.
 5. The AA records the archive's PeerID and ElGamal key, keeps the KeyPackage, and replies `MemKey { None }`. Archives therefore receive no member key. The position of an archive in this list is the index of the share it will hold.
