@@ -1,5 +1,6 @@
 mod adversary;
 mod conn_cap;
+mod link_latency;
 mod experiment;
 mod peer;
 
@@ -104,6 +105,14 @@ struct Args {
     /// role in what the experiment measures.
     #[clap(long, default_value_t = false)]
     plaintext: bool,
+
+    /// One-way delay of simulated links in ms: peers sit at random points of a
+    /// unit square, and <min>,<max> is the delay between neighbours and between
+    /// opposite corners; <ms> fixes it, 0 turns the simulation off. All peers
+    /// share one process, so without it CPU scheduling rather than path length
+    /// decides which copy of a message arrives first.
+    #[clap(long, default_value = "10,100")]
+    link_latency_ms: link_latency::LatencyRange,
 
     /// Colluding fractions f to evaluate the source-anonymity attack at. Each is
     /// converted to a coalition size of ceil(f * N), capped at the N-1 peers that
@@ -223,7 +232,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .open(adv)?;
     writeln!(
         &adv_file,
-        "total_peers,mesh_n,mesh_n_low,mesh_n_high,gossip_factor,gossip_lazy,run,coalition_size,f_effective,estimator,success_rate,delivery_ratio,direct_receipts,conn_low,conn_high,heartbeat_ms"
+        "total_peers,mesh_n,mesh_n_low,mesh_n_high,gossip_factor,gossip_lazy,run,coalition_size,f_effective,estimator,success_rate,delivery_ratio,direct_receipts,conn_low,conn_high,heartbeat_ms,latency_min_ms,latency_max_ms"
     )?;
 
     start_experiment_series(StartExperimentSeriesArgs {
@@ -246,7 +255,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .with_conn_limits(args.conn_low, args.conn_high)
         .with_plaintext(args.plaintext)
         .with_heartbeat(args.heartbeat_secs)
-        .with_spawn_rate(args.spawn_per_sec),
+        .with_spawn_rate(args.spawn_per_sec)
+        .with_link_latency(args.link_latency_ms),
         adversary_fractions: args.adversary_fractions,
         coalition_sizes: args.coalition_sizes,
         adversary_trials: args.adversary_trials,
@@ -419,8 +429,10 @@ async fn start_experiment_series(args: StartExperimentSeriesArgs) -> Result<(), 
                     println!("  attack c={c} (f={f_effective:.4}) {estimator}: {rate:.4}");
                     writeln!(
                         &args.adv_file,
-                        "{n_peers},{n},{low},{high},{gf},{gl},{run},{c},{f_effective},{estimator},{rate},{delivery},{correct_receiver},{cl},{ch},{hb}",
+                        "{n_peers},{n},{low},{high},{gf},{gl},{run},{c},{f_effective},{estimator},{rate},{delivery},{correct_receiver},{cl},{ch},{hb},{lmin},{lmax}",
                         hb = args.mesh.heartbeat.as_millis(),
+                        lmin = args.mesh.latency.min_ms,
+                        lmax = args.mesh.latency.max_ms,
                         cl = args.mesh.conn_low,
                         ch = args.mesh.conn_high,
                         n = args.mesh.n,

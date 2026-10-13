@@ -1,9 +1,12 @@
 use crate::conn_cap::ConnCap;
+use crate::link_latency::{Delayed, LatencyRange};
 use futures::StreamExt;
 use libp2p::gossipsub::IdentTopic;
 use libp2p::swarm::dial_opts::{DialOpts, PeerCondition};
 use libp2p::swarm::{NetworkBehaviour, SwarmEvent};
-use libp2p::{gossipsub, noise, plaintext, tcp, yamux, Multiaddr, PeerId, Swarm};
+use libp2p::core::muxing::StreamMuxerBox;
+use libp2p::core::transport::{upgrade, Boxed};
+use libp2p::{gossipsub, noise, plaintext, tcp, yamux, Multiaddr, PeerId, Swarm, Transport};
 use rand::{distributions::Alphanumeric, seq::SliceRandom, Rng};
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
@@ -89,6 +92,8 @@ pub(crate) struct MeshConfig {
     /// Peers started per second; 0 starts them all at once. Starting in waves avoids
     /// a burst of simultaneous dials, handshakes and trims in large runs.
     pub(crate) spawn_per_sec: u32,
+    /// Simulated one-way delay per connection, see `link_latency`.
+    pub(crate) latency: LatencyRange,
 }
 
 impl MeshConfig {
@@ -128,6 +133,7 @@ impl MeshConfig {
             plaintext: false,
             heartbeat: Duration::from_secs(1),
             spawn_per_sec: 0,
+            latency: LatencyRange::OFF,
         }
     }
 
@@ -138,6 +144,11 @@ impl MeshConfig {
 
     pub(crate) fn with_spawn_rate(mut self, per_sec: u32) -> Self {
         self.spawn_per_sec = per_sec;
+        self
+    }
+
+    pub(crate) fn with_link_latency(mut self, latency: LatencyRange) -> Self {
+        self.latency = latency;
         self
     }
 
@@ -292,7 +303,13 @@ impl Peer {
         // Plaintext skips Noise, whose per-connection buffers dominate memory in
         // large single-process runs. Encryption does not affect who receives what
         // from whom and when, which is all the experiment measures.
-        let mut swarm = if mesh.plaintext {
+        let mut swarm = if !mesh.latency.is_off() {
+            builder
+                .with_other_transport(|key| Self::delayed_transport(key, mesh))?
+                .with_behaviour(|_| Self::build_behaviour(mesh))?
+                .with_swarm_config(swarm_config)
+                .build()
+        } else if mesh.plaintext {
             builder
                 .with_tcp(
                     tcp::Config::default(),
@@ -318,6 +335,47 @@ impl Peer {
         swarm.listen_on("/ip4/127.0.0.1/tcp/0".parse()?)?;
 
         Ok(swarm)
+    }
+
+    /// TCP whose connections lag by the simulated link delay, below the
+    /// security handshake so that handshakes take their round trips too.
+    fn delayed_transport(
+        key: &libp2p::identity::Keypair,
+        mesh: MeshConfig,
+    ) -> Result<Boxed<(PeerId, StreamMuxerBox)>, Box<dyn Error + Send + Sync>> {
+        let range = mesh.latency;
+        // Port reuse binds outgoing connections to the listening port, so both ends
+        // of a link see both listening ports and derive the same delay. Nagle is off
+        // (libp2p's nodelay(false) default, commented "Disable Nagle's algorithm",
+        // enables it): the kernel acknowledges loopback segments without the
+        // simulated delay, so Nagle's wait for acknowledgements held messages on busy
+        // links for up to the 40 ms delayed-ACK timeout, which no simulated link
+        // reflects, and relayed copies overtook the direct one.
+        let tcp = tcp::tokio::Transport::new(
+            tcp::Config::default().port_reuse(true).nodelay(true),
+        );
+        let tcp = tcp.map(move |stream, _| {
+            let ports = (stream.0.local_addr(), stream.0.peer_addr());
+            let delay = match ports {
+                (Ok(local), Ok(peer)) => range.for_ports(local.port(), peer.port()),
+                _ => Duration::from_millis(range.max_ms),
+            };
+            Delayed::new(stream, delay)
+        });
+        let upgraded = tcp.upgrade(upgrade::Version::V1);
+        Ok(if mesh.plaintext {
+            upgraded
+                .authenticate(plaintext::Config::new(key))
+                .multiplex(yamux::Config::default())
+                .map(|(peer, muxer), _| (peer, StreamMuxerBox::new(muxer)))
+                .boxed()
+        } else {
+            upgraded
+                .authenticate(noise::Config::new(key)?)
+                .multiplex(yamux::Config::default())
+                .map(|(peer, muxer), _| (peer, StreamMuxerBox::new(muxer)))
+                .boxed()
+        })
     }
 
     fn build_behaviour(mesh: MeshConfig) -> Result<MyBehaviour, Box<dyn Error + Send + Sync>> {
