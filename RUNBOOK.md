@@ -1,348 +1,503 @@
 # DACTIE Multi-Server Runbook
 
-Bring-up procedure for the 4-server testbed.
+Bring-up and test procedure for the 4-server testbed (minerva1–4), for branch `camera-ready`
+and later. Every step is copy-paste bash: run each block on the host named above it.
 
-Applies to branch `hardening-docker-runs` and later. On `main`/`merge-test` the archives
-do **not** self-heal — see [Older builds](#older-builds) at the end.
+Last full run: 2026-10-13, all checks in Phase 9 passed.
 
 ## Topology
 
-| Server | IP | Profile | Services | Ports |
-|---|---|---|---|---|
-| Server1 | 10.244.192.116 | `node116` | `authority_node` | 10001 |
-| Server2 | 10.244.192.117 | `node117` | `db`, `adminer`, `archive_node1`, `peer_1` | 5432, 8080, 20011, 21011, 9898 |
-| Server3 | 10.244.192.118 | `node118` | `db2`, `archive_node2`, `peer_2` | 5433, 20012, 21012, 9898 |
-| Server4 | 10.244.192.119 | `node119` | `peer_3`, `peer_4` | 21013, 21014, 9898, 9899 |
+| Host | ssh | IP | Profile | Services | Ports |
+| --- | --- | --- | --- | --- | --- |
+| minerva1 | `ssh minerva1` | 10.244.192.116 | `node116` | `authority_node` | 10001 |
+| minerva2 | `ssh minerva2` | 10.244.192.117 | `node117` | `db`, `adminer`, `archive_node1`, `peer_1` | 5432, 8080, 20011, 21011, 9898 |
+| minerva3 | `ssh minerva3` | 10.244.192.118 | `node118` | `db2`, `archive_node2`, `peer_2` | 5433, 20012, 21012, 9898 |
+| minerva4 | `ssh minerva4` | 10.244.192.119 | `node119` | `peer_3`, `peer_4` | 21013, 21014, 9898, 9899 |
+
+The checkout is `/opt/vero/dactie` on all four hosts. You are in the `docker` group there, so
+nothing below needs `sudo` (which would ask for a password).
 
 ### Key material map
 
 | Directory | Belongs to | Files |
-|---|---|---|
+| --- | --- | --- |
 | `key_material_0` | `authority_node` | `key_material.json` + `storage.json` |
 | `key_material_1` | `archive_node1` | `key_material.json` |
 | `key_material_2` | `archive_node2` | `key_material.json` |
-| `key_material_3` | `peer_1` | `key_material.json` |
-| `key_material_4` | `peer_2` | `key_material.json` |
-| `key_material_5` | `peer_3` | `key_material.json` |
-| `key_material_6` | `peer_4` | `key_material.json` |
+| `key_material_3` | `peer_1` | `key_material.json`, `slots.json`, `group_saves/` |
+| `key_material_4` | `peer_2` | same |
+| `key_material_5` | `peer_3` | same |
+| `key_material_6` | `peer_4` | same |
+
+What the options in `docker-compose.yml` mean is in
+[docs/PROTOCOL.md, Running the nodes](docs/PROTOCOL.md#running-the-nodes).
 
 ---
 
 ## Rules that still matter
 
 1. **The authority needs BOTH `key_material.json` and `storage.json` to keep its
-   identity.** `dactie-authority/src/main.rs` reuses the keypair only when both exist;
-   delete one and it mints a new PeerId, invalidating every `boot_id.env`. Always delete
-   the pair together.
+   identity.** Delete one and it mints a new PeerId, invalidating every `boot_id.env`.
+   Always delete the pair together.
 2. **`env_file` is read at container CREATE time.** Editing `boot_id.env` under a running
-   container changes nothing — use `up -d --force-recreate`.
-3. **Never `stop` a container you just started.** `restart: unless-stopped` deliberately
-   does not resurrect an explicitly stopped container.
-4. **Detach from `attach` with Ctrl-P Ctrl-Q.** Ctrl-C sends SIGINT; the binaries handle
-   only SIGTERM, so Ctrl-C kills the process.
-5. **A truncated `storage.json` is fatal and not self-healing.** The authority
-   fails to parse it at startup and, under `restart: unless-stopped`, crash-loops
-   silently. Check with
+   container changes nothing: use `up -d --force-recreate`.
+3. **Never `stop` a container you just started.** `restart: unless-stopped` does not
+   resurrect an explicitly stopped container.
+4. **Detach from `attach` with Ctrl-P Ctrl-Q.** Ctrl-C kills the process. The `dsend` helper
+   below avoids attaching altogether.
+5. **Files written by containers belong to root.** Delete key material through a container
+   (Phase 2), and replace root-owned files such as `boot_id.env` with `rm -f` + write, which
+   only needs write access to the folder (Phase 4).
+6. **A truncated `storage.json` is fatal and not self-healing.** Check with
    `python3 -c "import json;json.load(open('key_material/key_material_0/storage.json'))"`.
-   Recovery is Phase 2 plus a fresh Phase 3/4, since the authority identity is lost.
-6. **`end_init_archive` is irreversible.** It sets `archive_init_mode = false` and
-   persists it. No archive can join afterwards; adding one means a full rerun.
+   Recovery is Phase 2 and a fresh run.
+7. **`end_init_archive` is irreversible.** No archive can join afterwards; adding one means a
+   full rerun.
 
-Two former traps are now fixed in code and need no procedure:
+## Helpers
 
-- `build.sh` no longer overwrites an existing `boot_id.env`, and forwards its arguments,
-  so `./build.sh --no-cache --pull` works.
-- Archives re-register automatically whenever they hold no group key, so a failed
-  registration is no longer permanent.
+Run this in every minerva shell you open. `dsend` types one line into a container's console
+(like attach, type, Ctrl-P Ctrl-Q); `logs` prints a container's log without color codes.
+
+```bash
+cd /opt/vero/dactie
+dsend() { { printf '%s\r\n' "$2"; sleep 10; } | timeout 5 script -qfec "docker attach --sig-proxy=false $1" /dev/null >/dev/null 2>&1; }
+logs()  { docker logs "$@" 2>&1 | sed 's/\x1b\[[0-9;]*m//g'; }
+[ -f key_material/boot_id.env ] && export AA=$(sed -n 's/^BOOT_PEER_ID=//p' key_material/boot_id.env)
+```
+
+The last line sets `$AA`, the authority's PeerId, once Phase 4 has written it.
 
 ---
 
-## Phase 0 — Tear down
+## Phase 0 — Put the code on the hosts
 
-**All four servers**, in parallel.
+**Laptop.** The minervas cannot fetch `camera-ready` themselves, so push it over ssh. The
+branch must not be checked out on a host while you push it, so switch away first if needed.
 
 ```bash
-cd /path/to/dactie
-sudo docker compose --profile node116 --profile node117 --profile node118 --profile node119 down --remove-orphans
-docker ps -a | grep dactie      # expect no output
+cd ~/projects/dactie-camera
+for i in 1 2 3 4; do
+  git push ssh://minerva$i/opt/vero/dactie camera-ready:refs/heads/camera-ready
+done
 ```
+
+**All four hosts:**
+
+```bash
+cd /opt/vero/dactie
+git checkout camera-ready
+git log -1 --oneline        # the commit you pushed
+```
+
+To update a host that is already on `camera-ready`, push from the laptop to another name,
+e.g. `camera-ready:refs/heads/camera-ready-next`, then run `git merge --ff-only camera-ready-next`
+on the host.
 
 ## Phase 1 — Build
 
-**All four servers**, in parallel.
+Each host builds only the images it runs. A build takes about 5 minutes per image; run all
+four hosts in parallel.
+
+**minerva1:**
 
 ```bash
-cd /path/to/dactie
-git checkout hardening-docker-runs
-sudo ./build.sh --no-cache --pull
+cd /opt/vero/dactie
+docker build -t dactie-authority -f ./dactie-authority/Dockerfile .
 ```
 
-## Phase 2 — Wipe key material
-
-**All four servers**, in parallel. Only needed for a clean slate (new authority identity);
-skip it to keep existing identities.
+**minerva2 and minerva3:**
 
 ```bash
-cd /path/to/dactie
-sudo rm -f  ./key_material/key_material_[0-9]*/key_material.json \
-            ./key_material/key_material_[0-9]*/storage.json
-sudo rm -rf ./key_material/key_material_[0-9]*/group_saves
+cd /opt/vero/dactie
+docker build -t dactie-archive -f ./dactie-archive/Dockerfile .
+docker build -t dactie-peer -f ./dactie-peer/Dockerfile . --build-arg FEATURES=bench
 ```
 
-Both `.json` files go together (rule 1). Wiping every node in one pass also keeps stale
-identities out of the DHT.
+**minerva4:**
+
+```bash
+cd /opt/vero/dactie
+docker build -t dactie-peer -f ./dactie-peer/Dockerfile . --build-arg FEATURES=bench
+```
+
+The peer image needs `FEATURES=bench` for the benchmark publisher of `peer_4`.
+
+## Phase 2 — Tear down and wipe
+
+**All four hosts.** Stops every container and deletes the key material of the last run.
+The key files belong to root (rule 5), so a throwaway container deletes them:
+
+```bash
+cd /opt/vero/dactie
+docker compose --profile node116 --profile node117 --profile node118 --profile node119 down --remove-orphans
+mkdir -p key_material/key_material_{0..9}
+docker run --rm -v "$PWD/key_material:/km" busybox sh -c \
+  'rm -f /km/key_material_[0-9]*/key_material.json /km/key_material_[0-9]*/storage.json /km/key_material_[0-9]*/slots.json; rm -rf /km/key_material_[0-9]*/group_saves'
+find key_material -name 'key_material.json' -o -name 'storage.json' -o -name group_saves   # expect no output
+```
+
+**minerva2** and **minerva3** additionally empty the archive's database, which still holds the
+last run's messages and shares:
+
+```bash
+docker volume rm dactie_db_data      # minerva2
+docker volume rm dactie_db2_data     # minerva3
+```
+
+Optional, before wiping: keep a copy of the old state.
+
+```bash
+mkdir -p /opt/vero/backups
+tar czf /opt/vero/backups/key_material-$(date +%Y%m%d).tgz key_material
+docker run --rm -v dactie_db_data:/data:ro -v /opt/vero/backups:/backup busybox \
+  tar czf /backup/dactie_db_data-$(date +%Y%m%d).tgz -C /data .     # minerva2; dactie_db2_data on minerva3
+```
 
 ## Phase 3 — Authority
 
-**Server1 (.116) alone.**
+**minerva1:**
 
 ```bash
-cd /path/to/dactie
-sudo docker compose --profile node116 up -d authority_node
-sleep 5
-sudo docker compose --profile node116 logs authority_node \
-  | grep -E "Local PeerId|Listening on|Archives registered"
-ss -tlnp | grep 10001
+docker compose --profile node116 up -d authority_node
+sleep 6
+logs dactie-authority_node-1 | grep -E "Local PeerId|Archives registered"
 ```
 
-You now get an explicit state line:
+Expect `Archives registered: 0, init phase: open` and a `Local PeerId: 12D3KooW…` line.
+`init phase: CLOSED` means the key material was not wiped: go back to Phase 2.
 
-```
-INFO  Archives registered: 0, init phase: open
-```
+## Phase 4 — Tell every host the authority's PeerId
 
-`init phase: CLOSED` means this key material has already completed a run — go back to
-Phase 2 or you will never register an archive.
-
-Copy the `Local PeerId` value.
-
-> **BARRIER.** Do not touch Servers 2-4 until the PeerId is known and 10001 is listening.
-
-## Phase 4 — Propagate the authority ID
-
-**All four servers**, after Phase 1.
+**Laptop.** Reads the PeerId on minerva1 and writes `boot_id.env` on all four hosts. The old
+file may belong to root (rule 5), so it is removed first.
 
 ```bash
-cd /path/to/dactie
-export AA=<paste_Local_PeerId_from_Phase_3>
-echo "BOOT_PEER_ID=$AA" | sudo tee ./key_material/boot_id.env
+AA=$(ssh minerva1 'docker logs dactie-authority_node-1 2>&1' | grep -o 'Local PeerId: [A-Za-z0-9]*' | tail -1 | awk '{print $3}')
+echo "$AA"
+for i in 1 2 3 4; do
+  ssh minerva$i "cd /opt/vero/dactie && rm -f key_material/boot_id.env && echo BOOT_PEER_ID=$AA > key_material/boot_id.env && cat key_material/boot_id.env"
+done
 ```
 
-Keep `$AA` in the shell — Phase 8 needs it.
+Then rerun the [Helpers](#helpers) block in every minerva shell, so `$AA` is set there.
 
 ## Phase 5 — Archives
 
-**Server2 (.117):**
+**minerva2:**
+
 ```bash
-sudo docker compose --profile node117 up -d --force-recreate db
+docker compose --profile node117 up -d --force-recreate db
 sleep 10
-sudo docker compose --profile node117 up -d --force-recreate archive_node1
-sudo docker compose --profile node117 logs archive_node1 | grep -E "Registering identity|Group key|Postgres"
+docker compose --profile node117 up -d --force-recreate archive_node1
 ```
 
-**Server3 (.118):**
+**minerva3:**
+
 ```bash
-sudo docker compose --profile node118 up -d --force-recreate db2
+docker compose --profile node118 up -d --force-recreate db2
 sleep 10
-sudo docker compose --profile node118 up -d --force-recreate archive_node2
-sudo docker compose --profile node118 logs archive_node2 | grep -E "Registering identity|Group key|Postgres"
+docker compose --profile node118 up -d --force-recreate archive_node2
 ```
 
-Postgres first — an archive exits at startup if its DSN is unreachable.
-
-Each archive logs its decision explicitly:
-
-| Log line | Meaning |
-|---|---|
-| `Registering identity 'archiveN' with authority ...` | Registration sent |
-| `Key material has no group key, re-registering` | Previous attempt failed, retrying |
-| `Group key present, skipping registration` | Already registered, nothing to do |
-
-If an archive reports the third line but the authority shows it as unregistered, its key
-material belongs to a different authority — wipe that node's `key_material.json` and
-recreate it.
+PostgreSQL first: an archive exits at startup if its database is unreachable.
 
 ## Phase 6 — Confirm registration
 
-**Server1 (.116).** The authority now announces every registration:
+**minerva1:**
 
 ```bash
-sudo docker compose --profile node116 logs authority_node | grep "registered"
+logs dactie-authority_node-1 | grep "Verified identity archive"
 ```
 
-Wait for **two** distinct lines:
-
-```
-INFO  Archive '12D3KooW...' registered (1 total)
-INFO  Archive '12D3KooW...' registered (2 total)
-```
-
-Do not continue on one. If an archive is missing, fix it in Phase 5 — the authority side
-cannot be forced.
+Expect two lines, `Verified identity archive1 from 12D3KooW…` and `… archive2 from …`. If one
+is missing, check that archive's log for the PeerId it dials
+(`logs dactie-archive_node1-1 | grep "Registering identity"`): an old PeerId means its
+`boot_id.env` was not replaced (Phase 4) before the container was created.
 
 ## Phase 7 — Close the init phase
 
-**Server1 (.116):**
+**minerva1:**
 
 ```bash
-sudo docker attach dactie-authority_node-1
-```
-```
-end_init_archive
+dsend dactie-authority_node-1 end_init_archive
+sleep 3
+logs --since 1m dactie-authority_node-1 | grep -E "Enough Archives|Creating common group|Admitted"
 ```
 
-Success requires **both** lines:
-```
-INFO  Enough Archives registered, ending init phase
+Expect all three:
+
+```text
+INFO  Enough Archives registered, ending init phase (opening threshold 2 of 2)
 INFO  Creating common group with archives...
+INFO  Admitted 3 PeerIDs to GossipSub
 ```
 
-> **STOP if only the first line appears.** The authority is wedged: it stops
-> accepting connections, so every later phase fails with misleading peer-side
-> errors (`Timeout has been reached`, then `MLS Error: CommonGroup Not Set`).
-> Confirm with `sudo ss -tlnp | grep 10001` — a non-zero `Recv-Q` means
-> connections are arriving and never being accepted. Recovery is a full rerun
-> from Phase 2, because `storage.json` is left truncated. This was a reentrant
-> lock in `Storage::return_memkey` and is fixed on this branch; seeing it means
-> a node is running an older image.
+If only the first line appears, the authority is wedged: a full rerun from Phase 2 is needed.
 
-Failure now reports the count, so you know which problem you have:
-```
-ERROR Not enough archives registered (1 of 2 required), ...
-```
+## Phase 8 — Peers
 
-Detach with **Ctrl-P Ctrl-Q**.
+`register_identity` joins from a throwaway identity and then registers the peer's own
+PeerId as a sharing peer, so wait a few seconds before `sub`.
 
-Scripting this needs a real terminal — `docker attach` refuses a pipe against a
-TTY-enabled container (`cannot attach stdin to a TTY-enabled container because
-stdin is not a terminal`). Allocate a pty and hold stdin open past the command:
+**minerva2:**
 
 ```bash
-sudo sh -c '{ printf "end_init_archive\r\n"; sleep 20; } | \
-  timeout 12 script -qfec "docker attach --sig-proxy=false dactie-authority_node-1" /dev/null'
+docker compose --profile node117 up -d --force-recreate adminer peer_1
+sleep 5
+dsend dactie-peer_1-1 "register_identity $AA peer1"
+dsend dactie-peer_1-1 "sub Test"
 ```
 
-`--sig-proxy=false` keeps the timeout from signalling the container, and the
-`sleep` prevents EOF reaching its stdin.
-
-## Phase 8 — Peers and smoke test
-
-**Server2 (.117):**
-```bash
-sudo docker compose --profile node117 up -d --force-recreate adminer peer_1
-sudo docker attach dactie-peer_1-1
-```
-```
-register_identity <AA> peer1
-sub Test
-```
-
-**Server3 (.118):**
-```bash
-sudo docker compose --profile node118 up -d --force-recreate peer_2
-sudo docker attach dactie-peer_2-1
-```
-```
-register_identity <AA> peer2
-sub Test
-broad Test hello-from-peer2
-```
-
-**Server4 (.119):**
-```bash
-sudo docker compose --profile node119 up -d --force-recreate peer_3 peer_4
-sudo docker attach dactie-peer_3-1
-```
-```
-register_identity <AA> peer3
-sub Test
-```
-```bash
-sudo docker attach dactie-peer_4-1
-```
-```
-register_identity <AA> peer4
-sub Test
-```
-
-**peer_3 and peer_4 must be registered too.** They are not optional extras: a peer
-that has not registered has no common group, so `peer_4` starts its BENCH publisher
-immediately and every publish fails with `MLS Error: CommonGroup Not Set`. The
-publisher does not wait for registration, so those errors appear before you have a
-chance to register — they stop once registration completes, and the run is only
-valid from that point on.
-
-`peer1` should print the message.
-
-Once all four peers are registered, confirm the benchmark is actually moving
-traffic rather than erroring:
+**minerva3:**
 
 ```bash
-sudo docker compose --profile node119 logs peer_4 | grep -c "Publishing gossipsub payload"
-sudo docker compose --profile node119 logs peer_3 | grep -c BENCH_RX
+docker compose --profile node118 up -d --force-recreate peer_2
+sleep 5
+dsend dactie-peer_2-1 "register_identity $AA peer2"
+dsend dactie-peer_2-1 "sub Test"
 ```
 
-Both counts should climb. A `BENCH_RX` line reads
-`topic=Test via=<relay> seq=<n> latency_ms=<ms>` — `via` is the relaying
-neighbour, not the originator, which is deliberate: the probe payload carries no
-sender id.
-
-Confirm the BENCH publisher is actually compiled in — it lives behind the
-`dactie-peer/bench` feature, which `build.sh` passes as a build arg. If this line
-is missing from `peer_4`, the image predates that change and no benchmark traffic
-will be produced at all:
+**minerva4:**
 
 ```bash
-sudo docker compose --profile node119 logs peer_4 | grep BENCH_PUBLISH
-# INFO  BENCH_PUBLISH enabled: rate=40 msg/s topic='Test' extra_bytes=0
+docker compose --profile node119 up -d --force-recreate peer_3 peer_4
+sleep 5
+dsend dactie-peer_3-1 "register_identity $AA peer3"
+dsend dactie-peer_4-1 "register_identity $AA peer4"
+dsend dactie-peer_3-1 "sub Test"
+dsend dactie-peer_4-1 "sub Test"
 ```
- Substitute the literal ID for `<AA>` — container stdin
-does not expand shell variables. `peer_4` runs with `BENCH_PUBLISH=true`, `BENCH_RATE=40`,
-`BENCH_TOPIC=Test`, so it self-publishes without input.
 
-Adminer: `http://10.244.192.117:8080` — user `archive`, password `archivepw`, database
-`archivedb`.
+**minerva1** confirms all four:
+
+```bash
+logs dactie-authority_node-1 | grep -E "Verified identity peer|Created Key Material|Adding new peer|Admitted"
+```
+
+Expect, per peer, `Verified identity peerN from <PeerId>`, `Created Key Material for member
+<MemberID>` and `Adding new peer from existing member`, ending with `Admitted 7 PeerIDs to
+GossipSub` (authority, 2 archives, 4 peers). `peer_4` then starts its benchmark traffic.
+
+---
+
+## Phase 9 — Checks
+
+### 9.1 The join came from a throwaway identity
+
+Each peer prints its own PeerId and the throwaway one it joined from, e.g. on **minerva2**:
+
+```bash
+logs dactie-peer_1-1 | grep -o -E 'Local PeerId: [A-Za-z0-9]*|Joining from throwaway identity [A-Za-z0-9]*|Registering with slot [0-9]+ of epoch [0-9]+'
+```
+
+The two PeerIds must differ, and the `Verified identity peer1 from …` line on minerva1 must
+name the throwaway one: the authority never links a peer's own PeerId to a name. Expect
+`Registering with slot 1 of epoch …`. The same holds for `dactie-peer_2-1` on minerva3 and
+`dactie-peer_3-1`, `dactie-peer_4-1` on minerva4.
+
+### 9.2 Anonymous broadcast
+
+**minerva3:**
+
+```bash
+dsend dactie-peer_2-1 "broad Test hello-from-peer2"
+```
+
+**minerva2:**
+
+```bash
+logs --since 1m dactie-peer_1-1 | grep -A5 "hello-from-peer2"
+logs --since 1m dactie-peer_1-1 | grep -A5 "hello-from-peer2" | grep -A1 '^Signature:' | tail -1 | tr -d '[:space:]' > /tmp/sig.hex
+```
+
+Expect the message with `Sender: anonymous`. The second command keeps its signature for 9.6.
+
+### 9.3 Attributed broadcast
+
+**minerva3:**
+
+```bash
+dsend dactie-peer_2-1 "attr_broad Test signed-by-peer2"
+```
+
+**minerva2:**
+
+```bash
+logs --since 1m dactie-peer_1-1 | grep -A4 "signed-by-peer2"
+```
+
+Expect `Attributed to member: <MemberID>`, the MemberID that minerva1 logged as `Created Key
+Material for member …` for `peer2` (the second one).
+
+### 9.4 Benchmark traffic
+
+**minerva4:**
+
+```bash
+logs dactie-peer_4-1 | grep -c "Publishing gossipsub payload"
+logs dactie-peer_3-1 | grep -c BENCH_RX
+logs dactie-peer_3-1 | grep BENCH_RX | tail -1
+```
+
+Both counts climb by about 400 every 10 s (40 msg/s). A `BENCH_RX` line ends with
+`latency_ms=<ms>`; the last run showed 11 ms.
+
+### 9.5 An unregistered node gets nothing
+
+**minerva4:** a peer that never registers subscribes to the benchmark topic:
+
+```bash
+docker run -dit --name dactie-observer --network host -e RUST_LOG=info dactie-peer \
+  sh -c "/usr/src/dactie/target/release/dactie-peer -K /tmp/obs -b $AA -B /ip4/10.244.192.116/tcp/10001 -p 21099 --advertise-addr /ip4/10.244.192.119/tcp/21099"
+sleep 6
+dsend dactie-observer "sub Test"
+sleep 30
+logs dactie-observer | grep -c "Received gossipsub payload"      # expect 0
+export OBS=$(logs dactie-observer | grep -o 'Local PeerId: [A-Za-z0-9]*' | head -1 | awk '{print $3}'); echo $OBS
+```
+
+`peer_3` receives benchmark messages meanwhile (9.4); the observer must not. After 60 s every
+node it connected to closes the connection:
+
+```bash
+sleep 40
+logs dactie-peer_3-1 | grep -c "Closing connection to $OBS"      # expect 1
+docker rm -f dactie-observer
+```
+
+**minerva1** (paste `$OBS`): `logs dactie-authority_node-1 | grep "Closing connection to"` shows
+`Closing connection to <OBS>: not admitted within 60s`.
+
+### 9.6 Opening
+
+**minerva2** prints the signature from 9.2; copy it:
+
+```bash
+cat /tmp/sig.hex
+```
+
+**minerva1:**
+
+```bash
+export SIG=<signature from minerva2>
+dsend dactie-authority_node-1 "req_open $SIG"
+```
+
+**minerva2**, then **minerva3** with `dactie-archive_node2-1`: each archive operator approves.
+
+```bash
+ID=$(logs dactie-archive_node1-1 | grep -o 'Opening request [0-9a-f]*' | tail -1 | awk '{print $3}'); echo $ID
+dsend dactie-archive_node1-1 "approve $ID"
+logs --since 1m dactie-archive_node1-1 | grep "Submitted this archive's partial opening"
+```
+
+**minerva1:**
+
+```bash
+dsend dactie-authority_node-1 "open $SIG"
+sleep 3
+logs --since 1m dactie-authority_node-1 | grep "Signature belongs"
+```
+
+Expect `Signature belongs to ID:<MemberID>, Name:peer2` and peer_2's own PeerId (9.1), not its
+throwaway one.
+
+### 9.7 A second sharing peer of the same member
+
+**minerva2:** a second node of member `peer1` uses peer_1's key file and takes slot 2.
+
+```bash
+docker run -dit --name dactie-peer1b --network host -e RUST_LOG=info \
+  -v /opt/vero/dactie/key_material/key_material_3:/member dactie-peer \
+  sh -c "/usr/src/dactie/target/release/dactie-peer -K /tmp/peer1b -b $AA -B /ip4/10.244.192.116/tcp/10001 -p 21021 --advertise-addr /ip4/10.244.192.117/tcp/21021"
+sleep 6
+dsend dactie-peer1b "get_opener_keys $AA"
+dsend dactie-peer1b "peer_from_sig $AA /member/key_material.json"
+logs dactie-peer1b | grep -E "Registering with slot|refused"
+cat key_material/key_material_3/slots.json
+docker rm -f dactie-peer1b
+```
+
+Expect `Registering with slot 2 of epoch …`, `slots.json` with slots `1` and `2` for that
+epoch, and a fifth `Adding new peer from existing member` on minerva1.
+
+---
+
+## Variant: expiry with 10-minute epochs
+
+Epochs last 30 days by default. To see expiry, run Phases 2–8 again with one change in
+**Phase 3** on **minerva1**: start the authority with short epochs.
+
+```bash
+cat > /tmp/epoch-test.yml <<'EOF'
+services:
+  authority_node:
+    command: >-
+      sh -c '/usr/src/dactie/target/release/dactie-authority
+      -K /usr/src/dactie/key_material/
+      -p 10001
+      --advertise-addr /ip4/10.244.192.116/tcp/10001
+      --epoch-secs 600
+      --peers-per-member 3'
+EOF
+docker compose -f docker-compose.yml -f /tmp/epoch-test.yml --profile node116 up -d authority_node
+```
+
+Epochs start at multiples of 600 s of Unix time (`echo $(( 600 - $(date +%s) % 600 ))` prints
+the seconds left). Before the epoch ends, renew peer_1 and peer_2 but not peer_3 and peer_4:
+
+```bash
+dsend dactie-peer_1-1 "renew $AA /usr/src/dactie/key_material/key_material.json"     # minerva2
+dsend dactie-peer_2-1 "renew $AA /usr/src/dactie/key_material/key_material.json"     # minerva3
+```
+
+**minerva1:**
+
+```bash
+logs dactie-authority_node-1 | grep -E "Renewed sharing peer|Expired"
+```
+
+Expect two `Renewed sharing peer … until epoch <E+1>` lines, and after the boundary
+`Expired 2 sharing peers: [...]` with the PeerIds of peer_3 and peer_4. From then on they are
+out of every mesh: on **minerva4**, `logs dactie-peer_3-1 | grep -c BENCH_RX` stops climbing.
+
+## Tear down
+
+**All four hosts:**
+
+```bash
+cd /opt/vero/dactie
+docker compose --profile node116 --profile node117 --profile node118 --profile node119 down --remove-orphans
+docker rm -f dactie-observer dactie-peer1b 2>/dev/null
+```
 
 ---
 
 ## Expected noise
 
-- `HEARTBEAT: Mesh low. Topic contains: 1 needs: 5` / `RANDOM PEERS: Got 0 peers` at DEBUG
-  — an empty gossipsub mesh. Normal before peers subscribe; if it persists after Phase 8,
-  that node is genuinely isolated.
-- `Dial error: Unexpected peer ID` — a stale Kademlia entry for an identity wiped after
-  the authority had already met it. Following Phase 2 prevents these; existing ones decay
-  as Kademlia evicts them.
-- `Error: BuildError(... AddrInUse ... "Address already in use")` in a burst at startup,
-  right after `up -d --force-recreate` — the replacement process binds before the old one
-  has released the port. Every service here uses `network_mode: host`, so there is one
-  port namespace and no handover. `restart: unless-stopped` retries until the port frees;
-  it self-heals, and a restart count in the single digits is expected rather than a fault.
-  Confirm it settled instead of assuming either way:
+- `HEARTBEAT: Mesh low. Topic contains: 1 needs: 5` / `RANDOM PEERS: Got 0 peers` at DEBUG:
+  an empty GossipSub mesh, normal before peers subscribe.
+- `Dial error: Unexpected peer ID`: a stale Kademlia entry for an identity wiped after the
+  authority had met it. Phase 2 on all hosts prevents it.
+- `Error: BuildError(... AddrInUse ...)` in a burst right after `up -d --force-recreate`: the
+  new process binds before the old one released the port (`network_mode: host`).
+  `restart: unless-stopped` retries; a restart count in the single digits is expected. A
+  climbing count means something outside compose holds the port, or a corrupt `storage.json`
+  (rule 6):
 
   ```bash
-  sudo docker inspect -f '{{.RestartCount}} {{.State.Status}}' dactie-authority_node-1
-  sudo docker compose --profile node116 logs --since 30s authority_node | grep -c AddrInUse
+  docker inspect -f '{{.RestartCount}} {{.State.Status}}' dactie-authority_node-1
   ```
 
-  A restart count that keeps climbing, or `AddrInUse` still arriving in the last 30
-  seconds, is a genuine conflict: something outside compose holds the port. It is worth
-  distinguishing, because the crash-loop from a corrupt `storage.json` (rule 5) looks
-  identical from the outside and is not self-healing.
-
-`Connection refused` against `172.17.0.1` / `172.18.0.1` should no longer appear —
-`dactie_utils::net::is_unroutable_addr` now keeps Docker bridge addresses out of the DHT.
-If you still see them, one node is running a pre-hardening image.
+- `Closing connection to <PeerId>: not admitted within 60s` and `Refusing connection from
+  <PeerId>: not admitted`: a node that is not in the common group, e.g. a peer during its join
+  or a stale one. Expected and harmless.
+- Log lines contain color codes; `grep` still works, and the `logs` helper strips them.
 
 ## Older builds
 
-On `main`/`merge-test`, three extra steps are required:
-
-1. `build.sh` resets `boot_id.env` to `<insert_here>` on every run, so Phase 4 must always
-   follow Phase 1 — never the reverse.
-2. `build.sh` ignores its arguments; use direct `docker build --no-cache --pull -t ...`
-   calls for a clean rebuild.
-3. An archive registers **only** when `key_material.json` is absent, and writes that file
-   before the authority answers. A registration that fails is permanent and silent. Before
-   every archive start, delete `key_material.json` from `key_material_1` / `key_material_2`
-   by hand, and make sure the authority is already listening.
+On `main` before `camera-ready`, peers registered with their own PeerId (no throwaway
+identity), and `register_identity` added that PeerId to the common group directly; there are no
+slot tags, no admission checks and no attribution, so Phase 9 does not apply. The archive
+self-healing and `build.sh` fixes are present since `hardening-docker-runs`.
