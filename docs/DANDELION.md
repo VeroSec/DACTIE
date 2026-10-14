@@ -2,6 +2,10 @@
 
 Status: design draft, 2026-10-13. Nothing here is implemented yet.
 
+Parameter sources: BIP 156 (fluff 10%, routes rebuilt every ten minutes on average, random
+embargo), Monero `src/cryptonote_config.h` (2 stems, fluff 20%, epoch 10 min + 30 s, embargo
+average 39 s), Grin `pool/src/types.rs` (epoch 600 s, stem 90%, embargo 180 s).
+
 ## Problem
 
 A sharing peer publishes a broadcast by handing it to its GossipSub mesh peers directly
@@ -24,13 +28,14 @@ cited in the paper as future work), adapted to a permissioned GossipSub network.
 
 ## Protocol
 
-**Epochs.** Every sharing peer keeps a local stem epoch of 10 minutes (independent of the
-registration epoch `epoch_secs`). At the start of each epoch it:
+**Epochs.** Every sharing peer keeps a local stem epoch of 10 minutes plus up to 30 s of
+random jitter, so peers do not all switch at once (independent of the registration epoch
+`epoch_secs`). At the start of each epoch it:
 
 1. picks two stem successors uniformly at random among its connected, admitted peers
    (`admission::is_admitted`), so the stem graph is roughly 4-regular;
-2. becomes a diffuser with probability q (default 0.2, expected stem length 1/q = 5 hops),
-   otherwise a relay;
+2. becomes a diffuser with probability q (default 0.2 as in Monero, expected stem length
+   1/q = 5 hops; BIP 156 and Grin use 0.1), otherwise a relay;
 3. as a relay, fixes a one-to-one mapping from each stem predecessor to one of its two
    successors, and sends its own messages always to the same successor. Fixed routes within
    an epoch keep repeated messages of one source from revealing it through intersection.
@@ -42,10 +47,12 @@ drops duplicates (content-addressed message ID, as in GossipSub), and then eithe
 to its mapped successor (relay) or publishes it with `gossipsub.publish` (diffuser). The
 request is answered with an empty acknowledgement.
 
-**Fail-safe.** Every peer that forwards a stem message starts a timer, exponentially
-distributed with a mean of a few seconds. If the message has not arrived through GossipSub
-when the timer fires, the peer publishes it itself. This bounds the damage of relays that
-drop messages; GossipSub's duplicate detection absorbs the extra copies.
+**Fail-safe.** Every peer that forwards a stem message starts an embargo timer, exponentially
+distributed with a mean of 39 s as in Monero (Grin: 180 s). If the message has not arrived
+through GossipSub when the timer fires, the peer publishes it itself. This bounds the damage of
+relays that drop messages; GossipSub's duplicate detection absorbs the extra copies. The timer
+must be long against a normal stem: a relay that fluffs before the diffuser reveals its stem
+position.
 
 **Unchanged.** MLS encryption, group signatures, openings, archives (they receive the message
 at the fluff like any other peer), the admission gate and the connection cap. Attributed
