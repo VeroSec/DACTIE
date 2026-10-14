@@ -160,6 +160,11 @@ pub(crate) async fn experiment_prop_peer_id(
     let mut first_receipt: HashMap<PeerId, (Duration, PeerId)> = HashMap::new();
 
     while let Some(val) = response_rx.recv().await {
+        // With the stem, the source never publishes into GossipSub itself, so the
+        // diffuser's copy reaches it as a new message. That is no observation.
+        if val.observer == stop_peer_addr {
+            continue;
+        }
         // saturating: an observation cannot predate the publish, but the peers
         // stamp their own arrivals and we do not want a panic if one races.
         let at = val.at.saturating_duration_since(published_at);
