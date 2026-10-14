@@ -1,6 +1,7 @@
 mod adversary;
 mod conn_cap;
 mod link_latency;
+mod stem;
 mod experiment;
 mod peer;
 
@@ -113,6 +114,21 @@ struct Args {
     /// decides which copy of a message arrives first.
     #[clap(long, default_value = "10,100")]
     link_latency_ms: link_latency::LatencyRange,
+
+    /// Stem phase (Dandelion++): probability that a peer is a diffuser in an
+    /// epoch, i.e. publishes relayed stem messages into GossipSub. Monero uses
+    /// 0.2, BIP 156 and Grin 0.1; 0 turns the stem off.
+    #[clap(long, default_value_t = 0.0)]
+    stem_fluff_probability: f64,
+
+    /// Stem epoch: how long a peer keeps its stem successors and role.
+    #[clap(long, default_value_t = 600)]
+    stem_epoch_secs: u64,
+
+    /// Mean of the exponential fail-safe embargo after which a stem relay
+    /// publishes a message that has not shown up in GossipSub (Monero: 39 s).
+    #[clap(long, default_value_t = 39.0)]
+    stem_embargo_secs: f64,
 
     /// Colluding fractions f to evaluate the source-anonymity attack at. Each is
     /// converted to a coalition size of ceil(f * N), capped at the N-1 peers that
@@ -232,7 +248,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .open(adv)?;
     writeln!(
         &adv_file,
-        "total_peers,mesh_n,mesh_n_low,mesh_n_high,gossip_factor,gossip_lazy,run,coalition_size,f_effective,estimator,success_rate,delivery_ratio,direct_receipts,conn_low,conn_high,heartbeat_ms,latency_min_ms,latency_max_ms"
+        "total_peers,mesh_n,mesh_n_low,mesh_n_high,gossip_factor,gossip_lazy,run,coalition_size,f_effective,estimator,success_rate,delivery_ratio,direct_receipts,conn_low,conn_high,heartbeat_ms,latency_min_ms,latency_max_ms,stem_q"
     )?;
 
     start_experiment_series(StartExperimentSeriesArgs {
@@ -256,7 +272,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .with_plaintext(args.plaintext)
         .with_heartbeat(args.heartbeat_secs)
         .with_spawn_rate(args.spawn_per_sec)
-        .with_link_latency(args.link_latency_ms),
+        .with_link_latency(args.link_latency_ms)
+        .with_stem(stem::StemConfig {
+            q: args.stem_fluff_probability,
+            epoch: tokio::time::Duration::from_secs(args.stem_epoch_secs),
+            embargo_mean: tokio::time::Duration::from_secs_f64(args.stem_embargo_secs.max(0.001)),
+        }),
         adversary_fractions: args.adversary_fractions,
         coalition_sizes: args.coalition_sizes,
         adversary_trials: args.adversary_trials,
@@ -429,10 +450,11 @@ async fn start_experiment_series(args: StartExperimentSeriesArgs) -> Result<(), 
                     println!("  attack c={c} (f={f_effective:.4}) {estimator}: {rate:.4}");
                     writeln!(
                         &args.adv_file,
-                        "{n_peers},{n},{low},{high},{gf},{gl},{run},{c},{f_effective},{estimator},{rate},{delivery},{correct_receiver},{cl},{ch},{hb},{lmin},{lmax}",
+                        "{n_peers},{n},{low},{high},{gf},{gl},{run},{c},{f_effective},{estimator},{rate},{delivery},{correct_receiver},{cl},{ch},{hb},{lmin},{lmax},{sq}",
                         hb = args.mesh.heartbeat.as_millis(),
                         lmin = args.mesh.latency.min_ms,
                         lmax = args.mesh.latency.max_ms,
+                        sq = args.mesh.stem.q,
                         cl = args.mesh.conn_low,
                         ch = args.mesh.conn_high,
                         n = args.mesh.n,

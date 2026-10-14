@@ -2,7 +2,7 @@ use crate::adversary::Observation;
 use crate::peer::{ControlSignal, Directory, MeshConfig, Peer, PubInterval};
 use futures::future::join_all;
 use libp2p::PeerId;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use tokio::sync::{broadcast, mpsc};
 use tokio::time::{sleep, Duration, Instant};
@@ -154,21 +154,33 @@ pub(crate) async fn experiment_prop_peer_id(
     drop(response_tx);
 
     let mut observations = Vec::new();
+    // With the stem on, a peer can report two receipts, one on the stem and one
+    // through GossipSub. Delivery and direct receipts count each peer once, by
+    // its earliest receipt; the adversary sees every observation.
+    let mut first_receipt: HashMap<PeerId, (Duration, PeerId)> = HashMap::new();
 
     while let Some(val) = response_rx.recv().await {
-        duplicate_free_propagation_peers.insert(val.prop_id);
-        if val.prop_id == stop_peer_addr {
+        // saturating: an observation cannot predate the publish, but the peers
+        // stamp their own arrivals and we do not want a panic if one races.
+        let at = val.at.saturating_duration_since(published_at);
+        let entry = first_receipt.entry(val.observer).or_insert((at, val.prop_id));
+        if at < entry.0 {
+            *entry = (at, val.prop_id);
+        }
+        observations.push(Observation {
+            observer: val.observer,
+            prop_id: val.prop_id,
+            at,
+            stem: val.stem,
+        });
+    }
+    for (_, prop_id) in first_receipt.values() {
+        duplicate_free_propagation_peers.insert(*prop_id);
+        if *prop_id == stop_peer_addr {
             correct_receiver += 1f32;
         } else {
             other_peer += 1f32;
         }
-        // saturating: an observation cannot predate the publish, but the peers
-        // stamp their own arrivals and we do not want a panic if one races.
-        observations.push(Observation {
-            observer: val.observer,
-            prop_id: val.prop_id,
-            at: val.at.saturating_duration_since(published_at),
-        });
     }
 
     Ok(RunOutcome {
@@ -197,6 +209,7 @@ mod tests {
                     observer: p,
                     prop_id: p,
                     at: Duration::from_micros(*us),
+                    stem: false,
                 })
                 .collect(),
             source: p,
