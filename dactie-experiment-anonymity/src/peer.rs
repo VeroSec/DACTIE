@@ -544,6 +544,7 @@ impl Peer {
         }
         let id = message_id(&data);
         self.stem.first_time(id);
+        self.stem.mark_own(id);
         self.stem_step(None, id, data)
     }
 
@@ -554,26 +555,51 @@ impl Peer {
         let mut rng = rand::thread_rng();
         match self.stem.route(from, &connected, now, &mut rng) {
             Route::Forward(next) => {
-                self.stem.arm_embargo(id, data.clone(), now, &mut rng);
-                let request = self
-                    .swarm
-                    .behaviour_mut()
-                    .stem
-                    .send_request(&next, StemMessage { data: data.clone() });
-                self.stem_pending.insert(request, data);
+                self.send_stem(next, id, data);
                 "stem".to_string()
             }
             Route::Fluff => self.fluff(data),
         }
     }
 
+    fn send_stem(&mut self, next: PeerId, id: u64, data: Vec<u8>) {
+        self.stem
+            .arm_embargo(id, data.clone(), Instant::now(), &mut rand::thread_rng());
+        let request = self
+            .swarm
+            .behaviour_mut()
+            .stem
+            .send_request(&next, StemMessage { data: data.clone() });
+        self.stem_pending.insert(request, data);
+    }
+
+    /// Re-route this peer's own message away from `avoid`; without a new hop it
+    /// waits for the embargo. Returns false if the message is not its own.
+    fn retry_own(&mut self, id: u64, data: &[u8], avoid: &[PeerId]) -> bool {
+        if !self.stem.is_own(id) {
+            return false;
+        }
+        let connected: Vec<PeerId> = self.swarm.connected_peers().copied().collect();
+        if let Some(next) =
+            self.stem
+                .retry_own(id, avoid, &connected, Instant::now(), &mut rand::thread_rng())
+        {
+            self.send_stem(next, id, data.to_vec());
+        }
+        true
+    }
+
     /// A stem message arrived from `from`.
     fn on_stem(&mut self, from: PeerId, data: Vec<u8>) {
         let id = message_id(&data);
         if !self.stem.first_time(id) {
-            // The stem looped back here: spread it now instead of waiting for
-            // the embargo.
-            self.fluff(data);
+            // The stem looped back here. The source re-routes its own message;
+            // a relay spreads it now instead of waiting for the embargo, which
+            // reveals only the relay.
+            let avoid: Vec<PeerId> = [Some(from), self.stem.own_successor()].into_iter().flatten().collect();
+            if !self.retry_own(id, &data, &avoid) {
+                self.fluff(data);
+            }
             return;
         }
         if is_measurement(&data) {
@@ -642,12 +668,16 @@ impl Peer {
                 }
             },
             SwarmEvent::Behaviour(MyBehaviourEvent::Stem(request_response::Event::OutboundFailure {
+                peer,
                 request_id,
                 ..
             })) => {
-                // The successor did not take it: spread it from here.
+                // The successor did not take it. The source tries another hop;
+                // a relay spreads it from here.
                 if let Some(data) = self.stem_pending.remove(&request_id) {
-                    self.fluff(data);
+                    if !self.retry_own(message_id(&data), &data, &[peer]) {
+                        self.fluff(data);
+                    }
                 }
             }
             //e => println!("{:?}",e)

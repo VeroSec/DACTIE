@@ -73,7 +73,13 @@ pub(crate) struct StemState {
     own: Option<PeerId>,
     seen: HashSet<u64>,
     embargo: HashMap<u64, (Instant, Vec<u8>)>,
+    /// This peer's own messages, with the re-routes used so far.
+    originated: HashMap<u64, u8>,
 }
+
+/// How often the source re-routes its own message after a loop or a failed
+/// hop before it leaves the message to the embargo.
+const OWN_RETRIES: u8 = 3;
 
 impl StemState {
     pub(crate) fn new(config: StemConfig) -> Self {
@@ -86,6 +92,7 @@ impl StemState {
             own: None,
             seen: HashSet::new(),
             embargo: HashMap::new(),
+            originated: HashMap::new(),
         }
     }
 
@@ -167,6 +174,49 @@ impl StemState {
             Some(s) if Some(s) != from => Route::Forward(s),
             _ => Route::Fluff,
         }
+    }
+
+    /// Mark a message as this peer's own.
+    pub(crate) fn mark_own(&mut self, id: u64) {
+        self.originated.entry(id).or_insert(0);
+    }
+
+    pub(crate) fn is_own(&self, id: u64) -> bool {
+        self.originated.contains_key(&id)
+    }
+
+    /// A new successor for one of this peer's own messages that came back on a
+    /// loop or whose hop failed. The source must never fluff its own message
+    /// itself: its mesh peers would then receive it straight from the source,
+    /// which is exactly what the stem hides. `avoid` holds the peers that led
+    /// into the loop or failed. After `OWN_RETRIES` re-routes, or without a
+    /// spare peer, the message is left to the embargo.
+    pub(crate) fn retry_own<R: Rng>(
+        &mut self,
+        id: u64,
+        avoid: &[PeerId],
+        connected: &[PeerId],
+        now: Instant,
+        rng: &mut R,
+    ) -> Option<PeerId> {
+        let used = self.originated.get_mut(&id)?;
+        if *used >= OWN_RETRIES {
+            return None;
+        }
+        *used += 1;
+        self.refresh(now, connected, rng);
+        let usable = |p: &PeerId| !avoid.contains(p) && connected.contains(p);
+        let preferred: Vec<PeerId> = self.successors.iter().copied().filter(|p| usable(p)).collect();
+        if let Some(p) = preferred.choose(rng) {
+            return Some(*p);
+        }
+        let spare: Vec<PeerId> = connected.iter().copied().filter(|p| usable(p)).collect();
+        spare.choose(rng).copied()
+    }
+
+    /// Successor of this peer's own messages in the current epoch.
+    pub(crate) fn own_successor(&self) -> Option<PeerId> {
+        self.own
     }
 
     /// Whether this is the first time the message reaches this peer on the stem.
@@ -279,6 +329,26 @@ mod tests {
         };
         assert_ne!(s, t);
         assert!(remaining.contains(&t));
+    }
+
+    /// The source re-routes its own message away from the peers that failed or
+    /// looped, a bounded number of times, and never re-routes others' messages.
+    #[test]
+    fn own_messages_are_rerouted_not_fluffed() {
+        let mut rng = StdRng::seed_from_u64(6);
+        let connected = peers(10);
+        let mut stem = StemState::new(config(0.0001));
+        let now = Instant::now();
+        let Route::Forward(first) = stem.route(None, &connected, now, &mut rng) else {
+            panic!("own messages enter the stem")
+        };
+        stem.mark_own(42);
+        for _ in 0..OWN_RETRIES {
+            let next = stem.retry_own(42, &[first], &connected, now, &mut rng).expect("a spare peer");
+            assert_ne!(next, first);
+        }
+        assert_eq!(stem.retry_own(42, &[first], &connected, now, &mut rng), None);
+        assert_eq!(stem.retry_own(43, &[first], &connected, now, &mut rng), None);
     }
 
     /// The embargo releases messages not seen in gossip, and only those.
