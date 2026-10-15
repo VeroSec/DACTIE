@@ -1,6 +1,8 @@
 # Stem phase against coalition first-spy (Dandelion++ for DACTIE)
 
-Status: design draft, 2026-10-13. Nothing here is implemented yet.
+Status: designed 2026-10-13; implemented in the anonymity harness (branch `feat/stem`) and in
+the sharing peer (branch `feat/stem-peer`), not merged. Results and open questions:
+`docs/FUTURE_WORK.md`, item 3.1, and "Implementation notes" below.
 
 Parameter sources: BIP 156 (fluff 10%, routes rebuilt every ten minutes on average, random
 embargo), Monero `src/cryptonote_config.h` (2 stems, fluff 20%, epoch 10 min + 30 s, embargo
@@ -23,7 +25,7 @@ Only the peer at the end of the stem, the diffuser, publishes it into GossipSub 
 Colluders in the mesh then see the diffuser, not the source. To name the source, the coalition
 must hold the first stem hop, so first-spy success is expected to drop to roughly the colluding
 fraction c/N: from 5.2% to about 0.5% for one attacker and from 63% to about 10% for 20 of 200
-peers (estimate from a one-hop stem, to be measured). This is Dandelion++ (Fanti et al. 2018,
+peers (estimate from a one-hop stem; measured at q = 0.2: 0.5% and 9.8%). This is Dandelion++ (Fanti et al. 2018,
 cited in the paper as future work), adapted to a permissioned GossipSub network.
 
 ## Protocol
@@ -98,6 +100,31 @@ About 2 days for the harness and the adversary model, 2 to 3 days for the sharin
 
 - The first stem hop learns the source's PeerID if it colludes. Reaching that hop through an
   onion service (the Tor mode) removes this, and is the natural next step.
-- Each stem hop adds one link delay: with q = 0.2, about 0.2 s on average at 10 to 100 ms links.
+- Each stem hop adds latency: at q = 0.2 the harness measured a median of 0.64 s (p90 1.4 s)
+  against 77 ms without the stem, more than one link delay per hop, probably because every hop
+  opens a substream and negotiates the protocol first.
 - Peers that learn the stem graph over many epochs can narrow the source down; the epoch
   length trades this against route stability.
+
+## Implementation notes
+
+Where the code differs from the design above, or adds to it:
+
+- **Channel, not topic.** A stem message carries the broadcast's channel, since the topic is
+  inside the ciphertext. A relay checks that the channel matches the message before forwarding.
+- **Loops.** A relay that receives a stem message it has already seen publishes it at once. The
+  source never publishes its own message: when it comes back, the source sends it on again, at
+  most three times, then leaves it to the embargo. The harness picks a fresh hop for that
+  re-send; the sharing peer picks one of its two successors (open question 2 in
+  `FUTURE_WORK.md` 3.1).
+- **Failed hops.** The source re-routes its own message around the failed peer; a relay
+  publishes the message instead.
+- **Local delivery.** GossipSub does not hand a node its own publishes, so a diffuser that is
+  itself a recipient delivers the message to its client directly.
+- **Rate limit.** 20 stem messages per second per predecessor (`StemConfig::rate_per_sec`).
+- **Fanout.** A diffuser often does not subscribe to the message's channel and publishes
+  through GossipSub's fanout. At the pinned rust-libp2p rev the fanout top-up picks
+  non-admitted peers, so all nodes with admission scoring set `fanout_ttl` to zero
+  (`admission::FANOUT_TTL`).
+- **Open: embargo outside the channel.** A relay that does not subscribe to the channel never
+  sees the fluff, so its embargo always fires (open question 1 in `FUTURE_WORK.md` 3.1).
