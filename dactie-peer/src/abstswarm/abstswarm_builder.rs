@@ -8,7 +8,7 @@ use tokio::sync::mpsc;
 
 use crate::abstswarm::event_handler::EventHandler;
 use crate::abstswarm::instruction_handler::InstructionHandler;
-use crate::abstswarm::{AbstSwarm, Instruction, Notification, ProtectedPeers};
+use crate::abstswarm::{AbstSwarm, Instruction, Notification, ProtectedPeers, StemTick};
 use dactie_utils::mls_wrapper::MyOpenMls;
 use identity::Keypair;
 use libp2p::swarm::NetworkBehaviour;
@@ -32,7 +32,7 @@ pub(crate) struct AbstSwarmBuilder<TBehaviour> {
 
 impl<TBehaviour> AbstSwarmBuilder<TBehaviour>
 where
-    TBehaviour: NetworkBehaviour + EventHandler + InstructionHandler + ProtectedPeers,
+    TBehaviour: NetworkBehaviour + EventHandler + InstructionHandler + ProtectedPeers + StemTick,
 {
     pub(crate) fn new(
         keypair: Keypair,

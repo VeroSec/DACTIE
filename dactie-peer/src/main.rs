@@ -25,6 +25,7 @@ mod abstswarm;
 mod join_relay;
 mod mybehaviour;
 mod myclient;
+mod stem_relay;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -77,6 +78,22 @@ struct Args {
     /// High connection watermark: the peer never holds more connections.
     #[arg(long, default_value_t = 100)]
     conn_high: usize,
+
+    /// Stem phase (Dandelion++): probability that this peer is a diffuser in an
+    /// epoch, i.e. publishes relayed stem messages into GossipSub. Its own
+    /// anonymous broadcasts always enter the stem. Monero uses 0.2, BIP 156 and
+    /// Grin 0.1; 0 turns the stem off and publishes directly.
+    #[arg(long, default_value_t = 0.2)]
+    stem_fluff_probability: f64,
+
+    /// Stem epoch: how long the peer keeps its stem successors and role.
+    #[arg(long, default_value_t = 600)]
+    stem_epoch_secs: u64,
+
+    /// Mean of the exponential fail-safe after which a stem relay publishes a
+    /// message that has not shown up in GossipSub (Monero: 39 s).
+    #[arg(long, default_value_t = 39.0)]
+    stem_embargo_secs: f64,
 }
 
 /// Splits `/ip4/.../tcp/.../p2p/<PeerId>` into the PeerId and the address to dial.
@@ -157,6 +174,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
         args.bootstrap_addr,
         &archives,
         args.conn_high.max(args.conn_low),
+        dactie_utils::stem::StemConfig {
+            q: args.stem_fluff_probability.clamp(0.0, 1.0),
+            epoch: std::time::Duration::from_secs(args.stem_epoch_secs),
+            embargo_mean: std::time::Duration::from_secs_f64(args.stem_embargo_secs.max(0.001)),
+            ..Default::default()
+        },
     )?;
 
     let mut abstswarm_builder = AbstSwarmBuilder::new(

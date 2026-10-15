@@ -4,6 +4,8 @@ use dactie_utils::net::{is_unroutable_addr, MESH_N, MESH_N_HIGH, MESH_N_LOW};
 use crate::join_relay;
 use dactie_utils::admission;
 use dactie_utils::conn_cap;
+use dactie_utils::stem::{self, Route, StemAck, StemCodec, StemConfig, StemMessage, STEM_PROTOCOL};
+use crate::stem_relay;
 use dactie_utils::key_store;
 use dactie_utils::slot_store::SlotStore;
 use libp2p::gossipsub::{IdentTopic, MessageAcceptance};
@@ -19,7 +21,7 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 use std::iter;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use thiserror::Error;
 use tokio::io;
 use tokio::sync::mpsc;
@@ -116,6 +118,32 @@ pub(crate) struct MyBehaviour {
     pub(crate) gate: admission::Gate,
     /// Caps connections at the high watermark, refusing before the handshake
     pub(crate) limits: conn_cap::ConnCap,
+    /// Stem hops of the Dandelion++ phase, one request per hop
+    pub(crate) stem: request_response::Behaviour<StemCodec>,
+}
+
+impl crate::abstswarm::StemTick for MyBehaviour {
+    /// Publishes stem messages whose embargo ran out without them showing up
+    /// in GossipSub; a relay also delivers them here.
+    fn stem_tick(
+        &mut self,
+        notification_tx: &mpsc::UnboundedSender<Notification>,
+        my_open_mls: &MyOpenMls,
+    ) {
+        let due = stem_relay::state().due(Instant::now());
+        for message in due {
+            log::info!("Stem: embargo ran out, publishing");
+            let own = stem_relay::state().is_own(stem::message_id(&message.payload));
+            let result = if own {
+                self.publish_to(&message.channel, message.payload)
+            } else {
+                self.publish_relayed(notification_tx, my_open_mls, message)
+            };
+            if let Err(e) = result {
+                log::warn!("Stem: could not publish after the embargo: {e}");
+            }
+        }
+    }
 }
 
 impl crate::abstswarm::ProtectedPeers for MyBehaviour {
@@ -134,6 +162,7 @@ impl MyBehaviour {
         boot_peer_addr: Multiaddr,
         archives: &[(PeerId, Multiaddr)],
         conn_high: usize,
+        stem_config: StemConfig,
     ) -> Result<MyBehaviour, MyBehaviourError> {
         // To content-address message, we can take the hash of message and use it as an ID.
         let message_id_fn = |message: &gossipsub::Message| {
@@ -208,6 +237,12 @@ impl MyBehaviour {
                 .chain(archives.iter().map(|(archive, _)| *archive)),
         );
 
+        stem_relay::init(stem_config, keypair.public().to_peer_id());
+        let stem = request_response::Behaviour::<StemCodec>::new(
+            iter::once((STEM_PROTOCOL, ProtocolSupport::Full)),
+            request_response::Config::default(),
+        );
+
         Ok(Self {
             gossipsub,
             identify,
@@ -215,6 +250,7 @@ impl MyBehaviour {
             request_response,
             gate: admission::Gate::default(),
             limits,
+            stem,
         })
     }
 
@@ -300,6 +336,11 @@ impl MyBehaviour {
         my_open_mls: &MyOpenMls,
         attributed: bool,
     ) -> Result<(), AbstSwarmError> {
+        // Anonymous broadcasts enter the stem. Attributed messages name their
+        // member anyway, and MLS control messages are not CTI.
+        let stem_eligible = !attributed
+            && matches!(body, MessageBody::Broadcast { .. } | MessageBody::Group { .. })
+            && stem_relay::state().is_on();
         let (body, channel) = match body.clone() {
             MessageBody::Broadcast { ref topic, data } => (
                 self.send_to_topic(topic, data, my_open_mls)?,
@@ -326,15 +367,25 @@ impl MyBehaviour {
 
         let to_send =
             bincode::serialize(&message).map_err(|e| SerializationError(e.to_string()))?;
-        let payload_bytes = to_send.len();
-        log::info!("Publishing gossipsub payload: {} bytes", payload_bytes);
+        if stem_eligible {
+            return self.stem_publish_own(channel, to_send);
+        }
+        self.publish_to(&channel, to_send)
+    }
+
+    /// Publishes a signed gossip message on a channel.
+    fn publish_to(&mut self, channel: &str, payload: Vec<u8>) -> Result<(), AbstSwarmError> {
+        log::info!("Publishing gossipsub payload: {} bytes", payload.len());
         if let Err(error) = self
             .gossipsub
-            .publish(IdentTopic::new(channel.clone()), to_send)
+            .publish(IdentTopic::new(channel.to_owned()), payload)
         {
             match error {
                 gossipsub::PublishError::InsufficientPeers => {
                     log::debug!("Could not publish, no peers subscribed to channel")
+                }
+                gossipsub::PublishError::Duplicate => {
+                    log::debug!("Not publishing: the message is already out")
                 }
                 e => {
                     return Err(SendError {
@@ -344,6 +395,192 @@ impl MyBehaviour {
             }
         }
         Ok(())
+    }
+
+    /// Connected, admitted sharing peers that speak the stem protocol.
+    fn stem_candidates(&self) -> Vec<PeerId> {
+        let capable = stem_relay::capable();
+        self.gossipsub
+            .all_peers()
+            .map(|(peer, _)| *peer)
+            .filter(|peer| capable.contains(peer) && admission::is_admitted(peer))
+            .collect()
+    }
+
+    /// Sends one of this peer's own messages into the stem.
+    fn stem_publish_own(&mut self, channel: String, payload: Vec<u8>) -> Result<(), AbstSwarmError> {
+        let id = stem::message_id(&payload);
+        let candidates = self.stem_candidates();
+        let route = {
+            let mut state = stem_relay::state();
+            state.first_time(id);
+            state.mark_own(id);
+            state.route(None, &candidates, Instant::now(), &mut rand::thread_rng())
+        };
+        match route {
+            Route::Forward(next) => {
+                log::info!("Stem: sent own message to {next}");
+                self.send_stem(next, id, StemMessage { channel, payload });
+                Ok(())
+            }
+            Route::Fluff => {
+                log::info!("Stem: no stem peer available, publishing directly");
+                self.publish_to(&channel, payload)
+            }
+        }
+    }
+
+    fn send_stem(&mut self, next: PeerId, id: u64, message: StemMessage) {
+        stem_relay::state().arm_embargo(id, message.clone(), Instant::now(), &mut rand::thread_rng());
+        let request = self.stem.send_request(&next, message.clone());
+        stem_relay::pending().insert(request, message);
+    }
+
+    /// Re-routes this peer's own message away from `avoid`; without a new hop it
+    /// waits for the embargo. Returns false if the message is not its own.
+    fn retry_own_stem(&mut self, id: u64, message: &StemMessage, avoid: &[PeerId]) -> bool {
+        if !stem_relay::state().is_own(id) {
+            return false;
+        }
+        let candidates = self.stem_candidates();
+        let next = stem_relay::state().retry_own(id, avoid, &candidates, Instant::now(), &mut rand::thread_rng());
+        match next {
+            Some(next) => {
+                log::info!("Stem: re-routing own message to {next}");
+                self.send_stem(next, id, message.clone());
+            }
+            None => log::info!("Stem: own message left to the embargo"),
+        }
+        true
+    }
+
+    /// Publishes a stem message that another peer originated, and delivers it
+    /// here too: GossipSub never hands a peer its own publication back, so a
+    /// diffuser that is also a recipient would otherwise never see the message.
+    fn publish_relayed(
+        &mut self,
+        notification_tx: &mpsc::UnboundedSender<Notification>,
+        my_open_mls: &MyOpenMls,
+        message: StemMessage,
+    ) -> Result<(), AbstSwarmError> {
+        let payload = message.payload.clone();
+        self.publish_to(&message.channel, message.payload)?;
+        let Ok(gossip) = bincode::deserialize::<Message>(&payload) else {
+            return Ok(());
+        };
+        let Ok((body, signature, attributed_to)) = my_open_mls.verify_message(gossip) else {
+            return Ok(());
+        };
+        let here = stem_relay::local_peer();
+        self.deliver(notification_tx, my_open_mls, body, signature, attributed_to, here)
+    }
+
+    /// A stem message arrived from `from`.
+    fn on_stem(
+        &mut self,
+        notification_tx: &mpsc::UnboundedSender<Notification>,
+        from: PeerId,
+        message: StemMessage,
+        my_open_mls: &MyOpenMls,
+    ) -> Result<(), AbstSwarmError> {
+        if !admission::is_admitted(&from) {
+            log::debug!("Stem: ignoring a message from non-admitted {from}");
+            return Ok(());
+        }
+        let allowed = stem_relay::state().allow(from, Instant::now());
+        if !allowed {
+            log::warn!("Stem: {from} exceeds the stem rate limit, dropping");
+            return Ok(());
+        }
+        // Forward only what the network would accept: a broadcast with a valid
+        // group signature, for the channel it names.
+        let gossip: Message = match bincode::deserialize(&message.payload) {
+            Ok(gossip) => gossip,
+            Err(e) => {
+                log::warn!("Stem: undecodable message from {from}: {e}");
+                return Ok(());
+            }
+        };
+        let expected = match &gossip.body {
+            MessageBody::BroadcastEnc { channel, .. } => channel.clone(),
+            MessageBody::GroupEnc { group_id, .. } => my_open_mls.get_channel(group_id.clone()),
+            _ => {
+                log::warn!("Stem: {from} sent something other than a broadcast");
+                return Ok(());
+            }
+        };
+        if expected != message.channel {
+            log::warn!("Stem: {from} sent a message for {expected} as {}", message.channel);
+            return Ok(());
+        }
+        if let Err(e) = my_open_mls.verify_message(gossip) {
+            log::warn!("Stem: invalid message from {from}: {e}");
+            return Ok(());
+        }
+        let id = stem::message_id(&message.payload);
+        let first = stem_relay::state().first_time(id);
+        if !first {
+            // The stem looped back here. A relay publishes the message now, which
+            // reveals only the relay. The source never does: it hands the message
+            // back to one of its successors, which has seen it already and so
+            // publishes it as a relay. In a small network, where stems often loop
+            // without meeting a diffuser, this ends the loop at once instead of
+            // after the embargo.
+            if !self.retry_own_stem(id, &message, &[]) {
+                log::info!("Stem: loop at this relay, publishing a message from {from}");
+                self.publish_relayed(notification_tx, my_open_mls, message)?;
+            }
+            return Ok(());
+        }
+        let candidates = self.stem_candidates();
+        let route = stem_relay::state().route(Some(from), &candidates, Instant::now(), &mut rand::thread_rng());
+        match route {
+            Route::Forward(next) => {
+                log::info!("Stem: relayed a message from {from} to {next}");
+                self.send_stem(next, id, message);
+                Ok(())
+            }
+            Route::Fluff => {
+                log::info!("Stem: diffusing a message from {from}");
+                self.publish_relayed(notification_tx, my_open_mls, message)
+            }
+        }
+    }
+
+    fn handle_stem_event(
+        &mut self,
+        notification_tx: &mpsc::UnboundedSender<Notification>,
+        event: request_response::Event<StemMessage, StemAck>,
+        my_open_mls: &MyOpenMls,
+    ) -> Result<(), AbstSwarmError> {
+        match event {
+            request_response::Event::Message { peer, message } => match message {
+                request_response::Message::Request { request, channel, .. } => {
+                    let _ = self.stem.send_response(channel, StemAck);
+                    self.on_stem(notification_tx, peer, request, my_open_mls)
+                }
+                request_response::Message::Response { request_id, .. } => {
+                    stem_relay::pending().remove(&request_id);
+                    Ok(())
+                }
+            },
+            request_response::Event::OutboundFailure {
+                peer,
+                request_id,
+                error,
+            } => {
+                let failed = stem_relay::pending().remove(&request_id);
+                if let Some(message) = failed {
+                    log::info!("Stem: hop to {peer} failed: {error}");
+                    let id = stem::message_id(&message.payload);
+                    if !self.retry_own_stem(id, &message, &[peer]) {
+                        self.publish_relayed(notification_tx, my_open_mls, message)?;
+                    }
+                }
+                Ok(())
+            }
+            _ => Ok(()),
+        }
     }
 
     fn send_to_topic(
@@ -818,7 +1055,16 @@ impl MyBehaviour {
                 message,
             } => {
                 // Log raw gossipsub payload size (on-application payload pre-libp2p overhead)
-                log::info!("Received gossipsub payload: {} bytes", message.data.len());
+                log::info!("Received gossipsub payload: {} bytes from {peer_id}", message.data.len());
+                // A message that went out through the stem is now in GossipSub:
+                // the embargo is no longer needed, and this peer's own message
+                // coming back is forwarded but not shown again.
+                let stem_id = stem::message_id(&message.data);
+                let own = {
+                    let mut state = stem_relay::state();
+                    state.seen_in_gossip(stem_id);
+                    state.is_own(stem_id)
+                };
                 let arrived_on = message.topic.clone();
                 let message: Message = bincode::deserialize(&message.data)
                     .map_err(|e| SerializationError(e.to_string()))?;
@@ -842,6 +1088,9 @@ impl MyBehaviour {
                                 MessageAcceptance::Accept,
                             )
                             .map_err(|_| MessageValidationError)?;
+                        if own {
+                            return Ok(());
+                        }
                         message
                     }
                     Err(e) => {
@@ -865,83 +1114,99 @@ impl MyBehaviour {
                     }
                 };
 
-                match message_body {
-                    MessageBody::Broadcast { .. } => {} // Peers should only receive encrypted messages
-                    MessageBody::GroupEnc {
-                        group_id,
-                        enc_data: data,
-                        nonce,
-                    } => {
-                        //Validate Group Signature
-                        let decrypt_res = my_open_mls.decrypt_with_group_key(group_id, data, nonce);
-                        match decrypt_res {
-                            Ok((group_number_option, data)) => {
-                                let group_number = group_number_option.ok_or(GroupNotAvailable("".to_string()))?;
-                                let message_body = MessageBody::Group {group_number, data};
-                                Self::notify(notification_tx, Notification::Data{propagation_source:peer_id, message_body, signature:signature.to_bytes(), attributed_to})
-                            }
-                            Err(e) => match e {
-                                GroupNotAvailable(_) => {}, //Do nothing, because not my group
-                                MyOpenMLSError::SignatureInvalid{signature} => log::error!("Received message with invalid Signature: {}", hex::encode(signature.as_ref().to_bytes())),
-                                SerializationError(e) => log::error!("Received message but could not decode: {e}"),
-                                _ => log::error!("Received a gossipsub message, which caused an unhandeled error: {e}"),
-                            }
-                        }
-                    }
-
-                    MessageBody::BroadcastEnc { channel, data, nonce } => {
-                        // Handle public message. The topic is inside the
-                        // ciphertext: decrypt every broadcast on a subscribed
-                        // channel and filter by topic here.
-                        let (topic, data) = match my_open_mls.open_broadcast(&channel, data, nonce) {
-                            Ok(opened) => opened,
-                            Err(e @ MyOpenMLSError::ChannelMismatch { .. }) => {
-                                log::warn!("Dropping broadcast from {peer_id}: {e}");
-                                return Ok(());
-                            }
-                            Err(e) => return Err(MLSError(e)),
-                        };
-                        if my_open_mls.subscibed_to_topic(topic.as_bytes().to_vec()) {
-                            let message_body = MessageBody::Broadcast { topic, data };
-                            Self::notify(
-                                notification_tx,
-                                Notification::Data {
-                                    propagation_source: peer_id,
-                                    message_body: message_body.clone(),
-                                    signature: signature.to_bytes(),
-                                    attributed_to,
-                                },
-                            )
-                        } else {
-                            log::debug!("Ignoring a broadcast on {channel} from {peer_id}: not subscribed to its topic (run `sub <topic>` to receive)");
-                        }
-                    }
-                    MessageBody::Group { .. } => {} // Peers should only receive encrypted messages // Handle private message
-                    MessageBody::Proposal { group_id, data, .. } => {
-                        // Handle group proposal
-                        log::info!("Got a Proposal for {group_id:?}");
-                        if let Err(e) = my_open_mls.store_proposal(group_id, data) {
-                            match e {
-                                GroupNotAvailable(_) => { /* Ignore Groups that I do not belong */ }
-                                _ => return Err(MLSError(e)),
-                            }
-                        }
-                    }
-                    MessageBody::Commit {
-                        group_id,
-                        commit,
-                        welcome_option,
-                        ..
-                    } => {
-                        // Handle group commit
-                        log::info!("Got a Commit for {group_id:?}");
-                        self.handle_commit(my_open_mls, group_id, commit, welcome_option)?;
-                    }
-                }
+                self.deliver(notification_tx, my_open_mls, message_body, signature, attributed_to, peer_id)?;
             }
             _ => log::debug!("Received Pubsub event:  {event:?}"),
         }
 
+        Ok(())
+    }
+
+    /// Hands a verified gossip message to this peer: decrypts what it can read,
+    /// delivers subscribed broadcasts and group messages, applies MLS proposals
+    /// and commits.
+    fn deliver(
+        &mut self,
+        notification_tx: &mpsc::UnboundedSender<Notification>,
+        my_open_mls: &MyOpenMls,
+        message_body: MessageBody,
+        signature: thressig::structs::Signature,
+        attributed_to: Option<usize>,
+        peer_id: PeerId,
+    ) -> Result<(), AbstSwarmError> {
+        match message_body {
+            MessageBody::Broadcast { .. } => {} // Peers should only receive encrypted messages
+            MessageBody::GroupEnc {
+                group_id,
+                enc_data: data,
+                nonce,
+            } => {
+                //Validate Group Signature
+                let decrypt_res = my_open_mls.decrypt_with_group_key(group_id, data, nonce);
+                match decrypt_res {
+                    Ok((group_number_option, data)) => {
+                        let group_number = group_number_option.ok_or(GroupNotAvailable("".to_string()))?;
+                        let message_body = MessageBody::Group {group_number, data};
+                        Self::notify(notification_tx, Notification::Data{propagation_source:peer_id, message_body, signature:signature.to_bytes(), attributed_to})
+                    }
+                    Err(e) => match e {
+                        GroupNotAvailable(_) => {}, //Do nothing, because not my group
+                        MyOpenMLSError::SignatureInvalid{signature} => log::error!("Received message with invalid Signature: {}", hex::encode(signature.as_ref().to_bytes())),
+                        SerializationError(e) => log::error!("Received message but could not decode: {e}"),
+                        _ => log::error!("Received a gossipsub message, which caused an unhandeled error: {e}"),
+                    }
+                }
+            }
+
+            MessageBody::BroadcastEnc { channel, data, nonce } => {
+                // Handle public message. The topic is inside the
+                // ciphertext: decrypt every broadcast on a subscribed
+                // channel and filter by topic here.
+                let (topic, data) = match my_open_mls.open_broadcast(&channel, data, nonce) {
+                    Ok(opened) => opened,
+                    Err(e @ MyOpenMLSError::ChannelMismatch { .. }) => {
+                        log::warn!("Dropping broadcast from {peer_id}: {e}");
+                        return Ok(());
+                    }
+                    Err(e) => return Err(MLSError(e)),
+                };
+                if my_open_mls.subscibed_to_topic(topic.as_bytes().to_vec()) {
+                    let message_body = MessageBody::Broadcast { topic, data };
+                    Self::notify(
+                        notification_tx,
+                        Notification::Data {
+                            propagation_source: peer_id,
+                            message_body: message_body.clone(),
+                            signature: signature.to_bytes(),
+                            attributed_to,
+                        },
+                    )
+                } else {
+                    log::debug!("Ignoring a broadcast on {channel} from {peer_id}: not subscribed to its topic (run `sub <topic>` to receive)");
+                }
+            }
+            MessageBody::Group { .. } => {} // Peers should only receive encrypted messages // Handle private message
+            MessageBody::Proposal { group_id, data, .. } => {
+                // Handle group proposal
+                log::info!("Got a Proposal for {group_id:?}");
+                if let Err(e) = my_open_mls.store_proposal(group_id, data) {
+                    match e {
+                        GroupNotAvailable(_) => { /* Ignore Groups that I do not belong */ }
+                        _ => return Err(MLSError(e)),
+                    }
+                }
+            }
+            MessageBody::Commit {
+                group_id,
+                commit,
+                welcome_option,
+                ..
+            } => {
+                // Handle group commit
+                log::info!("Got a Commit for {group_id:?}");
+                self.handle_commit(my_open_mls, group_id, commit, welcome_option)?;
+            }
+        }
         Ok(())
     }
 
@@ -983,6 +1248,9 @@ impl MyBehaviour {
                 },
         } = *identify_event
         {
+            if protocols.contains(&STEM_PROTOCOL) {
+                stem_relay::capable().insert(peer_id);
+            }
             if protocols.contains(&PROTOCOL_NAME) {
                 for addr in listen_addrs {
                     // Skip addresses no remote host can dial (loopback, Docker bridges).
@@ -1541,6 +1809,9 @@ impl EventHandler for MyBehaviour {
             SwarmEvent::Behaviour(MyBehaviourEvent::RequestResponseEvent(e)) => {
                 self.handle_request_response_event(*e, my_open_mls)
             }
+            SwarmEvent::Behaviour(MyBehaviourEvent::Stem(e)) => {
+                self.handle_stem_event(notification_tx, *e, my_open_mls)
+            }
             non_functional_event => self.handle_non_functional_event(non_functional_event),
         } {
             Self::notify_error(notification_tx, e);
@@ -1567,6 +1838,13 @@ pub(crate) enum MyBehaviourEvent {
     KademliaEvent(()),
     IdentifyEvent(Box<identify::Event>),
     RequestResponseEvent(Box<request_response::Event<Request, Response>>),
+    Stem(Box<request_response::Event<StemMessage, StemAck>>),
+}
+
+impl From<request_response::Event<StemMessage, StemAck>> for MyBehaviourEvent {
+    fn from(event: request_response::Event<StemMessage, StemAck>) -> Self {
+        MyBehaviourEvent::Stem(Box::new(event))
+    }
 }
 
 impl From<std::convert::Infallible> for MyBehaviourEvent {

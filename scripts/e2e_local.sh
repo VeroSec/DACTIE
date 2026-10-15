@@ -80,12 +80,20 @@ ROW=$(docker exec $S-pg1 psql -U archive -d archivedb -tAc "SELECT channel, topi
 [ "$ROW" = "channel_9|other2" ] || fail "archive1 stored '$ROW' instead of channel_9|other2"
 echo "OK topic inside the ciphertext: peer1 dropped another topic of its channel, archive1 stored channel and topic"
 
+# Stem phase (Dandelion++): anonymous broadcasts first travel along a stem of
+# admitted sharing peers; only a diffuser publishes them into GossipSub.
+grep -q 'Stem: sent own message to' "$W/p2.log" || fail "peer2's anonymous broadcasts did not enter the stem"
+STEMMED=$(grep -c 'Stem: sent own message to' "$W/p2.log")
+echo "OK stem: peer2's anonymous broadcasts entered the stem ($STEMMED times)"
+
 # Attributed: the signature names peer1's member, whose MemberID only the AA logged.
 MID=$(grep -o 'Created Key Material for member [0-9]*' "$W/aa.log" | head -1 | awk '{print $NF}')
 send p2 "attr_broad t attributed-e2e"
 wait_count "$W/p1.log" 'attributed-e2e' 1 30
 grep -A6 "attributed-e2e" "$W/p1.log" | grep -q "Attributed to member: $MID" || fail "the attributed broadcast did not name member $MID"
 echo "OK attribution: peer1 saw the attributed message as from member $MID"
+[ "$(grep -c 'Stem: sent own message to' "$W/p2.log")" = "$STEMMED" ] || fail "the attributed broadcast went through the stem"
+echo "OK stem: the attributed broadcast was published directly"
 sleep 3
 grep -q "Connection established peer=$AA" "$W/obs.log" \
     || fail "observer never connected to the AA, so the check below proves nothing"

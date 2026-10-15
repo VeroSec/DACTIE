@@ -44,6 +44,11 @@ pub(crate) trait ProtectedPeers {
     fn protected_peers(&self) -> HashSet<PeerId>;
 }
 
+/// Periodic work of the stem phase (the fail-safe embargo).
+pub(crate) trait StemTick {
+    fn stem_tick(&mut self, notification_tx: &mpsc::UnboundedSender<Notification>, my_open_mls: &MyOpenMls);
+}
+
 /// New connections are not trimmed during their first seconds (go-libp2p's
 /// connection manager uses the same 20 s grace period).
 const CONN_GRACE: Duration = Duration::from_secs(20);
@@ -68,7 +73,7 @@ where
 
 impl<TBehaviour> AbstSwarm<TBehaviour>
 where
-    TBehaviour: NetworkBehaviour + EventHandler + InstructionHandler + ProtectedPeers,
+    TBehaviour: NetworkBehaviour + EventHandler + InstructionHandler + ProtectedPeers + StemTick,
 {
     pub(crate) fn new(
         instruction_rx: mpsc::UnboundedReceiver<Instruction>,
@@ -125,7 +130,10 @@ where
         let mut trim = tokio::time::interval(Duration::from_secs(5));
         loop {
             tokio::select! {
-                _ = trim.tick() => self.trim_connections(),
+                _ = trim.tick() => {
+                    self.trim_connections();
+                    self.swarm.behaviour_mut().stem_tick(&self.notification_tx, &self.my_open_mls);
+                }
                 Some(group_id) = self.group_commit_rx.recv() => {
                     let my_open_mls_clone = self.my_open_mls.clone();
                     let notification_tx_clone= self.notification_tx.clone();

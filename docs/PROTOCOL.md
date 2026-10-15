@@ -73,6 +73,7 @@ Console: `pending`, `approve <id>`, `deny <id>` (section 7).
 ```text
 dactie-peer -K <dir> -b <AA PeerID> -B <AA multiaddr> [-p <port>] [--advertise-addr <multiaddr>]
             [--archive <multiaddr>/p2p/<PeerID>]... [--conn-low <n>] [--conn-high <n>]
+            [--stem-fluff-probability <q>] [--stem-epoch-secs <s>] [--stem-embargo-secs <s>]
             [--metrics-addr <ip:port>]
 ```
 
@@ -86,6 +87,9 @@ dactie-peer -K <dir> -b <AA PeerID> -B <AA multiaddr> [-p <port>] [--advertise-a
 | `--archive <multiaddr>/p2p/<PeerID>` | none | A trusted archive, configured out of band; repeat for each archive. Before the peer uses the archive keys the AA hands out (join, `get_opener_keys`), it asks each archive for its own key and refuses on a mismatch, so a dishonest AA cannot substitute keys it holds. Without it, the peer logs a warning and uses the AA's keys unverified. |
 | `--conn-high <n>` | `100` | The most connections the peer holds; further ones are refused before the handshake. Incoming connections take at most 80% of them, so the peer can always still dial out, and at most 32 incoming handshakes may be in progress. |
 | `--conn-low <n>` | `50` | Once the peer reaches `--conn-high`, it closes random connections older than 20 s down to this number, never its GossipSub mesh peers, the AA or trusted archives. |
+| `--stem-fluff-probability <q>` | `0.2` | Stem phase (see [Stem phase](#stem-phase-dandelion)): probability that the peer is a diffuser in an epoch. `0` turns the stem off; anonymous broadcasts are then published directly. |
+| `--stem-epoch-secs <s>` | `600` | How long the peer keeps its two stem successors and its role (plus up to 30 s of jitter). |
+| `--stem-embargo-secs <s>` | `39` | Mean of the exponential fail-safe after which a peer that sent a message on the stem publishes it itself if it has not shown up in GossipSub. |
 | `--metrics-addr <ip:port>` | off | Serves Prometheus metrics, e.g. `127.0.0.1:9898`. The endpoint is unauthenticated: bind it to loopback unless the network is trusted. |
 | `-n, --n-memkey <n>`, `-l, --load-file <file>` | | Not used. |
 
@@ -126,6 +130,18 @@ A gossip message is the bincode encoding of `Message { body: MessageBody, signat
 4. reports `MessageAcceptance::Reject` if the signature is invalid, so the message is dropped and not forwarded.
 
 Direct requests (libp2p request-response) carry an optional group signature. Which requests must be signed is noted in each flow below.
+
+### Stem phase (Dandelion++)
+
+Without it, a sharing peer hands its broadcast to all its mesh peers, and a colluder holding one of those mesh slots names the source with first-spy. With the stem, a peer's own anonymous broadcasts (`broad`, `enc_broad`) first travel along a random path of sharing peers, one hop at a time, and only the peer at its end publishes them into GossipSub. Attributed broadcasts and MLS control messages are published directly.
+
+- **Protocol:** `/dactie/stem/1` (libp2p request-response, length-prefixed bincode). The request is `StemMessage { channel, payload }`: the signed gossip message exactly as it would be published, and its channel. The answer is an empty acknowledgement.
+- **Epochs:** every `--stem-epoch-secs` (plus up to 30 s of jitter) a peer picks two successors among its connected, admitted peers whose identify info lists the protocol (so never the AA or an archive), and becomes a diffuser with probability `--stem-fluff-probability`. For the whole epoch, each predecessor is mapped to one successor, and the peer's own messages always go to the same successor, so repeated messages take the same path.
+- **Relays:** a peer accepts stem messages only from admitted peers, at most 20 per predecessor and second. It forwards only a `BroadcastEnc` or `GroupEnc` with a valid group signature whose channel matches the request. A diffuser publishes it; any other peer passes it to its mapped successor.
+- **Source:** a peer's own messages enter the stem even if it is a diffuser. It never publishes them itself: if the stem loops back to it or its hop fails, it re-routes the message to another successor, up to three times, and otherwise leaves it to the embargo. It does not show its own message again when it comes back through GossipSub.
+- **Fail-safe:** every peer that sent a message on the stem publishes it itself if it has not arrived through GossipSub when an exponential embargo (mean `--stem-embargo-secs`) runs out, or (relays only) when its hop fails or the stem loops back.
+- **Opening:** the stem carries the source's own group signature, so an opening still names the real author, never a relay.
+- **Limits:** the first stem hop sees the source's PeerID; if it colludes, first-spy succeeds. In the anonymity harness, first-spy success fell from 62% to 10% with 20 of 200 colluders (about the colluding share) at q = 0.2, at about 0.6 s more median latency (docs/DANDELION.md).
 
 ## 1. Archive initialization
 
