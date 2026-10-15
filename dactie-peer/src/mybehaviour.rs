@@ -353,13 +353,8 @@ impl MyBehaviour {
     ) -> Result<MessageBody, AbstSwarmError> {
         log::debug!("Broadcasting: {:?}", message.clone());
 
-        let (_, ciphertext, nonce) =
-            my_open_mls.encrypt_with_group_key(my_open_mls.get_common_group_id()?, message)?;
-        Ok(MessageBody::BroadcastEnc {
-            topic: topic.to_owned(),
-            data: ciphertext,
-            nonce,
-        })
+        // The topic goes inside the ciphertext; only its channel stays in clear.
+        Ok(my_open_mls.seal_broadcast(topic, message)?)
     }
 
     fn send_to_group(
@@ -823,8 +818,20 @@ impl MyBehaviour {
             } => {
                 // Log raw gossipsub payload size (on-application payload pre-libp2p overhead)
                 log::info!("Received gossipsub payload: {} bytes", message.data.len());
+                let arrived_on = message.topic.clone();
                 let message: Message = bincode::deserialize(&message.data)
                     .map_err(|e| SerializationError(e.to_string()))?;
+                // The signed body names its channel: a broadcast replayed on
+                // another channel is rejected and not forwarded.
+                if let MessageBody::BroadcastEnc { channel, .. } = &message.body {
+                    if IdentTopic::new(channel.clone()).hash() != arrived_on {
+                        log::warn!("Rejecting a broadcast for {channel} that arrived on {arrived_on} from {peer_id}");
+                        self.gossipsub
+                            .report_message_validation_result(&id, &peer_id, MessageAcceptance::Reject)
+                            .map_err(|_| MessageValidationError)?;
+                        return Ok(());
+                    }
+                }
                 let (message_body, signature, attributed_to) = match my_open_mls.verify_message(message) {
                     Ok(message) => {
                         self.gossipsub
@@ -881,11 +888,19 @@ impl MyBehaviour {
                         }
                     }
 
-                    MessageBody::BroadcastEnc { topic, data, nonce } => {
-                        // Handle public message
-
+                    MessageBody::BroadcastEnc { channel, data, nonce } => {
+                        // Handle public message. The topic is inside the
+                        // ciphertext: decrypt every broadcast on a subscribed
+                        // channel and filter by topic here.
+                        let (topic, data) = match my_open_mls.open_broadcast(&channel, data, nonce) {
+                            Ok(opened) => opened,
+                            Err(e @ MyOpenMLSError::ChannelMismatch { .. }) => {
+                                log::warn!("Dropping broadcast from {peer_id}: {e}");
+                                return Ok(());
+                            }
+                            Err(e) => return Err(MLSError(e)),
+                        };
                         if my_open_mls.subscibed_to_topic(topic.as_bytes().to_vec()) {
-                            let data = my_open_mls.decrypt_broadcast(data, nonce)?;
                             let message_body = MessageBody::Broadcast { topic, data };
                             Self::notify(
                                 notification_tx,
@@ -897,7 +912,7 @@ impl MyBehaviour {
                                 },
                             )
                         } else {
-                            log::info!("Dropping BroadcastEnc on topic '{}' from {}: not subscribed at MLS layer (run `sub {}` to receive)", topic, peer_id, topic);
+                            log::debug!("Ignoring a broadcast on {channel} from {peer_id}: not subscribed to its topic (run `sub <topic>` to receive)");
                         }
                     }
                     MessageBody::Group { .. } => {} // Peers should only receive encrypted messages // Handle private message

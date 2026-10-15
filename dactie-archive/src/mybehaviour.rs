@@ -184,11 +184,15 @@ impl MyBehaviour {
     async fn insert_broadcast(
         pool: &sqlx::PgPool,
         id: &[u8],
+        channel: &str,
         topic: &str,
         data: &[u8],
     ) -> Result<(), MyBehaviourError> {
-        let result = sqlx::query("INSERT INTO broadcast (id, topic, data) VALUES ($1, $2, $3)")
+        let result = sqlx::query(
+            "INSERT INTO broadcast (id, channel, topic, data) VALUES ($1, $2, $3, $4)",
+        )
             .bind(id)
+            .bind(channel.to_string())
             .bind(topic.to_string())
             .bind(data)
             .execute(pool)
@@ -553,8 +557,20 @@ impl MyBehaviour {
                 message_id: id,
                 message,
             } => {
+                let arrived_on = message.topic.clone();
                 let message: Message = bincode::deserialize(&message.data)
                     .map_err(|e| SerializationError(e.to_string()))?;
+                // A broadcast replayed on another channel than the one its signed
+                // body names is rejected and not forwarded.
+                if let MessageBody::BroadcastEnc { channel, .. } = &message.body {
+                    if IdentTopic::new(channel.clone()).hash() != arrived_on {
+                        log::warn!("Rejecting a broadcast for {channel} that arrived on {arrived_on} from {peer_id}");
+                        self.gossipsub
+                            .report_message_validation_result(&id, &peer_id, MessageAcceptance::Reject)
+                            .map_err(|_| MessageValidationError)?;
+                        return Ok(());
+                    }
+                }
                 let (message_body, _) = match my_open_mls.verify(message) {
                     Ok(message) => {
                         self.gossipsub
@@ -588,10 +604,19 @@ impl MyBehaviour {
                 };
 
                 match message_body {
-                    MessageBody::BroadcastEnc { topic, data, nonce } => {
-                        let plaintext = my_open_mls.decrypt_broadcast(data, nonce)?;
-                        Self::insert_broadcast(pool, &id.0, &topic, &plaintext).await?;
-                        println!("Got a Broadcast");
+                    MessageBody::BroadcastEnc { channel, data, nonce } => {
+                        // Archives are members of the common group, so they can
+                        // read the topic; peers query them by channel only.
+                        match my_open_mls.open_broadcast(&channel, data, nonce) {
+                            Ok((topic, plaintext)) => {
+                                Self::insert_broadcast(pool, &id.0, &channel, &topic, &plaintext).await?;
+                                println!("Got a Broadcast");
+                            }
+                            Err(e @ MyOpenMLSError::ChannelMismatch { .. }) => {
+                                log::warn!("Not storing broadcast from {peer_id}: {e}")
+                            }
+                            Err(e) => return Err(MLSError(e)),
+                        }
                     }
                     MessageBody::GroupEnc {
                         group_id,

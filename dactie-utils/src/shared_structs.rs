@@ -214,6 +214,13 @@ impl Verifiable for Message {
     }
 }
 
+/// The plaintext inside a [`MessageBody::BroadcastEnc`].
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub struct BroadcastPlain {
+    pub topic: String,
+    pub data: Vec<u8>,
+}
+
 // DIfferent Gossipsub message types
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub enum MessageBody {
@@ -221,8 +228,13 @@ pub enum MessageBody {
         topic: String,
         data: Vec<u8>,
     },
+    /// A common-group broadcast. Only the channel travels in clear: `data`
+    /// encrypts a [`BroadcastPlain`], so the topic is inside the ciphertext.
+    /// The channel is part of the signed body, and receivers check it against
+    /// the GossipSub topic the message arrived on, so a message cannot be
+    /// replayed on another channel.
     BroadcastEnc {
-        topic: String,
+        channel: String,
         data: Vec<u8>,
         nonce: Vec<u8>,
     },

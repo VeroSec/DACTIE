@@ -67,6 +67,19 @@ SIG=$(grep -A6 "camera-ready-e2e" "$W/p1.log" | grep -A1 '^Signature:' | tail -1
 grep -A6 "camera-ready-e2e" "$W/p1.log" | grep -q 'Sender: anonymous' || fail "the broadcast was not shown as anonymous"
 echo "OK broadcast: peer1 received peer2's message, sender anonymous"
 
+# Only the channel travels in clear; the topic is inside the ciphertext. "other2"
+# shares channel_9 with "t" (channel_of in mls_wrapper.rs), so peer1 receives and
+# decrypts it, but must not show it: it subscribed to "t" only.
+send p2 "broad other2 same-channel-e2e"
+sleep 2
+send p2 "broad t after-other-e2e"
+wait_count "$W/p1.log" 'after-other-e2e' 1 30
+sleep 2
+if grep -q 'same-channel-e2e' "$W/p1.log"; then fail "peer1 showed a broadcast on a topic it did not subscribe to"; fi
+ROW=$(docker exec $S-pg1 psql -U archive -d archivedb -tAc "SELECT channel, topic FROM broadcast WHERE data = convert_to('same-channel-e2e', 'UTF8')")
+[ "$ROW" = "channel_9|other2" ] || fail "archive1 stored '$ROW' instead of channel_9|other2"
+echo "OK topic inside the ciphertext: peer1 dropped another topic of its channel, archive1 stored channel and topic"
+
 # Attributed: the signature names peer1's member, whose MemberID only the AA logged.
 MID=$(grep -o 'Created Key Material for member [0-9]*' "$W/aa.log" | head -1 | awk '{print $NF}')
 send p2 "attr_broad t attributed-e2e"

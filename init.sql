@@ -2,9 +2,12 @@
 
 CREATE TABLE broadcast (
     id BYTEA PRIMARY KEY,
+    channel TEXT NOT NULL, -- peers query archives by channel, never by topic
     topic TEXT NOT NULL,
     data BYTEA NOT NULL
 );
+
+CREATE INDEX broadcast_channel ON broadcast (channel);
 
 CREATE TABLE id_shares (
    id BIGINT PRIMARY KEY, --user_id

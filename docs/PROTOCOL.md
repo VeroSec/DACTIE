@@ -114,7 +114,7 @@ A topic is not a GossipSub topic of its own. `get_channel` in `dactie-utils/src/
 channel = "channel_" + (hash(topic) mod 10)      // topics "0".."9" map directly to their channel
 ```
 
-A peer subscribes to a channel in GossipSub when it subscribes to the first topic in that channel. It receives every message on the channel, but delivers only messages whose topic it subscribed to. Private MLS groups use the channel of their group ID. Archives subscribe to all channels.
+A peer subscribes to a channel in GossipSub when it subscribes to the first topic in that channel. It receives and decrypts every broadcast on the channel, but delivers only those whose topic it subscribed to. Private MLS groups use the channel of their group ID. Archives subscribe to all channels.
 
 ### Gossip messages and validation
 
@@ -223,13 +223,13 @@ A sharing peer's registration lasts until the end of its tag's epoch.
 | Console | Gossip message | Encryption | Readable by |
 | --- | --- | --- | --- |
 | `sub <topic>` | none (subscribes to the topic's channel) | — | — |
-| `broad <topic> <msg>` | `BroadcastEnc { topic, data, nonce }` | AES-256-GCM with a random 96-bit nonce, under a key exported from the common MLS group's current epoch | all members (the common group) |
+| `broad <topic> <msg>` | `BroadcastEnc { channel, data, nonce }`, where `data` encrypts `BroadcastPlain { topic, data }` | AES-256-GCM with a random 96-bit nonce, under a key exported from the common MLS group's current epoch | all members (the common group) |
 | `enc_broad <group> <msg>` | `GroupEnc { group_id, enc_data, nonce }` | AES-256-GCM under a key exported from the private group's current epoch | members of that private group |
 | `attr_broad <topic> <msg>`, `attr_enc_broad <group> <msg>` | as above, with `attributed_to: MemberID` | as above | as above; receivers also see the sender's MemberID (see Attribution) |
 
-Topic and group ID travel unencrypted, so that peers can filter messages before decrypting them. The exported keys change with every MLS epoch. The sender signs the whole encoded body (topic or group ID, ciphertext, nonce) with its group signature and publishes it on the channel of the topic or group.
+Only the channel of a broadcast travels unencrypted; its topic is inside the ciphertext, so nobody without the common-group key learns what a message is about, and an archive queried by channel learns only the channel. The group ID of a private-group message travels unencrypted. The exported keys change with every MLS epoch. The sender signs the whole encoded body (channel or group ID, ciphertext, nonce) with its group signature and publishes it on the channel of the topic or group.
 
-A receiver validates the signature (see [Gossip messages and validation](#gossip-messages-and-validation)). It then decrypts a `BroadcastEnc` only if it subscribed to the topic, and a `GroupEnc` only if it is a member of the group. It ignores all other messages, but still forwards them.
+A receiver first rejects a `BroadcastEnc` whose signed channel differs from the GossipSub topic it arrived on, so a broadcast cannot be replayed on another channel, and then validates the signature (see [Gossip messages and validation](#gossip-messages-and-validation)). It decrypts every `BroadcastEnc`, drops it if the topic inside does not belong to the channel, and delivers it only if it subscribed to that topic. It decrypts a `GroupEnc` only if it is a member of the group. It ignores all other messages, but still forwards them.
 
 Messages are anonymous: neither the gossip message nor the group signature identifies the sender.
 
@@ -249,7 +249,7 @@ Each archive writes to its own PostgreSQL database (`init.sql`):
 
 | Table | Content | Form |
 | --- | --- | --- |
-| `broadcast(id, topic, data)` | common-group messages | **decrypted** (archives are members of the common group) |
+| `broadcast(id, channel, topic, data)` | common-group messages, indexed by channel | **decrypted** (archives are members of the common group) |
 | `group_enc(id, group_id, data, nonce)` | private-group messages | ciphertext (archives are not members of private groups) |
 | `proposal`, `commit` | MLS proposals, commits and welcomes, with group ID and epoch | as received |
 | `id_shares(id, enc_share, commits)` | one encrypted share per MemberID | ElGamal ciphertext |
