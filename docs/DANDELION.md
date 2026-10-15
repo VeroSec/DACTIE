@@ -126,5 +126,16 @@ Where the code differs from the design above, or adds to it:
   through GossipSub's fanout. At the pinned rust-libp2p rev the fanout top-up picks
   non-admitted peers, so all nodes with admission scoring set `fanout_ttl` to zero
   (`admission::FANOUT_TTL`).
-- **Open: embargo outside the channel.** A relay that does not subscribe to the channel never
-  sees the fluff, so its embargo always fires (open question 1 in `FUTURE_WORK.md` 3.1).
+- **Embargo only inside the channel.** A peer that does not subscribe to the message's channel
+  never sees the fluff, so its timer would always fire, and the late copy would reveal it as a
+  stem member and, after GossipSub's 60 s duplicate cache, be delivered twice. Such a peer arms
+  no embargo. Bitcoin, Monero and Grin do not have this case: every
+  node receives every transaction in the fluff, and the mempool rejects late copies. The cost:
+  the fail-safe only holds where the source or a later relay subscribes to the channel.
+- **Own publishes cancel the embargo.** GossipSub never hands a node its own publication back,
+  so a peer that publishes a stem message itself (after a loop or a failed hop) cancels its
+  embargo there. Before, the timer fired later and the peer showed the message, and after 60 s
+  sent it, a second time.
+- **Propagating peer.** A diffuser that delivers a message locally reports its stem
+  predecessor to the client, as GossipSub reports the forwarding neighbour; authorship comes
+  only from the group signature.

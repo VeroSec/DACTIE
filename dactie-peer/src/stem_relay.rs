@@ -11,19 +11,12 @@ use std::collections::{HashMap, HashSet};
 use std::sync::{Mutex, MutexGuard, OnceLock};
 
 static STATE: OnceLock<Mutex<StemState>> = OnceLock::new();
-static PENDING: OnceLock<Mutex<HashMap<OutboundRequestId, StemMessage>>> = OnceLock::new();
+static PENDING: OnceLock<Mutex<HashMap<OutboundRequestId, Pending>>> = OnceLock::new();
 static CAPABLE: OnceLock<Mutex<HashSet<PeerId>>> = OnceLock::new();
-static LOCAL: OnceLock<PeerId> = OnceLock::new();
 
 /// Sets the stem configuration; called once when the behaviour is built.
-pub(crate) fn init(config: StemConfig, local: PeerId) {
+pub(crate) fn init(config: StemConfig) {
     let _ = STATE.set(Mutex::new(StemState::new(config)));
-    let _ = LOCAL.set(local);
-}
-
-/// This peer's PeerID, the propagation source of messages it publishes itself.
-pub(crate) fn local_peer() -> PeerId {
-    *LOCAL.get().expect("stem_relay::init runs when the behaviour is built")
 }
 
 /// Routing state. Do not hold the guard across a call that locks it again.
@@ -34,8 +27,11 @@ pub(crate) fn state() -> MutexGuard<'static, StemState> {
         .unwrap()
 }
 
+/// A stem message in flight and its stem predecessor (`None` for this peer's own).
+pub(crate) type Pending = (StemMessage, Option<PeerId>);
+
 /// Stem requests in flight, published or re-routed if the hop fails.
-pub(crate) fn pending() -> MutexGuard<'static, HashMap<OutboundRequestId, StemMessage>> {
+pub(crate) fn pending() -> MutexGuard<'static, HashMap<OutboundRequestId, Pending>> {
     PENDING.get_or_init(Default::default).lock().unwrap()
 }
 

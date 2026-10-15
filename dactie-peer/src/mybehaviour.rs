@@ -131,13 +131,11 @@ impl crate::abstswarm::StemTick for MyBehaviour {
         my_open_mls: &MyOpenMls,
     ) {
         let due = stem_relay::state().due(Instant::now());
-        for message in due {
+        for (message, from) in due {
             log::info!("Stem: embargo ran out, publishing");
-            let own = stem_relay::state().is_own(stem::message_id(&message.payload));
-            let result = if own {
-                self.publish_to(&message.channel, message.payload)
-            } else {
-                self.publish_relayed(notification_tx, my_open_mls, message)
+            let result = match from {
+                None => self.publish_to(&message.channel, message.payload),
+                Some(from) => self.publish_relayed(notification_tx, my_open_mls, message, from),
             };
             if let Err(e) = result {
                 log::warn!("Stem: could not publish after the embargo: {e}");
@@ -237,7 +235,7 @@ impl MyBehaviour {
                 .chain(archives.iter().map(|(archive, _)| *archive)),
         );
 
-        stem_relay::init(stem_config, keypair.public().to_peer_id());
+        stem_relay::init(stem_config);
         let stem = request_response::Behaviour::<StemCodec>::new(
             iter::once((STEM_PROTOCOL, ProtocolSupport::Full)),
             request_response::Config::default(),
@@ -420,7 +418,7 @@ impl MyBehaviour {
         match route {
             Route::Forward(next) => {
                 log::info!("Stem: sent own message to {next}");
-                self.send_stem(next, id, StemMessage { channel, payload });
+                self.send_stem(next, id, StemMessage { channel, payload }, None);
                 Ok(())
             }
             Route::Fluff => {
@@ -430,10 +428,18 @@ impl MyBehaviour {
         }
     }
 
-    fn send_stem(&mut self, next: PeerId, id: u64, message: StemMessage) {
-        stem_relay::state().arm_embargo(id, message.clone(), Instant::now(), &mut rand::thread_rng());
+    /// Hands a message to the next stem hop; `from` is its stem predecessor,
+    /// `None` for this peer's own. Only a peer that subscribes to the message's
+    /// channel arms the embargo: any other never sees the message in GossipSub,
+    /// so its timer would always run out and publish a late copy, which GossipSub
+    /// may deliver twice and which marks this peer as a stem member.
+    fn send_stem(&mut self, next: PeerId, id: u64, message: StemMessage, from: Option<PeerId>) {
+        let topic = IdentTopic::new(message.channel.clone()).hash();
+        if self.gossipsub.topics().any(|t| *t == topic) {
+            stem_relay::state().arm_embargo(id, message.clone(), from, Instant::now(), &mut rand::thread_rng());
+        }
         let request = self.stem.send_request(&next, message.clone());
-        stem_relay::pending().insert(request, message);
+        stem_relay::pending().insert(request, (message, from));
     }
 
     /// Re-routes this peer's own message away from `avoid`; without a new hop it
@@ -447,7 +453,7 @@ impl MyBehaviour {
         match next {
             Some(next) => {
                 log::info!("Stem: re-routing own message to {next}");
-                self.send_stem(next, id, message.clone());
+                self.send_stem(next, id, message.clone(), None);
             }
             None => log::info!("Stem: own message left to the embargo"),
         }
@@ -457,13 +463,18 @@ impl MyBehaviour {
     /// Publishes a stem message that another peer originated, and delivers it
     /// here too: GossipSub never hands a peer its own publication back, so a
     /// diffuser that is also a recipient would otherwise never see the message.
+    /// The client sees `from`, the stem predecessor, as the propagating peer, as
+    /// it sees the forwarding neighbour for gossip; the author is only ever
+    /// what the group signature says.
     fn publish_relayed(
         &mut self,
         notification_tx: &mpsc::UnboundedSender<Notification>,
         my_open_mls: &MyOpenMls,
         message: StemMessage,
+        from: PeerId,
     ) -> Result<(), AbstSwarmError> {
         let payload = message.payload.clone();
+        stem_relay::state().cancel_embargo(stem::message_id(&payload));
         self.publish_to(&message.channel, message.payload)?;
         let Ok(gossip) = bincode::deserialize::<Message>(&payload) else {
             return Ok(());
@@ -471,8 +482,7 @@ impl MyBehaviour {
         let Ok((body, signature, attributed_to)) = my_open_mls.verify_message(gossip) else {
             return Ok(());
         };
-        let here = stem_relay::local_peer();
-        self.deliver(notification_tx, my_open_mls, body, signature, attributed_to, here)
+        self.deliver(notification_tx, my_open_mls, body, signature, attributed_to, from)
     }
 
     /// A stem message arrived from `from`.
@@ -528,7 +538,7 @@ impl MyBehaviour {
             // after the embargo.
             if !self.retry_own_stem(id, &message, &[]) {
                 log::info!("Stem: loop at this relay, publishing a message from {from}");
-                self.publish_relayed(notification_tx, my_open_mls, message)?;
+                self.publish_relayed(notification_tx, my_open_mls, message, from)?;
             }
             return Ok(());
         }
@@ -537,12 +547,12 @@ impl MyBehaviour {
         match route {
             Route::Forward(next) => {
                 log::info!("Stem: relayed a message from {from} to {next}");
-                self.send_stem(next, id, message);
+                self.send_stem(next, id, message, Some(from));
                 Ok(())
             }
             Route::Fluff => {
                 log::info!("Stem: diffusing a message from {from}");
-                self.publish_relayed(notification_tx, my_open_mls, message)
+                self.publish_relayed(notification_tx, my_open_mls, message, from)
             }
         }
     }
@@ -570,11 +580,14 @@ impl MyBehaviour {
                 error,
             } => {
                 let failed = stem_relay::pending().remove(&request_id);
-                if let Some(message) = failed {
+                if let Some((message, from)) = failed {
                     log::info!("Stem: hop to {peer} failed: {error}");
                     let id = stem::message_id(&message.payload);
-                    if !self.retry_own_stem(id, &message, &[peer]) {
-                        self.publish_relayed(notification_tx, my_open_mls, message)?;
+                    match from {
+                        None => {
+                            self.retry_own_stem(id, &message, &[peer]);
+                        }
+                        Some(from) => self.publish_relayed(notification_tx, my_open_mls, message, from)?,
                     }
                 }
                 Ok(())
@@ -1062,7 +1075,7 @@ impl MyBehaviour {
                 let stem_id = stem::message_id(&message.data);
                 let own = {
                     let mut state = stem_relay::state();
-                    state.seen_in_gossip(stem_id);
+                    state.cancel_embargo(stem_id);
                     state.is_own(stem_id)
                 };
                 let arrived_on = message.topic.clone();

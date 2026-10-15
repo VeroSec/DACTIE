@@ -115,6 +115,24 @@ left=$((OBS_START + 75 - $(date +%s)))
 grep -q "Closing connection to $OBS: not admitted" "$W/aa.log" || fail "the AA kept the observer connected past the grace period"
 echo "OK grace: the AA closed the observer's connection after 60 s"
 
+# Over a minute after the broadcasts. peer3 does not subscribe to t's channel, so it never sees
+# a stem message arrive in GossipSub and must not arm an embargo (it would publish late copies).
+FORWARDED=$(grep -c 'Stem: relayed a message' "$W/p3.log")
+grep -q 'Stem: embargo ran out' "$W/p3.log" && fail "peer3, outside the channel, published after an embargo"
+echo "OK stem: peer3, outside the channel, forwarded $FORWARDED stem messages and armed no embargo"
+# A peer that ends a stem shows its stem predecessor as the propagating peer, never itself.
+for n in p1 p2 p3; do
+    grep -q "Propagating Peer: $(peer_id $n)" "$W/$n.log" && fail "$n showed itself as the propagating peer"
+done
+echo "OK stem: no peer showed itself as the propagating peer"
+# A peer that publishes a stem message itself must cancel its own embargo; otherwise the timer
+# fires later and the peer shows (and after 60 s re-sends) the message a second time.
+for n in p1 p2 p3; do
+    TWICE=$(grep -A1 'Got Broadcastmessage' "$W/$n.log" | grep -v -e 'Got Broadcastmessage' -e '^--' | sort | uniq -d)
+    [ -z "$TWICE" ] || fail "$n showed a broadcast twice: $TWICE"
+done
+echo "OK stem: no peer showed a broadcast twice"
+
 send aa "req_open $SIG"
 for i in 1 2; do
     wait_count "$W/arc$i.log" 'Opening request [0-9a-f]* from the authority is pending' 1 30

@@ -97,10 +97,17 @@ pub struct StemState {
     routes: HashMap<PeerId, PeerId>,
     /// Successor for this peer's own messages.
     own: Option<PeerId>,
+    /// Messages seen on the stem in this epoch and the previous one. Loops end
+    /// within seconds, so older IDs are dropped at each new epoch.
     seen: HashSet<u64>,
-    /// This peer's own messages, with the re-routes used so far.
+    seen_before: HashSet<u64>,
+    /// This peer's own messages, with the re-routes used so far (this epoch and
+    /// the previous one).
     originated: HashMap<u64, u8>,
-    embargo: HashMap<u64, (Instant, StemMessage)>,
+    originated_before: HashMap<u64, u8>,
+    /// Messages this peer sent on and will publish itself if they do not show
+    /// up in GossipSub in time, with their stem predecessor (`None` for its own).
+    embargo: HashMap<u64, (Instant, StemMessage, Option<PeerId>)>,
     /// Stem messages per predecessor in the current second.
     rate: HashMap<PeerId, (Instant, u32)>,
 }
@@ -115,7 +122,9 @@ impl StemState {
             routes: HashMap::new(),
             own: None,
             seen: HashSet::new(),
+            seen_before: HashSet::new(),
             originated: HashMap::new(),
+            originated_before: HashMap::new(),
             embargo: HashMap::new(),
             rate: HashMap::new(),
         }
@@ -137,6 +146,8 @@ impl StemState {
         self.successors = candidates.choose_multiple(rng, 2).copied().collect();
         self.routes.clear();
         self.own = self.successors.choose(rng).copied();
+        self.seen_before = std::mem::take(&mut self.seen);
+        self.originated_before = std::mem::take(&mut self.originated);
     }
 
     /// Replace a successor that is no longer a candidate.
@@ -204,7 +215,7 @@ impl StemState {
 
     /// Whether this is the first time the message reaches this peer on the stem.
     pub fn first_time(&mut self, id: u64) -> bool {
-        self.seen.insert(id)
+        !self.seen_before.contains(&id) && self.seen.insert(id)
     }
 
     /// Mark a message as this peer's own.
@@ -213,7 +224,7 @@ impl StemState {
     }
 
     pub fn is_own(&self, id: u64) -> bool {
-        self.originated.contains_key(&id)
+        self.originated.contains_key(&id) || self.originated_before.contains_key(&id)
     }
 
     /// A new successor for one of this peer's own messages that came back on a
@@ -231,7 +242,10 @@ impl StemState {
         now: Instant,
         rng: &mut R,
     ) -> Option<PeerId> {
-        let used = self.originated.get_mut(&id)?;
+        let used = match self.originated.get_mut(&id) {
+            Some(used) => used,
+            None => self.originated_before.get_mut(&id)?,
+        };
         if *used >= OWN_RETRIES {
             return None;
         }
@@ -261,29 +275,41 @@ impl StemState {
         entry.1 <= self.config.rate_per_sec
     }
 
-    /// Start the fail-safe for a message this peer sent on the stem.
-    pub fn arm_embargo<R: Rng>(&mut self, id: u64, message: StemMessage, now: Instant, rng: &mut R) {
+    /// Start the fail-safe for a message this peer sent on the stem; `from` is
+    /// its stem predecessor, `None` for this peer's own message. Only a peer
+    /// that subscribes to the message's channel can see it arrive in GossipSub,
+    /// so only such a peer arms an embargo.
+    pub fn arm_embargo<R: Rng>(
+        &mut self,
+        id: u64,
+        message: StemMessage,
+        from: Option<PeerId>,
+        now: Instant,
+        rng: &mut R,
+    ) {
         // Exponential with the configured mean.
         let u: f64 = rng.gen_range(f64::EPSILON..1.0);
         let wait = self.config.embargo_mean.mul_f64(-u.ln());
-        self.embargo.entry(id).or_insert((now + wait, message));
+        self.embargo.entry(id).or_insert((now + wait, message, from));
     }
 
-    /// The message arrived through GossipSub, so the stem did its job.
-    pub fn seen_in_gossip(&mut self, id: u64) {
+    /// The message is in GossipSub, so the stem did its job: this peer saw it
+    /// arrive there, or published it itself (GossipSub never hands a peer its
+    /// own publication back, so that would otherwise not cancel the timer).
+    pub fn cancel_embargo(&mut self, id: u64) {
         self.embargo.remove(&id);
     }
 
-    /// Messages whose embargo ran out: publish them.
-    pub fn due(&mut self, now: Instant) -> Vec<StemMessage> {
+    /// Messages whose embargo ran out, with their stem predecessor: publish them.
+    pub fn due(&mut self, now: Instant) -> Vec<(StemMessage, Option<PeerId>)> {
         let ids: Vec<u64> = self
             .embargo
             .iter()
-            .filter(|(_, (at, _))| *at <= now)
+            .filter(|(_, (at, _, _))| *at <= now)
             .map(|(id, _)| *id)
             .collect();
         ids.into_iter()
-            .filter_map(|id| self.embargo.remove(&id).map(|(_, message)| message))
+            .filter_map(|id| self.embargo.remove(&id).map(|(_, message, from)| (message, from)))
             .collect()
     }
 }
@@ -450,19 +476,42 @@ mod tests {
         assert!(stem.allow(a, now + Duration::from_secs(1)));
     }
 
-    /// The embargo releases messages not seen in gossip, and only those.
+    /// The embargo releases messages not seen in gossip, and only those, with
+    /// the predecessor each came from.
     #[test]
     fn embargo_releases_only_unseen_messages() {
         let mut rng = StdRng::seed_from_u64(5);
         let mut stem = StemState::new(config(0.2));
         let now = Instant::now();
+        let from = PeerId::random();
         let m = |p: &[u8]| StemMessage { channel: "channel_1".into(), payload: p.to_vec() };
-        stem.arm_embargo(1, m(b"a"), now, &mut rng);
-        stem.arm_embargo(2, m(b"b"), now, &mut rng);
-        stem.seen_in_gossip(1);
+        stem.arm_embargo(1, m(b"a"), Some(from), now, &mut rng);
+        stem.arm_embargo(2, m(b"b"), Some(from), now, &mut rng);
+        stem.arm_embargo(3, m(b"c"), None, now, &mut rng);
+        stem.cancel_embargo(1);
         let later = now + Duration::from_secs(100_000);
-        assert_eq!(stem.due(later), vec![m(b"b")]);
+        let mut due = stem.due(later);
+        due.sort_by(|a, b| a.0.payload.cmp(&b.0.payload));
+        assert_eq!(due, vec![(m(b"b"), Some(from)), (m(b"c"), None)]);
         assert!(stem.due(later).is_empty());
+    }
+
+    /// A seen ID survives one epoch change but not two, so the set stays
+    /// bounded in a long run.
+    #[test]
+    fn seen_ids_expire_after_two_epochs() {
+        let mut rng = StdRng::seed_from_u64(7);
+        let candidates = peers(10);
+        let mut stem = StemState::new(config(0.2));
+        let epoch = stem.config.epoch + Duration::from_secs(31);
+        let now = Instant::now();
+        stem.route(None, &candidates, now, &mut rng);
+        assert!(stem.first_time(1));
+        assert!(!stem.first_time(1));
+        stem.route(None, &candidates, now + epoch, &mut rng);
+        assert!(!stem.first_time(1));
+        stem.route(None, &candidates, now + epoch * 2, &mut rng);
+        assert!(stem.first_time(1));
     }
 
     /// Requests and acknowledgements survive the codec, and oversized frames

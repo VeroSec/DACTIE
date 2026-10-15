@@ -42,4 +42,10 @@ wait_count "$W/p3.log" 'after-expiry' 1 30
 sleep 3
 [ "$(grep -c 'Received gossipsub payload' "$W/p4.log")" -eq "$before" ] || fail "the expired p4 still received gossip"
 echo "OK gossip: p3 got p2's message, the expired p4 got nothing"
+# p3 usually ends p2's stem and delivers the message itself: it must show the stem predecessor
+# as the propagating peer, never itself, and the sender as anonymous.
+SHOWN=$(grep -A6 'after-expiry' "$W/p3.log")
+echo "$SHOWN" | grep -q "Propagating Peer: $P3" && fail "p3 showed itself as the propagating peer"
+echo "$SHOWN" | grep -q 'Sender: anonymous' || fail "p3 did not show p2's message as anonymous"
+echo "OK stem: p3 showed $(echo "$SHOWN" | grep -o 'Propagating Peer: [A-Za-z0-9]*' | awk '{print $3}' | sed "s/$P2/p2/") as the propagating peer, sender anonymous"
 echo "PASS"
