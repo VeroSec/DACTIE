@@ -126,6 +126,7 @@ impl MyBehaviour {
             .mesh_n_low(MESH_N_LOW)
             .mesh_n(MESH_N)
             .mesh_n_high(MESH_N_HIGH)
+            .fanout_ttl(admission::FANOUT_TTL)
             .build()
             .map_err(io::Error::other)
             .unwrap(); // Temporary hack because `build` does not return a proper `std::error::Error`.

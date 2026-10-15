@@ -151,6 +151,7 @@ impl MyBehaviour {
             .mesh_n_low(MESH_N_LOW)
             .mesh_n(MESH_N)
             .mesh_n_high(MESH_N_HIGH)
+            .fanout_ttl(admission::FANOUT_TTL)
             // Real CTI events are far larger than gossipsub's 65536-byte default,
             // which a 64KiB MISP event already exceeds once the group signature
             // and framing are added. Raised so the evaluation can carry actual
