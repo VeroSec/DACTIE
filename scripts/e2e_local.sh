@@ -7,7 +7,8 @@
 # and a member cannot register more than k. peer2 publishes, both archives approve the opening,
 # and the AA must name peer1's member and list peer2's PeerID. An observer node that never
 # registered subscribes to the same topic and must not receive any gossip; the AA keeps at
-# most 5 such connections open and closes each after 60 s.
+# most 5 such connections open and closes each after 60 s. A second member's peer then publishes
+# a broadcast through the stem of member 1's peers, and its opening must name member 2.
 # Run with the setup in e2e_common.sh, which also describes the requirements.
 source "$(dirname "$0")/e2e_common.sh"
 
@@ -94,6 +95,18 @@ grep -A6 "attributed-e2e" "$W/p1.log" | grep -q "Attributed to member: $MID" || 
 echo "OK attribution: peer1 saw the attributed message as from member $MID"
 [ "$(grep -c 'Stem: sent own message to' "$W/p2.log")" = "$STEMMED" ] || fail "the attributed broadcast went through the stem"
 echo "OK stem: the attributed broadcast was published directly"
+
+# A second member whose sharing peer m2 is the source. Its stem can only run through member 1's
+# peers, so one of them publishes the message; the opening at the end must still name member 2.
+join_member m2 member2
+M2=$(peer_id m2)
+send m2 "sub t"
+sleep 10
+send m2 "broad t member2-e2e"
+wait_count "$W/p1.log" 'member2-e2e' 1 60
+grep -q 'Stem: sent own message to' "$W/m2.log" || fail "member 2's broadcast did not enter the stem"
+SIG2=$(grep -A6 "member2-e2e" "$W/p1.log" | grep -A1 '^Signature:' | tail -1 | tr -d '[:space:]')
+echo "OK stem: member 2's broadcast went into the stem of member 1's peers"
 sleep 3
 grep -q "Connection established peer=$AA" "$W/obs.log" \
     || fail "observer never connected to the AA, so the check below proves nothing"
@@ -149,4 +162,23 @@ grep -q 'Name:peer1' "$W/aa.log" || fail "opening did not name peer1"
 P2=$(peer_id p2)
 echo "peer2 PeerId: ${P2:-unknown}"
 if [ -n "$P2" ]; then grep -q "PeerID:.*$P2" "$W/aa.log" || fail "opening did not list peer2's PeerID"; fi
+
+# Member 2's message, published by one of member 1's peers: no stem hop may be taken for the author.
+grep -q 'Stem: embargo ran out' "$W/m2.log" && fail "m2 published its own message after the embargo, so no stem hop did"
+send aa "req_open $SIG2"
+for i in 1 2; do
+    wait_count "$W/arc$i.log" 'Opening request [0-9a-f]* from the authority is pending' 2 30
+    ID=$(grep -o 'Opening request [0-9a-f]*' "$W/arc$i.log" | tail -1 | awk '{print $3}')
+    send arc$i "approve $ID"
+    wait_count "$W/arc$i.log" "Submitted this archive's partial opening" 2 30
+done
+sleep 3
+send aa "open $SIG2"
+wait_count "$W/aa.log" 'Signature belongs to ID' 2 60
+sleep 2
+OPENED=$(awk '/Signature belongs to ID/{n++} n==2' "$W/aa.log" | grep 'Signature belongs')
+echo "$OPENED" | grep -q 'Name:member2' || fail "the opening of member 2's message did not name member2"
+echo "$OPENED" | grep -q "PeerID:.*$M2" || fail "the opening of member 2's message did not list m2's PeerID"
+echo "$OPENED" | grep -q 'Name:peer1' && fail "the opening named member 1, whose peers carried the stem"
+echo "OK authorship: member 1's peers published member 2's message; the opening named member2 and m2"
 echo "PASS"
