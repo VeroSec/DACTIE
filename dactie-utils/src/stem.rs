@@ -97,14 +97,18 @@ pub struct StemState {
     routes: HashMap<PeerId, PeerId>,
     /// Successor for this peer's own messages.
     own: Option<PeerId>,
-    /// Messages seen on the stem in this epoch and the previous one. Loops end
-    /// within seconds, so older IDs are dropped at each new epoch.
+    /// Message IDs are kept for this period and the previous one ([`Self::expire`]);
+    /// loops and late stem copies end within seconds.
+    rotate_at: Option<Instant>,
+    /// Messages seen on the stem.
     seen: HashSet<u64>,
     seen_before: HashSet<u64>,
-    /// This peer's own messages, with the re-routes used so far (this epoch and
-    /// the previous one).
+    /// This peer's own messages, with the re-routes used so far.
     originated: HashMap<u64, u8>,
     originated_before: HashMap<u64, u8>,
+    /// Messages known to be in GossipSub ([`Self::in_gossip`]).
+    gossiped: HashSet<u64>,
+    gossiped_before: HashSet<u64>,
     /// Messages this peer sent on and will publish itself if they do not show
     /// up in GossipSub in time, with their stem predecessor (`None` for its own).
     embargo: HashMap<u64, (Instant, StemMessage, Option<PeerId>)>,
@@ -121,10 +125,13 @@ impl StemState {
             successors: Vec::new(),
             routes: HashMap::new(),
             own: None,
+            rotate_at: None,
             seen: HashSet::new(),
             seen_before: HashSet::new(),
             originated: HashMap::new(),
             originated_before: HashMap::new(),
+            gossiped: HashSet::new(),
+            gossiped_before: HashSet::new(),
             embargo: HashMap::new(),
             rate: HashMap::new(),
         }
@@ -146,8 +153,20 @@ impl StemState {
         self.successors = candidates.choose_multiple(rng, 2).copied().collect();
         self.routes.clear();
         self.own = self.successors.choose(rng).copied();
-        self.seen_before = std::mem::take(&mut self.seen);
-        self.originated_before = std::mem::take(&mut self.originated);
+    }
+
+    /// Forgets message IDs older than two periods of one stem epoch, so the sets
+    /// stay bounded in a long run. Call regularly.
+    pub fn expire(&mut self, now: Instant) {
+        if self.rotate_at.is_some_and(|at| now < at) {
+            return;
+        }
+        if self.rotate_at.is_some() {
+            self.seen_before = std::mem::take(&mut self.seen);
+            self.originated_before = std::mem::take(&mut self.originated);
+            self.gossiped_before = std::mem::take(&mut self.gossiped);
+        }
+        self.rotate_at = Some(now + self.config.epoch);
     }
 
     /// Replace a successor that is no longer a candidate.
@@ -295,9 +314,18 @@ impl StemState {
 
     /// The message is in GossipSub, so the stem did its job: this peer saw it
     /// arrive there, or published it itself (GossipSub never hands a peer its
-    /// own publication back, so that would otherwise not cancel the timer).
-    pub fn cancel_embargo(&mut self, id: u64) {
+    /// own publication back, so that would otherwise not cancel the timer). Its
+    /// embargo ends, and stem copies that still arrive are dropped.
+    pub fn in_gossip(&mut self, id: u64) {
         self.embargo.remove(&id);
+        self.gossiped.insert(id);
+    }
+
+    /// Whether the message is already in GossipSub, see [`Self::in_gossip`]. A
+    /// stem copy can still arrive after that if a relay's embargo ran out early
+    /// or a hop arrived although its acknowledgement was lost.
+    pub fn is_in_gossip(&self, id: u64) -> bool {
+        self.gossiped.contains(&id) || self.gossiped_before.contains(&id)
     }
 
     /// Messages whose embargo ran out, with their stem predecessor: publish them.
@@ -488,7 +516,8 @@ mod tests {
         stem.arm_embargo(1, m(b"a"), Some(from), now, &mut rng);
         stem.arm_embargo(2, m(b"b"), Some(from), now, &mut rng);
         stem.arm_embargo(3, m(b"c"), None, now, &mut rng);
-        stem.cancel_embargo(1);
+        stem.in_gossip(1);
+        assert!(stem.is_in_gossip(1) && !stem.is_in_gossip(2));
         let later = now + Duration::from_secs(100_000);
         let mut due = stem.due(later);
         due.sort_by(|a, b| a.0.payload.cmp(&b.0.payload));
@@ -496,22 +525,21 @@ mod tests {
         assert!(stem.due(later).is_empty());
     }
 
-    /// A seen ID survives one epoch change but not two, so the set stays
-    /// bounded in a long run.
+    /// Message IDs survive one rotation but not two, so the sets stay bounded
+    /// in a long run, also at a peer that never routes a stem message.
     #[test]
-    fn seen_ids_expire_after_two_epochs() {
-        let mut rng = StdRng::seed_from_u64(7);
-        let candidates = peers(10);
+    fn ids_expire_after_two_periods() {
         let mut stem = StemState::new(config(0.2));
-        let epoch = stem.config.epoch + Duration::from_secs(31);
+        let period = stem.config.epoch;
         let now = Instant::now();
-        stem.route(None, &candidates, now, &mut rng);
+        stem.expire(now);
         assert!(stem.first_time(1));
         assert!(!stem.first_time(1));
-        stem.route(None, &candidates, now + epoch, &mut rng);
-        assert!(!stem.first_time(1));
-        stem.route(None, &candidates, now + epoch * 2, &mut rng);
-        assert!(stem.first_time(1));
+        stem.in_gossip(2);
+        stem.expire(now + period);
+        assert!(!stem.first_time(1) && stem.is_in_gossip(2));
+        stem.expire(now + period * 2);
+        assert!(stem.first_time(1) && !stem.is_in_gossip(2));
     }
 
     /// Requests and acknowledgements survive the codec, and oversized frames

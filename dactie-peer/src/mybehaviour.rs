@@ -130,11 +130,19 @@ impl crate::abstswarm::StemTick for MyBehaviour {
         notification_tx: &mpsc::UnboundedSender<Notification>,
         my_open_mls: &MyOpenMls,
     ) {
-        let due = stem_relay::state().due(Instant::now());
+        let now = Instant::now();
+        let due = {
+            let mut state = stem_relay::state();
+            state.expire(now);
+            state.due(now)
+        };
         for (message, from) in due {
             log::info!("Stem: embargo ran out, publishing");
             let result = match from {
-                None => self.publish_to(&message.channel, message.payload),
+                None => {
+                    stem_relay::state().in_gossip(stem::message_id(&message.payload));
+                    self.publish_to(&message.channel, message.payload)
+                }
                 Some(from) => self.publish_relayed(notification_tx, my_open_mls, message, from),
             };
             if let Err(e) = result {
@@ -474,7 +482,15 @@ impl MyBehaviour {
         from: PeerId,
     ) -> Result<(), AbstSwarmError> {
         let payload = message.payload.clone();
-        stem_relay::state().cancel_embargo(stem::message_id(&payload));
+        {
+            let mut state = stem_relay::state();
+            let id = stem::message_id(&payload);
+            if state.is_in_gossip(id) {
+                // Out already, and shown here when it arrived or was published.
+                return Ok(());
+            }
+            state.in_gossip(id);
+        }
         self.publish_to(&message.channel, message.payload)?;
         let Ok(gossip) = bincode::deserialize::<Message>(&payload) else {
             return Ok(());
@@ -502,6 +518,13 @@ impl MyBehaviour {
             log::warn!("Stem: {from} exceeds the stem rate limit, dropping");
             return Ok(());
         }
+        let id = stem::message_id(&message.payload);
+        if stem_relay::state().is_in_gossip(id) {
+            // The message is out already: a relay's embargo ran out early, or a hop
+            // arrived although its acknowledgement was lost. The stem is done.
+            log::info!("Stem: dropping a message from {from} that is already in GossipSub");
+            return Ok(());
+        }
         // Forward only what the network would accept: a broadcast with a valid
         // group signature, for the channel it names.
         let gossip: Message = match bincode::deserialize(&message.payload) {
@@ -527,7 +550,6 @@ impl MyBehaviour {
             log::warn!("Stem: invalid message from {from}: {e}");
             return Ok(());
         }
-        let id = stem::message_id(&message.payload);
         let first = stem_relay::state().first_time(id);
         if !first {
             // The stem looped back here. A relay publishes the message now, which
@@ -1075,7 +1097,7 @@ impl MyBehaviour {
                 let stem_id = stem::message_id(&message.data);
                 let own = {
                     let mut state = stem_relay::state();
-                    state.cancel_embargo(stem_id);
+                    state.in_gossip(stem_id);
                     state.is_own(stem_id)
                 };
                 let arrived_on = message.topic.clone();

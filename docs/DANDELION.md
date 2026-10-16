@@ -136,6 +136,12 @@ Where the code differs from the design above, or adds to it:
   so a peer that publishes a stem message itself (after a loop or a failed hop) cancels its
   embargo there. Before, the timer fired later and the peer showed the message, and after 60 s
   sent it, a second time.
+- **Late stem copies.** A message can reach GossipSub while a copy is still on the stem: a
+  relay's embargo runs out early, or a hop arrives although its acknowledgement was lost. Every
+  peer remembers which messages it has seen in, or published to, GossipSub, drops stem copies
+  of those, and never shows a message twice. Before, a later diffuser showed it again, and a
+  later relay armed an embargo that nothing cancelled. Message IDs are kept for two stem-epoch
+  lengths, also at peers that never route on the stem.
 - **Propagating peer.** A diffuser that delivers a message locally reports its stem
   predecessor to the client, as GossipSub reports the forwarding neighbour; authorship comes
   only from the group signature.
