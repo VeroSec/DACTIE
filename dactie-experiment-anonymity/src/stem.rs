@@ -104,6 +104,7 @@ impl StemState {
     /// the connected peers and whether this peer diffuses.
     fn refresh<R: Rng>(&mut self, now: Instant, connected: &[PeerId], rng: &mut R) {
         if self.epoch_until.is_some_and(|until| now < until) {
+            self.top_up(connected, rng);
             return;
         }
         let jitter = Duration::from_millis(rng.gen_range(0..=30_000));
@@ -112,6 +113,22 @@ impl StemState {
         self.successors = connected.choose_multiple(rng, 2).copied().collect();
         self.routes.clear();
         self.own = self.successors.choose(rng).copied();
+    }
+
+    /// Adds successors while the epoch has fewer than two, e.g. because the peer
+    /// published background traffic before its first connection: without this,
+    /// its own messages, the measurement message included, would skip the stem
+    /// for the rest of the epoch (15 of the 240 runs in the first stem grid).
+    fn top_up<R: Rng>(&mut self, connected: &[PeerId], rng: &mut R) {
+        while self.successors.len() < 2 {
+            let spare: Vec<PeerId> =
+                connected.iter().copied().filter(|p| !self.successors.contains(p)).collect();
+            let Some(p) = spare.choose(rng).copied() else { break };
+            self.successors.push(p);
+        }
+        if self.own.is_none() {
+            self.own = self.successors.choose(rng).copied();
+        }
     }
 
     /// Replace a successor that is no longer connected.
@@ -265,6 +282,18 @@ mod tests {
 
     fn peers(n: usize) -> Vec<PeerId> {
         (0..n).map(|_| PeerId::random()).collect()
+    }
+
+    /// An epoch that began before the first connection gets successors as soon
+    /// as there are connections, instead of skipping the stem until it ends.
+    #[test]
+    fn an_empty_epoch_is_topped_up() {
+        let mut rng = StdRng::seed_from_u64(10);
+        let mut stem = StemState::new(config(0.0001));
+        let now = Instant::now();
+        assert_eq!(stem.route(None, &[], now, &mut rng), Route::Fluff);
+        let connected = peers(5);
+        assert!(matches!(stem.route(None, &connected, now, &mut rng), Route::Forward(_)));
     }
 
     /// Within an epoch, each predecessor always gets the same successor, and

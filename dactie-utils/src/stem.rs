@@ -175,6 +175,7 @@ impl StemState {
     /// the candidates and whether this peer diffuses.
     fn refresh<R: Rng>(&mut self, now: Instant, candidates: &[PeerId], rng: &mut R) {
         if self.epoch_until.is_some_and(|until| now < until) {
+            self.top_up(candidates, rng);
             return;
         }
         let jitter = Duration::from_millis(rng.gen_range(0..=30_000));
@@ -197,6 +198,21 @@ impl StemState {
             self.gossiped_before = std::mem::take(&mut self.gossiped);
         }
         self.rotate_at = Some(now + self.config.epoch);
+    }
+
+    /// Adds successors while the epoch has fewer than two, e.g. because the peer
+    /// had just started and knew no stem peers yet when the epoch began: without
+    /// this, it would publish its own messages directly for the rest of the epoch.
+    fn top_up<R: Rng>(&mut self, candidates: &[PeerId], rng: &mut R) {
+        while self.successors.len() < 2 {
+            let spare: Vec<PeerId> =
+                candidates.iter().copied().filter(|p| !self.successors.contains(p)).collect();
+            let Some(p) = spare.choose(rng).copied() else { break };
+            self.successors.push(p);
+        }
+        if self.own.is_none() {
+            self.own = self.successors.choose(rng).copied();
+        }
     }
 
     /// Replace a successor that is no longer a candidate.
@@ -532,6 +548,21 @@ mod tests {
         let mut rng = StdRng::seed_from_u64(3);
         let mut stem = StemState::new(config(0.2));
         assert_eq!(stem.route(None, &[], Instant::now(), &mut rng), Route::Fluff);
+    }
+
+    /// An epoch that began without stem peers gets successors as soon as some
+    /// appear, instead of publishing directly until it ends.
+    #[test]
+    fn an_empty_epoch_is_topped_up() {
+        let mut rng = StdRng::seed_from_u64(10);
+        let mut stem = StemState::new(config(0.0001));
+        let now = Instant::now();
+        assert_eq!(stem.route(None, &[], now, &mut rng), Route::Fluff);
+        let one = peers(1);
+        assert_eq!(stem.route(None, &one, now, &mut rng), Route::Forward(one[0]));
+        let more = [one.clone(), peers(3)].concat();
+        stem.route(None, &more, now, &mut rng);
+        assert_eq!(stem.successors.len(), 2);
     }
 
     /// Successors come from dialled connections as soon as there are two.
