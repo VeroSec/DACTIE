@@ -159,8 +159,10 @@ services:
       -B "/ip4/10.244.192.116/tcp/10001"
       -p 21011
       --metrics-addr 0.0.0.0:9898
-      --advertise-addr /ip4/10.244.192.117/tcp/21011'
+      --advertise-addr /ip4/10.244.192.117/tcp/21011
+      --tcp-nodelay $${TCP_NODELAY}'
     environment:
+      - TCP_NODELAY=${TCP_NODELAY:-true}
       - RUST_LOG=info
     env_file:
       - key_material/boot_id.env
@@ -192,8 +194,10 @@ services:
       -B "/ip4/10.244.192.116/tcp/10001"
       -p 21012
       --metrics-addr 0.0.0.0:9898
-      --advertise-addr /ip4/10.244.192.118/tcp/21012'
+      --advertise-addr /ip4/10.244.192.118/tcp/21012
+      --tcp-nodelay $${TCP_NODELAY}'
     environment:
+      - TCP_NODELAY=${TCP_NODELAY:-true}
       - RUST_LOG=info
     env_file:
       - key_material/boot_id.env
@@ -225,8 +229,10 @@ services:
       -B "/ip4/10.244.192.116/tcp/10001"
       -p 21013
       --metrics-addr 0.0.0.0:9898
-      --advertise-addr /ip4/10.244.192.119/tcp/21013'
+      --advertise-addr /ip4/10.244.192.119/tcp/21013
+      --tcp-nodelay $${TCP_NODELAY}'
     environment:
+      - TCP_NODELAY=${TCP_NODELAY:-true}
       - RUST_LOG=info
     env_file:
       - key_material/boot_id.env
@@ -258,8 +264,10 @@ services:
       -p 21014
       --metrics-addr 0.0.0.0:9899
       --advertise-addr /ip4/10.244.192.119/tcp/21014
-      --stem-fluff-probability $${STEM_Q}'
+      --stem-fluff-probability $${STEM_Q}
+      --tcp-nodelay $${TCP_NODELAY}'
     environment:
+      - TCP_NODELAY=${TCP_NODELAY:-true}
       - RUST_LOG=info
       - BENCH_PUBLISH=${BENCH_PUBLISH:-true}
       # Stem phase of the benchmark publisher; STEM_Q=0 measures latency without it.

@@ -28,6 +28,7 @@ pub(crate) struct AbstSwarmBuilder<TBehaviour> {
     // Addresses to advertise to remote peers as dialable
     external_addresses: Vec<Multiaddr>,
     conn_watermarks: (usize, usize),
+    tcp_nodelay: bool,
 }
 
 impl<TBehaviour> AbstSwarmBuilder<TBehaviour>
@@ -53,6 +54,7 @@ where
             metrics: None,
             external_addresses: Vec::new(),
             conn_watermarks: (50, 100),
+            tcp_nodelay: true,
         })
     }
 
@@ -60,6 +62,13 @@ where
     /// behaviour's connection limits enforce.
     pub(crate) fn connection_watermarks(mut self, low: usize, high: usize) -> Self {
         self.conn_watermarks = (low, high);
+        self
+    }
+
+    /// TCP_NODELAY on the peer's connections; false turns Nagle's algorithm back
+    /// on, libp2p's default, for latency comparisons.
+    pub(crate) fn tcp_nodelay(mut self, nodelay: bool) -> Self {
+        self.tcp_nodelay = nodelay;
         self
     }
 
@@ -90,9 +99,9 @@ where
             libp2p::SwarmBuilder::with_existing_identity(self.keypair)
                 .with_tokio()
                 .with_tcp(
-                    // Nagle off: libp2p's default sets TCP_NODELAY to false, which
-                    // holds small writes back for up to one round trip per hop.
-                    tcp::Config::default().nodelay(true),
+                    // Nagle off by default: libp2p's default sets TCP_NODELAY to
+                    // false, which holds small writes back for up to one round trip.
+                    tcp::Config::default().nodelay(self.tcp_nodelay),
                     noise::Config::new,
                     yamux::Config::default,
                 )?

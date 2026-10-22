@@ -131,7 +131,9 @@ Where the code differs from the design above, or adds to it:
   each of them. With fewer than two dialled candidates, as in the E2E scripts, all candidates
   count. The harness does not distinguish directions; its passive coalition at random
   positions is unaffected.
-- **Rate limit.** 20 stem messages per second per predecessor (`StemConfig::rate_per_sec`).
+- **Rate limit.** 100 stem messages per second per predecessor (`--stem-rate-limit`). The first
+  value, 20, dropped half of a single publisher's 40 msg/s on the minerva testbed: one edge can
+  carry most of a small network's stem traffic.
 - **Fanout.** A diffuser often does not subscribe to the message's channel and publishes
   through GossipSub's fanout. At the pinned rust-libp2p rev the fanout top-up picks
   non-admitted peers, so all nodes with admission scoring set `fanout_ttl` to zero

@@ -57,7 +57,7 @@ impl Default for StemConfig {
             q: 0.2,
             epoch: Duration::from_secs(600),
             embargo_mean: Duration::from_secs(39),
-            rate_per_sec: 20,
+            rate_per_sec: 100,
         }
     }
 }

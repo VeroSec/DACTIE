@@ -94,6 +94,17 @@ struct Args {
     /// message that has not shown up in GossipSub (Monero: 39 s).
     #[arg(long, default_value_t = 39.0)]
     stem_embargo_secs: f64,
+
+    /// Stem messages accepted per predecessor and second; more are dropped. One
+    /// edge can carry most of a small network's stem traffic, so keep this above
+    /// the network-wide message rate.
+    #[arg(long, default_value_t = 100)]
+    stem_rate_limit: u32,
+
+    /// TCP_NODELAY on the peer's connections. `false` turns Nagle's algorithm
+    /// back on (libp2p's default), e.g. to compare latencies.
+    #[arg(long, default_value_t = true, action = clap::ArgAction::Set)]
+    tcp_nodelay: bool,
 }
 
 /// Splits `/ip4/.../tcp/.../p2p/<PeerId>` into the PeerId and the address to dial.
@@ -178,7 +189,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             q: args.stem_fluff_probability.clamp(0.0, 1.0),
             epoch: std::time::Duration::from_secs(args.stem_epoch_secs),
             embargo_mean: std::time::Duration::from_secs_f64(args.stem_embargo_secs.max(0.001)),
-            ..Default::default()
+            rate_per_sec: args.stem_rate_limit.max(1),
         },
     )?;
 
@@ -190,7 +201,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
         myopenmls.clone(),
         group_commit_rx,
     )?
-    .connection_watermarks(args.conn_low, args.conn_high.max(args.conn_low));
+    .connection_watermarks(args.conn_low, args.conn_high.max(args.conn_low))
+    .tcp_nodelay(args.tcp_nodelay);
 
     if let Some(port) = args.port {
         abstswarm_builder =

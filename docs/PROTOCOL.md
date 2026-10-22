@@ -74,6 +74,7 @@ Console: `pending`, `approve <id>`, `deny <id>` (section 7).
 dactie-peer -K <dir> -b <AA PeerID> -B <AA multiaddr> [-p <port>] [--advertise-addr <multiaddr>]
             [--archive <multiaddr>/p2p/<PeerID>]... [--conn-low <n>] [--conn-high <n>]
             [--stem-fluff-probability <q>] [--stem-epoch-secs <s>] [--stem-embargo-secs <s>]
+            [--stem-rate-limit <n>] [--tcp-nodelay <bool>]
             [--metrics-addr <ip:port>]
 ```
 
@@ -90,6 +91,8 @@ dactie-peer -K <dir> -b <AA PeerID> -B <AA multiaddr> [-p <port>] [--advertise-a
 | `--stem-fluff-probability <q>` | `0.2` | Stem phase (see [Stem phase](#stem-phase-dandelion)): probability that the peer is a diffuser in an epoch. `0` turns the stem off; anonymous broadcasts are then published directly. |
 | `--stem-epoch-secs <s>` | `600` | How long the peer keeps its two stem successors and its role (plus up to 30 s of jitter). |
 | `--stem-embargo-secs <s>` | `39` | Mean of the exponential fail-safe after which a peer that sent a message on the stem publishes it itself if it has not shown up in GossipSub. |
+| `--stem-rate-limit <n>` | `100` | Stem messages a peer accepts per predecessor and second; it drops the rest. One edge can carry most of a small network's stem traffic, so keep this above the network-wide message rate. |
+| `--tcp-nodelay <bool>` | `true` | TCP_NODELAY on the peer's connections. `false` turns Nagle's algorithm back on (libp2p's default), e.g. to compare latencies. |
 | `--metrics-addr <ip:port>` | off | Serves Prometheus metrics, e.g. `127.0.0.1:9898`. The endpoint is unauthenticated: bind it to loopback unless the network is trusted. |
 | `-n, --n-memkey <n>`, `-l, --load-file <file>` | | Not used. |
 
@@ -137,7 +140,7 @@ Without it, a sharing peer hands its broadcast to all its mesh peers, and a coll
 
 - **Protocol:** `/dactie/stem/1` (libp2p request-response, length-prefixed bincode). The request is `StemMessage { channel, payload }`: the signed gossip message exactly as it would be published, and its channel. The answer is an empty acknowledgement.
 - **Epochs:** every `--stem-epoch-secs` (plus up to 30 s of jitter) a peer picks two successors among its connected, admitted peers whose identify info lists the protocol (so never the AA or an archive), and of those only among the ones it dialled itself, as in Dandelion++, BIP 156 and Monero, so a member cannot become a successor candidate by connecting to many peers (with fewer than two dialled candidates it uses all of them), and becomes a diffuser with probability `--stem-fluff-probability`. For the whole epoch, each predecessor is mapped to one successor, and the peer's own messages always go to the same successor, so repeated messages take the same path.
-- **Relays:** a peer accepts stem messages only from admitted peers, at most 20 per predecessor and second. It forwards only a `BroadcastEnc` or `GroupEnc` with a valid group signature whose channel matches the request. A diffuser publishes it; any other peer passes it to its mapped successor.
+- **Relays:** a peer accepts stem messages only from admitted peers, at most `--stem-rate-limit` (100) per predecessor and second; it acknowledges a request before this check, so a dropped message is recovered only by an embargo. It forwards only a `BroadcastEnc` or `GroupEnc` with a valid group signature whose channel matches the request. A diffuser publishes it; any other peer passes it to its mapped successor.
 - **Source:** a peer's own messages enter the stem even if it is a diffuser. It never publishes them itself: if the stem loops back to it or its hop fails, it re-routes the message to a peer that does not have it yet (its other successor, else a spare connection), up to three times, and otherwise leaves it to the embargo. It sends a message to the same peer twice only if every connected stem peer has it already, and then back to its first hop: only a source ever sends a message twice, so that peer learns its predecessor is the source, but as the first hop it got the message straight from the source anyway. It does not show its own message again when it comes back through GossipSub.
 - **Fail-safe:** a peer that sent a message on the stem and subscribes to its channel publishes it itself if it has not arrived through GossipSub when an exponential embargo (mean `--stem-embargo-secs`) runs out. A peer outside the channel never sees the message in GossipSub and arms no embargo: its timer would always run out, and the late copy would mark it as a stem member and, after GossipSub's 60 s duplicate cache, be delivered a second time. Relays also publish when their hop fails or the stem loops back.
 - **Authorship:** the stem carries the source's signed message unchanged, and every hop checks the group signature, so an opening still names the real author, never a relay. Peers show the sender as the signature states it (anonymous, or the attributed member). A peer that ends a stem and is itself a recipient shows its stem predecessor as the propagating peer, as it shows the forwarding neighbour for gossip.
