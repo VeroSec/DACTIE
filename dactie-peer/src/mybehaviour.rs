@@ -4,7 +4,7 @@ use dactie_utils::net::{is_unroutable_addr, MESH_N, MESH_N_HIGH, MESH_N_LOW};
 use crate::join_relay;
 use dactie_utils::admission;
 use dactie_utils::conn_cap;
-use dactie_utils::stem::{self, Route, StemAck, StemCodec, StemConfig, StemMessage, STEM_PROTOCOL};
+use dactie_utils::stem::{self, Resend, Route, StemAck, StemCodec, StemConfig, StemMessage, STEM_PROTOCOL};
 use crate::stem_relay;
 use dactie_utils::key_store;
 use dactie_utils::slot_store::SlotStore;
@@ -425,7 +425,7 @@ impl MyBehaviour {
         };
         match route {
             Route::Forward(next) => {
-                log::info!("Stem: sent own message to {next}");
+                log::info!("Stem: sent own message {id:016x} to {next}");
                 self.send_stem(next, id, StemMessage { channel, payload }, None);
                 Ok(())
             }
@@ -443,24 +443,49 @@ impl MyBehaviour {
     /// may deliver twice and which marks this peer as a stem member.
     fn send_stem(&mut self, next: PeerId, id: u64, message: StemMessage, from: Option<PeerId>) {
         let topic = IdentTopic::new(message.channel.clone()).hash();
-        if self.gossipsub.topics().any(|t| *t == topic) {
-            stem_relay::state().arm_embargo(id, message.clone(), from, Instant::now(), &mut rand::thread_rng());
+        let subscribed = self.gossipsub.topics().any(|t| *t == topic);
+        {
+            let mut state = stem_relay::state();
+            if from.is_none() {
+                state.sent_own(id, next);
+            }
+            if subscribed {
+                state.arm_embargo(id, message.clone(), from, Instant::now(), &mut rand::thread_rng());
+            }
         }
         let request = self.stem.send_request(&next, message.clone());
         stem_relay::pending().insert(request, (message, from));
     }
 
-    /// Re-routes this peer's own message away from `avoid`; without a new hop it
-    /// waits for the embargo. Returns false if the message is not its own.
-    fn retry_own_stem(&mut self, id: u64, message: &StemMessage, avoid: &[PeerId]) -> bool {
+    /// Re-routes this peer's own message after it came back from `came_back_from`
+    /// or its hop to `failed` failed, see `StemState::retry_own`. Returns false if
+    /// the message is not its own.
+    fn retry_own_stem(
+        &mut self,
+        id: u64,
+        message: &StemMessage,
+        came_back_from: Option<PeerId>,
+        failed: Option<PeerId>,
+    ) -> bool {
         if !stem_relay::state().is_own(id) {
             return false;
         }
         let candidates = self.stem_candidates();
-        let next = stem_relay::state().retry_own(id, avoid, &candidates, Instant::now(), &mut rand::thread_rng());
+        let next = stem_relay::state().retry_own(
+            id,
+            came_back_from,
+            failed,
+            &candidates,
+            Instant::now(),
+            &mut rand::thread_rng(),
+        );
         match next {
-            Some(next) => {
-                log::info!("Stem: re-routing own message to {next}");
+            Some(Resend::Fresh(next)) => {
+                log::info!("Stem: re-routing own message {id:016x} to {next}");
+                self.send_stem(next, id, message.clone(), None);
+            }
+            Some(Resend::FirstHop(next)) => {
+                log::info!("Stem: every stem peer has own message {id:016x}, back to the first hop {next}");
                 self.send_stem(next, id, message.clone(), None);
             }
             None => log::info!("Stem: own message left to the embargo"),
@@ -553,12 +578,11 @@ impl MyBehaviour {
         let first = stem_relay::state().first_time(id);
         if !first {
             // The stem looped back here. A relay publishes the message now, which
-            // reveals only the relay. The source never does: it hands the message
-            // back to one of its successors, which has seen it already and so
-            // publishes it as a relay. In a small network, where stems often loop
-            // without meeting a diffuser, this ends the loop at once instead of
-            // after the embargo.
-            if !self.retry_own_stem(id, &message, &[]) {
+            // reveals only the relay. The source never does: it sends the message
+            // to a peer that does not have it yet (its other successor, else a
+            // spare connection), which sees an ordinary new stem message. A peer
+            // that got the same message twice from it would know it is the source.
+            if !self.retry_own_stem(id, &message, Some(from), None) {
                 log::info!("Stem: loop at this relay, publishing a message from {from}");
                 self.publish_relayed(notification_tx, my_open_mls, message, from)?;
             }
@@ -607,7 +631,7 @@ impl MyBehaviour {
                     let id = stem::message_id(&message.payload);
                     match from {
                         None => {
-                            self.retry_own_stem(id, &message, &[peer]);
+                            self.retry_own_stem(id, &message, None, Some(peer));
                         }
                         Some(from) => self.publish_relayed(notification_tx, my_open_mls, message, from)?,
                     }

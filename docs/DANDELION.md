@@ -113,10 +113,14 @@ Where the code differs from the design above, or adds to it:
 - **Channel, not topic.** A stem message carries the broadcast's channel, since the topic is
   inside the ciphertext. A relay checks that the channel matches the message before forwarding.
 - **Loops.** A relay that receives a stem message it has already seen publishes it at once. The
-  source never publishes its own message: when it comes back, the source sends it on again, at
-  most three times, then leaves it to the embargo. The harness picks a fresh hop for that
-  re-send; the sharing peer picks one of its two successors (open question 2 in
-  `FUTURE_WORK.md` 3.1).
+  source never publishes its own message: when it comes back, the source sends it to a peer
+  that does not have it yet, its other successor, else a spare connection, at most three times, then leaves it to the embargo. Sending it back to a peer
+  that has it would tell that peer for sure that its predecessor is the source, since relays
+  never send a message twice. The extra first hop costs a factor 1 + P_loop on first-spy
+  success, 1.5% at 200 peers (`FUTURE_WORK.md` 3.1). Only if every connected stem peer has
+  the message (a tiny network, as in the E2E scripts) does it go back to the first hop, which
+  got it straight from the source anyway; first-spy success does not change. The harness does
+  the same on the first loop; on a rare second loop it may reuse the other successor.
 - **Failed hops.** The source re-routes its own message around the failed peer; a relay
   publishes the message instead.
 - **Local delivery.** GossipSub does not hand a node its own publishes, so a diffuser that is

@@ -83,8 +83,8 @@ echo "OK topic inside the ciphertext: peer1 dropped another topic of its channel
 
 # Stem phase (Dandelion++): anonymous broadcasts first travel along a stem of
 # admitted sharing peers; only a diffuser publishes them into GossipSub.
-grep -q 'Stem: sent own message to' "$W/p2.log" || fail "peer2's anonymous broadcasts did not enter the stem"
-STEMMED=$(grep -c 'Stem: sent own message to' "$W/p2.log")
+grep -q 'Stem: sent own message ' "$W/p2.log" || fail "peer2's anonymous broadcasts did not enter the stem"
+STEMMED=$(grep -c 'Stem: sent own message ' "$W/p2.log")
 echo "OK stem: peer2's anonymous broadcasts entered the stem ($STEMMED times)"
 
 # Attributed: the signature names peer1's member, whose MemberID only the AA logged.
@@ -93,7 +93,7 @@ send p2 "attr_broad t attributed-e2e"
 wait_count "$W/p1.log" 'attributed-e2e' 1 30
 grep -A6 "attributed-e2e" "$W/p1.log" | grep -q "Attributed to member: $MID" || fail "the attributed broadcast did not name member $MID"
 echo "OK attribution: peer1 saw the attributed message as from member $MID"
-[ "$(grep -c 'Stem: sent own message to' "$W/p2.log")" = "$STEMMED" ] || fail "the attributed broadcast went through the stem"
+[ "$(grep -c 'Stem: sent own message ' "$W/p2.log")" = "$STEMMED" ] || fail "the attributed broadcast went through the stem"
 echo "OK stem: the attributed broadcast was published directly"
 
 # A second member whose sharing peer m2 is the source. Its stem can only run through member 1's
@@ -104,7 +104,7 @@ send m2 "sub t"
 sleep 10
 send m2 "broad t member2-e2e"
 wait_count "$W/p1.log" 'member2-e2e' 1 60
-grep -q 'Stem: sent own message to' "$W/m2.log" || fail "member 2's broadcast did not enter the stem"
+grep -q 'Stem: sent own message ' "$W/m2.log" || fail "member 2's broadcast did not enter the stem"
 SIG2=$(grep -A6 "member2-e2e" "$W/p1.log" | grep -A1 '^Signature:' | tail -1 | tr -d '[:space:]')
 echo "OK stem: member 2's broadcast went into the stem of member 1's peers"
 sleep 3
@@ -145,6 +145,13 @@ for n in p1 p2 p3; do
     [ -z "$TWICE" ] || fail "$n showed a broadcast twice: $TWICE"
 done
 echo "OK stem: no peer showed a broadcast twice"
+# A source never sends one of its messages to the same peer twice: after a loop it picks a peer
+# that does not have it yet, so no hop learns for sure that its predecessor is the source.
+for n in p2 m2; do
+    DUP=$(grep -oE 'Stem: (sent|re-routing) own message [0-9a-f]+ to [A-Za-z0-9]+' "$W/$n.log" | awk '{print $5, $7}' | sort | uniq -d)
+    [ -z "$DUP" ] || fail "$n sent its own message to the same peer twice: $DUP"
+done
+echo "OK stem: sources re-routed $(cat "$W/p2.log" "$W/m2.log" | grep -c 'Stem: re-routing own message') looped messages to peers without them, $(cat "$W/p2.log" "$W/m2.log" | grep -c 'back to the first hop') back to the first hop (all stem peers had them)"
 
 send aa "req_open $SIG"
 for i in 1 2; do

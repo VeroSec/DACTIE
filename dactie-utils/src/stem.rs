@@ -87,6 +87,23 @@ pub fn message_id(payload: &Vec<u8>) -> u64 {
 /// hop before it leaves the message to the embargo.
 const OWN_RETRIES: u8 = 3;
 
+/// Where a source re-sends its own message, see [`StemState::retry_own`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Resend {
+    /// A peer that does not have the message yet.
+    Fresh(PeerId),
+    /// The first hop, which has it already: every connected stem peer has it.
+    FirstHop(PeerId),
+}
+
+/// One of this peer's own messages: re-routes used so far, and the peers it has
+/// been sent to, first hop first.
+#[derive(Default)]
+struct OwnMessage {
+    retries: u8,
+    sent_to: Vec<PeerId>,
+}
+
 pub struct StemState {
     config: StemConfig,
     epoch_until: Option<Instant>,
@@ -103,9 +120,9 @@ pub struct StemState {
     /// Messages seen on the stem.
     seen: HashSet<u64>,
     seen_before: HashSet<u64>,
-    /// This peer's own messages, with the re-routes used so far.
-    originated: HashMap<u64, u8>,
-    originated_before: HashMap<u64, u8>,
+    /// This peer's own messages.
+    originated: HashMap<u64, OwnMessage>,
+    originated_before: HashMap<u64, OwnMessage>,
     /// Messages known to be in GossipSub ([`Self::in_gossip`]).
     gossiped: HashSet<u64>,
     gossiped_before: HashSet<u64>,
@@ -239,7 +256,21 @@ impl StemState {
 
     /// Mark a message as this peer's own.
     pub fn mark_own(&mut self, id: u64) {
-        self.originated.entry(id).or_insert(0);
+        self.originated.entry(id).or_default();
+    }
+
+    fn own_mut(&mut self, id: u64) -> Option<&mut OwnMessage> {
+        match self.originated.get_mut(&id) {
+            Some(own) => Some(own),
+            None => self.originated_before.get_mut(&id),
+        }
+    }
+
+    /// Record that this peer sent its own message `id` to `to`.
+    pub fn sent_own(&mut self, id: u64, to: PeerId) {
+        if let Some(own) = self.own_mut(id) {
+            own.sent_to.push(to);
+        }
     }
 
     pub fn is_own(&self, id: u64) -> bool {
@@ -249,34 +280,52 @@ impl StemState {
     /// A new successor for one of this peer's own messages that came back on a
     /// loop or whose hop failed. The source must never publish its own message
     /// itself: its mesh peers would receive it straight from the source, which
-    /// is exactly what the stem hides. `avoid` holds peers whose hop failed; after
-    /// a loop it is empty, so the message goes back to a successor that has seen
-    /// it and publishes it as a relay. After `OWN_RETRIES` re-routes, or without
-    /// a usable peer, the message is left to the embargo.
+    /// is exactly what the stem hides. Nor does it send the message to a peer it
+    /// already sent it to: only a source ever sends a message twice (a relay
+    /// that sees a message again publishes it), so that peer would know for sure
+    /// that its predecessor is the source. The message goes to the other
+    /// successor, else to a spare connection, which sees an ordinary new stem
+    /// message. Only if every connected stem peer has
+    /// it already (a tiny network) does it go back to the first hop: that hop got
+    /// it straight from the source anyway, so a colluding first hop gains
+    /// certainty but first-spy success does not change. Any other peer that has
+    /// it might otherwise have guessed wrong. After `OWN_RETRIES` re-routes, or
+    /// without a usable peer, the message is left to the embargo.
     pub fn retry_own<R: Rng>(
         &mut self,
         id: u64,
-        avoid: &[PeerId],
+        came_back_from: Option<PeerId>,
+        failed: Option<PeerId>,
         candidates: &[PeerId],
         now: Instant,
         rng: &mut R,
-    ) -> Option<PeerId> {
-        let used = match self.originated.get_mut(&id) {
-            Some(used) => used,
-            None => self.originated_before.get_mut(&id)?,
-        };
-        if *used >= OWN_RETRIES {
+    ) -> Option<Resend> {
+        let own = self.own_mut(id)?;
+        if own.retries >= OWN_RETRIES {
             return None;
         }
-        *used += 1;
+        own.retries += 1;
+        let sent_to = own.sent_to.clone();
         self.refresh(now, candidates, rng);
-        let usable = |p: &PeerId| !avoid.contains(p) && candidates.contains(p);
+        let usable = |p: &PeerId| {
+            Some(*p) != came_back_from
+                && Some(*p) != failed
+                && !sent_to.contains(p)
+                && candidates.contains(p)
+        };
         let preferred: Vec<PeerId> = self.successors.iter().copied().filter(|p| usable(p)).collect();
         if let Some(p) = preferred.choose(rng) {
-            return Some(*p);
+            return Some(Resend::Fresh(*p));
         }
         let spare: Vec<PeerId> = candidates.iter().copied().filter(|p| usable(p)).collect();
-        spare.choose(rng).copied()
+        if let Some(p) = spare.choose(rng) {
+            return Some(Resend::Fresh(*p));
+        }
+        sent_to
+            .first()
+            .copied()
+            .filter(|p| candidates.contains(p) && Some(*p) != failed)
+            .map(Resend::FirstHop)
     }
 
     /// Successor of this peer's own messages in the current epoch.
@@ -472,8 +521,44 @@ mod tests {
         assert_eq!(stem.route(None, &[], Instant::now(), &mut rng), Route::Fluff);
     }
 
-    /// The source re-routes its own message away from the peers that failed or
-    /// looped, a bounded number of times, and never re-routes others' messages.
+    /// After a loop, the source sends its message to its other successor, the
+    /// one that does not have it yet.
+    #[test]
+    fn loops_go_to_the_other_successor() {
+        let mut rng = StdRng::seed_from_u64(8);
+        let candidates = peers(10);
+        let mut stem = StemState::new(config(0.0001));
+        let now = Instant::now();
+        let Route::Forward(own) = stem.route(None, &candidates, now, &mut rng) else {
+            panic!("own messages enter the stem")
+        };
+        let other = *stem.successors.iter().find(|p| **p != own).unwrap();
+        let from = *candidates.iter().find(|p| !stem.successors.contains(p)).unwrap();
+        stem.mark_own(7);
+        stem.sent_own(7, own);
+        assert_eq!(stem.retry_own(7, Some(from), None, &candidates, now, &mut rng), Some(Resend::Fresh(other)));
+    }
+
+    /// When every connected stem peer has the message, it goes back to the first
+    /// hop, unless that hop failed.
+    #[test]
+    fn only_a_tiny_network_sends_back_to_the_first_hop() {
+        let mut rng = StdRng::seed_from_u64(9);
+        let candidates = peers(2);
+        let mut stem = StemState::new(config(0.0001));
+        let now = Instant::now();
+        let Route::Forward(own) = stem.route(None, &candidates, now, &mut rng) else {
+            panic!("own messages enter the stem")
+        };
+        let other = *candidates.iter().find(|p| **p != own).unwrap();
+        stem.mark_own(5);
+        stem.sent_own(5, own);
+        assert_eq!(stem.retry_own(5, Some(other), None, &candidates, now, &mut rng), Some(Resend::FirstHop(own)));
+        assert_eq!(stem.retry_own(5, None, Some(own), &[own], now, &mut rng), None);
+    }
+
+    /// The source re-routes its own message a bounded number of times, never to
+    /// a peer it already sent it to, and never re-routes others' messages.
     #[test]
     fn own_messages_are_rerouted_not_fluffed() {
         let mut rng = StdRng::seed_from_u64(6);
@@ -484,12 +569,19 @@ mod tests {
             panic!("own messages enter the stem")
         };
         stem.mark_own(42);
+        stem.sent_own(42, first);
+        let mut sent = vec![first];
         for _ in 0..OWN_RETRIES {
-            let next = stem.retry_own(42, &[first], &candidates, now, &mut rng).expect("a spare peer");
-            assert_ne!(next, first);
+            // After a loop: it came back from `first` each time.
+            let Some(Resend::Fresh(next)) = stem.retry_own(42, Some(first), None, &candidates, now, &mut rng) else {
+                panic!("a peer without the message")
+            };
+            assert!(!sent.contains(&next), "sent to {next} twice");
+            stem.sent_own(42, next);
+            sent.push(next);
         }
-        assert_eq!(stem.retry_own(42, &[first], &candidates, now, &mut rng), None);
-        assert_eq!(stem.retry_own(43, &[first], &candidates, now, &mut rng), None);
+        assert_eq!(stem.retry_own(42, Some(first), None, &candidates, now, &mut rng), None);
+        assert_eq!(stem.retry_own(43, Some(first), None, &candidates, now, &mut rng), None);
     }
 
     /// Each predecessor gets `rate_per_sec` stem messages per second.
