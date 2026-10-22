@@ -403,14 +403,18 @@ impl MyBehaviour {
         Ok(())
     }
 
-    /// Connected, admitted sharing peers that speak the stem protocol.
+    /// Connected, admitted sharing peers that speak the stem protocol; of those,
+    /// the ones this peer dialled itself if there are at least two.
     fn stem_candidates(&self) -> Vec<PeerId> {
-        let capable = stem_relay::capable();
-        self.gossipsub
-            .all_peers()
-            .map(|(peer, _)| *peer)
-            .filter(|peer| capable.contains(peer) && admission::is_admitted(peer))
-            .collect()
+        let candidates: Vec<PeerId> = {
+            let capable = stem_relay::capable();
+            self.gossipsub
+                .all_peers()
+                .map(|(peer, _)| *peer)
+                .filter(|peer| capable.contains(peer) && admission::is_admitted(peer))
+                .collect()
+        };
+        stem::prefer_outbound(candidates, &stem_relay::outbound())
     }
 
     /// Sends one of this peer's own messages into the stem.
@@ -1701,7 +1705,19 @@ impl MyBehaviour {
                     }
                 }
             }
-            SwarmEvent::ConnectionClosed { peer_id, cause, .. } => {
+            SwarmEvent::ConnectionEstablished { peer_id, endpoint, num_established, .. } => {
+                if num_established.get() == 1 {
+                    if endpoint.is_dialer() {
+                        stem_relay::outbound().insert(peer_id);
+                    } else {
+                        stem_relay::outbound().remove(&peer_id);
+                    }
+                }
+            }
+            SwarmEvent::ConnectionClosed { peer_id, cause, num_established, .. } => {
+                if num_established == 0 {
+                    stem_relay::outbound().remove(&peer_id);
+                }
                 if let Some(connerror) = cause {
                     log::error!(
                         "Connection to peer {} closed because of an error: {}",

@@ -83,6 +83,19 @@ pub fn message_id(payload: &Vec<u8>) -> u64 {
     h.finish()
 }
 
+/// The candidates to draw stem successors from: the connections this peer
+/// dialled itself, as in Dandelion++, BIP 156 and Monero, so a member that
+/// connects to many peers does not become a successor candidate at each of
+/// them. With fewer than two dialled candidates (a tiny network), all of them.
+pub fn prefer_outbound(candidates: Vec<PeerId>, outbound: &HashSet<PeerId>) -> Vec<PeerId> {
+    let dialled: Vec<PeerId> = candidates.iter().copied().filter(|p| outbound.contains(p)).collect();
+    if dialled.len() >= 2 {
+        dialled
+    } else {
+        candidates
+    }
+}
+
 /// How often the source re-routes its own message after a loop or a failed
 /// hop before it leaves the message to the embargo.
 const OWN_RETRIES: u8 = 3;
@@ -519,6 +532,16 @@ mod tests {
         let mut rng = StdRng::seed_from_u64(3);
         let mut stem = StemState::new(config(0.2));
         assert_eq!(stem.route(None, &[], Instant::now(), &mut rng), Route::Fluff);
+    }
+
+    /// Successors come from dialled connections as soon as there are two.
+    #[test]
+    fn successors_prefer_outbound_connections() {
+        let all = peers(5);
+        let two: HashSet<PeerId> = all[..2].iter().copied().collect();
+        assert_eq!(prefer_outbound(all.clone(), &two), all[..2].to_vec());
+        let one: HashSet<PeerId> = all[..1].iter().copied().collect();
+        assert_eq!(prefer_outbound(all.clone(), &one), all);
     }
 
     /// After a loop, the source sends its message to its other successor, the

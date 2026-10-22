@@ -13,6 +13,7 @@ use std::sync::{Mutex, MutexGuard, OnceLock};
 static STATE: OnceLock<Mutex<StemState>> = OnceLock::new();
 static PENDING: OnceLock<Mutex<HashMap<OutboundRequestId, Pending>>> = OnceLock::new();
 static CAPABLE: OnceLock<Mutex<HashSet<PeerId>>> = OnceLock::new();
+static OUTBOUND: OnceLock<Mutex<HashSet<PeerId>>> = OnceLock::new();
 
 /// Sets the stem configuration; called once when the behaviour is built.
 pub(crate) fn init(config: StemConfig) {
@@ -39,4 +40,10 @@ pub(crate) fn pending() -> MutexGuard<'static, HashMap<OutboundRequestId, Pendin
 /// AA or the archives.
 pub(crate) fn capable() -> MutexGuard<'static, HashSet<PeerId>> {
     CAPABLE.get_or_init(Default::default).lock().unwrap()
+}
+
+/// Connected peers this peer dialled itself (by their first connection, as in
+/// GossipSub), from which it prefers to draw stem successors.
+pub(crate) fn outbound() -> MutexGuard<'static, HashSet<PeerId>> {
+    OUTBOUND.get_or_init(Default::default).lock().unwrap()
 }
