@@ -257,10 +257,13 @@ services:
       -B "/ip4/10.244.192.116/tcp/10001"
       -p 21014
       --metrics-addr 0.0.0.0:9899
-      --advertise-addr /ip4/10.244.192.119/tcp/21014'
+      --advertise-addr /ip4/10.244.192.119/tcp/21014
+      --stem-fluff-probability $${STEM_Q}'
     environment:
       - RUST_LOG=info
       - BENCH_PUBLISH=${BENCH_PUBLISH:-true}
+      # Stem phase of the benchmark publisher; STEM_Q=0 measures latency without it.
+      - STEM_Q=${STEM_Q:-0.2}
       # Left unset by default so the sweep can override them per run without
       # editing this file: `BENCH_RATE=5 BENCH_PAYLOAD_FILE=... docker compose up`.
       - BENCH_RATE=${BENCH_RATE:-40}
