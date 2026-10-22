@@ -11,6 +11,17 @@ handshake, and every 5 s it closes random connections that are older than 20 s a
 mesh, down to `--conn-low`. The connection graph is thus a random graph with 50 to 100 connections per
 peer; there is no Kademlia DHT. Peers start in waves of `--spawn-per-sec` (default 50).
 
+Every link has a simulated one-way delay. Each peer sits at a random point of a unit square, and the
+delay grows with the distance between the two ends, from 10 ms for neighbours to 100 ms for opposite
+corners (`--link-latency-ms 10,100`, the default; `0` turns it off). Delays are the same in both
+directions and obey the triangle inequality, so a detour via a third peer is never faster than the
+direct link. Without the simulation all links of the single process have zero delay, CPU scheduling
+decides which copy of a message arrives first, and relayed copies often beat the source's direct one,
+so peers record fewer direct receipts than in a real network. With the simulation, TCP runs with
+Nagle's algorithm off, since loopback acknowledgements do not see the simulated delay. At 100 peers
+the source's mesh peers received 70% of their first copies directly without the simulation and 100%
+with it.
+
 ## Configuration Parameters
 ```
 Usage: dactie-experiments [OPTIONS]

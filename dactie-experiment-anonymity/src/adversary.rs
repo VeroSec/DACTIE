@@ -27,6 +27,8 @@ pub(crate) struct Observation {
     pub(crate) prop_id: PeerId,
     /// Arrival, relative to the publish instant.
     pub(crate) at: Duration,
+    /// Received on the stem (Dandelion++) rather than through GossipSub.
+    pub(crate) stem: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -107,6 +109,10 @@ fn guess<R: Rng>(
             distinct.choose(rng).copied()
         }
         Estimator::FirstSpy => {
+            // A colluder on the stem names its stem predecessor; gossip
+            // observations only count when no colluder sat on the stem.
+            let on_stem: Vec<&Observation> = seen.iter().copied().filter(|o| o.stem).collect();
+            let seen: Vec<&Observation> = if on_stem.is_empty() { seen.to_vec() } else { on_stem };
             let earliest = seen.iter().map(|o| o.at).min()?;
             // Ties break uniformly, as they do for plurality. Observations
             // arrive over an unordered channel, so picking the first minimum
@@ -202,6 +208,21 @@ mod tests {
 
     /// If every colluder was relayed to directly by the source and the earliest
     /// observation is one of them, first-spy must name the source every time.
+    /// With the stem on, a colluder on the stem names its stem predecessor, and
+    /// gossip observations are ignored, however early they are.
+    #[test]
+    fn first_spy_prefers_the_stem() {
+        let mut rng = StdRng::seed_from_u64(9);
+        let (source, relay, b, c) = (pid(1), pid(2), pid(3), pid(4));
+        let on_stem = Observation { observer: b, prop_id: relay, at: Duration::from_millis(20), stem: true };
+        let gossip = Observation { observer: c, prop_id: source, at: Duration::from_millis(5), stem: false };
+        let candidates = [source, relay];
+        assert_eq!(guess(Estimator::FirstSpy, &[&on_stem, &gossip], &candidates, &mut rng), Some(relay));
+        let first_hop = Observation { observer: b, prop_id: source, at: Duration::from_millis(30), stem: true };
+        assert_eq!(guess(Estimator::FirstSpy, &[&first_hop, &gossip], &candidates, &mut rng), Some(source));
+        assert_eq!(guess(Estimator::FirstSpy, &[&gossip], &candidates, &mut rng), Some(source));
+    }
+
     #[test]
     fn first_spy_finds_a_source_that_relayed_directly() {
         let source = pid(1);
@@ -211,6 +232,7 @@ mod tests {
                 observer: pid(i),
                 prop_id: source,
                 at: Duration::from_millis(i as u64 * 10),
+                stem: false,
             })
             .collect();
 
@@ -232,6 +254,7 @@ mod tests {
                 observer: pid(i),
                 prop_id: relay,
                 at: Duration::from_millis(i as u64 * 10),
+                stem: false,
             })
             .collect();
 
@@ -251,6 +274,7 @@ mod tests {
             observer: pid(2),
             prop_id: pid(3),
             at: Duration::from_millis(5),
+            stem: false,
         }];
 
         let mut rng = StdRng::seed_from_u64(11);
@@ -285,11 +309,13 @@ mod tests {
                 observer: pid(3),
                 prop_id: other,
                 at: Duration::from_millis(10),
+                stem: false,
             },
             Observation {
                 observer: pid(4),
                 prop_id: source,
                 at: Duration::from_millis(10),
+                stem: false,
             },
         ];
 

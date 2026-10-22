@@ -1,9 +1,14 @@
 use crate::conn_cap::ConnCap;
+use crate::link_latency::{Delayed, LatencyRange};
+use crate::stem::{message_id, Route, StemAck, StemConfig, StemMessage, StemState};
 use futures::StreamExt;
 use libp2p::gossipsub::IdentTopic;
+use libp2p::request_response::{self, OutboundRequestId, ProtocolSupport};
 use libp2p::swarm::dial_opts::{DialOpts, PeerCondition};
 use libp2p::swarm::{NetworkBehaviour, SwarmEvent};
-use libp2p::{gossipsub, noise, plaintext, tcp, yamux, Multiaddr, PeerId, Swarm};
+use libp2p::core::muxing::StreamMuxerBox;
+use libp2p::core::transport::{upgrade, Boxed};
+use libp2p::{gossipsub, noise, plaintext, tcp, yamux, Multiaddr, PeerId, StreamProtocol, Swarm, Transport};
 use rand::{distributions::Alphanumeric, seq::SliceRandom, Rng};
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
@@ -23,6 +28,9 @@ pub(crate) struct Peer {
     directory: Directory,
     /// When each connection was established, so young ones are spared when trimming.
     conn_since: HashMap<PeerId, Instant>,
+    stem: StemState,
+    /// Stem messages in flight, published directly if the successor fails.
+    stem_pending: HashMap<OutboundRequestId, Vec<u8>>,
 }
 
 /// New connections are not trimmed during their first seconds (go-libp2p's
@@ -89,6 +97,10 @@ pub(crate) struct MeshConfig {
     /// Peers started per second; 0 starts them all at once. Starting in waves avoids
     /// a burst of simultaneous dials, handshakes and trims in large runs.
     pub(crate) spawn_per_sec: u32,
+    /// Simulated one-way delay per connection, see `link_latency`.
+    pub(crate) latency: LatencyRange,
+    /// Stem phase (Dandelion++), see `stem`; off by default.
+    pub(crate) stem: StemConfig,
 }
 
 impl MeshConfig {
@@ -128,6 +140,8 @@ impl MeshConfig {
             plaintext: false,
             heartbeat: Duration::from_secs(1),
             spawn_per_sec: 0,
+            latency: LatencyRange::OFF,
+            stem: StemConfig::OFF,
         }
     }
 
@@ -138,6 +152,16 @@ impl MeshConfig {
 
     pub(crate) fn with_spawn_rate(mut self, per_sec: u32) -> Self {
         self.spawn_per_sec = per_sec;
+        self
+    }
+
+    pub(crate) fn with_stem(mut self, stem: StemConfig) -> Self {
+        self.stem = stem;
+        self
+    }
+
+    pub(crate) fn with_link_latency(mut self, latency: LatencyRange) -> Self {
+        self.latency = latency;
         self
     }
 
@@ -164,6 +188,8 @@ pub(crate) struct PeerOut {
     /// When the observation was made. Converted to a publish-relative Duration
     /// by the experiment, which is the only place that knows the publish time.
     pub(crate) at: Instant,
+    /// Received on the stem rather than through GossipSub.
+    pub(crate) stem: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -238,6 +264,8 @@ pub(crate) struct MyBehaviour {
     pub(crate) gossipsub: gossipsub::Behaviour,
     /// Caps established connections at the high watermark, refusing before the handshake
     pub(crate) limits: ConnCap,
+    /// Stem hops of the Dandelion++ phase, one request per hop.
+    pub(crate) stem: request_response::json::Behaviour<StemMessage, StemAck>,
 }
 
 impl Peer {
@@ -254,6 +282,8 @@ impl Peer {
             mesh,
             directory,
             conn_since: HashMap::new(),
+            stem: StemState::new(mesh.stem),
+            stem_pending: HashMap::new(),
         })
     }
 
@@ -292,7 +322,13 @@ impl Peer {
         // Plaintext skips Noise, whose per-connection buffers dominate memory in
         // large single-process runs. Encryption does not affect who receives what
         // from whom and when, which is all the experiment measures.
-        let mut swarm = if mesh.plaintext {
+        let mut swarm = if !mesh.latency.is_off() {
+            builder
+                .with_other_transport(|key| Self::delayed_transport(key, mesh))?
+                .with_behaviour(|_| Self::build_behaviour(mesh))?
+                .with_swarm_config(swarm_config)
+                .build()
+        } else if mesh.plaintext {
             builder
                 .with_tcp(
                     tcp::Config::default(),
@@ -320,6 +356,47 @@ impl Peer {
         Ok(swarm)
     }
 
+    /// TCP whose connections lag by the simulated link delay, below the
+    /// security handshake so that handshakes take their round trips too.
+    fn delayed_transport(
+        key: &libp2p::identity::Keypair,
+        mesh: MeshConfig,
+    ) -> Result<Boxed<(PeerId, StreamMuxerBox)>, Box<dyn Error + Send + Sync>> {
+        let range = mesh.latency;
+        // Port reuse binds outgoing connections to the listening port, so both ends
+        // of a link see both listening ports and derive the same delay. Nagle is off
+        // (libp2p's nodelay(false) default, commented "Disable Nagle's algorithm",
+        // enables it): the kernel acknowledges loopback segments without the
+        // simulated delay, so Nagle's wait for acknowledgements held messages on busy
+        // links for up to the 40 ms delayed-ACK timeout, which no simulated link
+        // reflects, and relayed copies overtook the direct one.
+        let tcp = tcp::tokio::Transport::new(
+            tcp::Config::default().port_reuse(true).nodelay(true),
+        );
+        let tcp = tcp.map(move |stream, _| {
+            let ports = (stream.0.local_addr(), stream.0.peer_addr());
+            let delay = match ports {
+                (Ok(local), Ok(peer)) => range.for_ports(local.port(), peer.port()),
+                _ => Duration::from_millis(range.max_ms),
+            };
+            Delayed::new(stream, delay)
+        });
+        let upgraded = tcp.upgrade(upgrade::Version::V1);
+        Ok(if mesh.plaintext {
+            upgraded
+                .authenticate(plaintext::Config::new(key))
+                .multiplex(yamux::Config::default())
+                .map(|(peer, muxer), _| (peer, StreamMuxerBox::new(muxer)))
+                .boxed()
+        } else {
+            upgraded
+                .authenticate(noise::Config::new(key)?)
+                .multiplex(yamux::Config::default())
+                .map(|(peer, muxer), _| (peer, StreamMuxerBox::new(muxer)))
+                .boxed()
+        })
+    }
+
     fn build_behaviour(mesh: MeshConfig) -> Result<MyBehaviour, Box<dyn Error + Send + Sync>> {
         let gossipsub_config = Self::gossipsub_config(mesh).map_err(io::Error::other)?;
 
@@ -330,9 +407,15 @@ impl Peer {
 
         gossipsub.subscribe(&IdentTopic::new("Test"))?;
 
+        let stem = request_response::json::Behaviour::new(
+            [(StreamProtocol::new("/dactie/stem/1"), ProtocolSupport::Full)],
+            request_response::Config::default(),
+        );
+
         Ok(MyBehaviour {
             gossipsub,
             limits: ConnCap::new(Some(mesh.conn_high)),
+            stem,
         })
     }
 
@@ -348,6 +431,9 @@ impl Peer {
                 _ = trim.tick() => {
                     self.trim_connections();
                     self.top_up();
+                    for data in self.stem.due(Instant::now()) {
+                        self.fluff(data);
+                    }
                 }
                 Ok(signal) = self.control_channel.recv() => {
                     match signal {
@@ -381,13 +467,9 @@ impl Peer {
                             if val == self.get_peer_id() {
                                 println!("Stopping");
                                 let message = "Stop".repeat(30);
-                                let result = self.swarm.behaviour_mut().gossipsub.publish(topic, message);
+                                let result = self.publish_own(message.into_bytes());
                                 println!(
-                                    "Publisher state: {connected} connections, {mesh} mesh peers, publish {}",
-                                    match result {
-                                        Ok(_) => "ok".to_string(),
-                                        Err(e) => format!("failed: {e:?}"),
-                                    }
+                                    "Publisher state: {connected} connections, {mesh} mesh peers, publish {result}"
                                 );
                             }
                         }
@@ -397,7 +479,7 @@ impl Peer {
                 _ = Self::tick(&mut timer), if timer.is_some() => {
 
                     let message = generate_random_string(120);
-                    let _ = self.swarm.behaviour_mut().gossipsub.publish(IdentTopic::new("Test"),message); //Not handled
+                    self.publish_own(message.into_bytes());
                 },
                 event = self.swarm.select_next_some() => self.handle_event(event)
             }
@@ -454,6 +536,98 @@ impl Peer {
         }
     }
 
+    /// Publish one of this peer's own messages: into the stem when it is on,
+    /// otherwise straight into GossipSub. Returns what happened, for the log.
+    fn publish_own(&mut self, data: Vec<u8>) -> String {
+        if !self.stem.is_on() {
+            return self.fluff(data);
+        }
+        let id = message_id(&data);
+        self.stem.first_time(id);
+        self.stem.mark_own(id);
+        self.stem_step(None, id, data)
+    }
+
+    /// Forward a stem message to the next hop, or fluff it here.
+    fn stem_step(&mut self, from: Option<PeerId>, id: u64, data: Vec<u8>) -> String {
+        let connected: Vec<PeerId> = self.swarm.connected_peers().copied().collect();
+        let now = Instant::now();
+        let mut rng = rand::thread_rng();
+        match self.stem.route(from, &connected, now, &mut rng) {
+            Route::Forward(next) => {
+                self.send_stem(next, id, data);
+                "stem".to_string()
+            }
+            Route::Fluff => self.fluff(data),
+        }
+    }
+
+    fn send_stem(&mut self, next: PeerId, id: u64, data: Vec<u8>) {
+        self.stem
+            .arm_embargo(id, data.clone(), Instant::now(), &mut rand::thread_rng());
+        let request = self
+            .swarm
+            .behaviour_mut()
+            .stem
+            .send_request(&next, StemMessage { data: data.clone() });
+        self.stem_pending.insert(request, data);
+    }
+
+    /// Re-route this peer's own message away from `avoid`; without a new hop it
+    /// waits for the embargo. Returns false if the message is not its own.
+    fn retry_own(&mut self, id: u64, data: &[u8], avoid: &[PeerId]) -> bool {
+        if !self.stem.is_own(id) {
+            return false;
+        }
+        let connected: Vec<PeerId> = self.swarm.connected_peers().copied().collect();
+        if let Some(next) =
+            self.stem
+                .retry_own(id, avoid, &connected, Instant::now(), &mut rand::thread_rng())
+        {
+            self.send_stem(next, id, data.to_vec());
+        }
+        true
+    }
+
+    /// A stem message arrived from `from`.
+    fn on_stem(&mut self, from: PeerId, data: Vec<u8>) {
+        let id = message_id(&data);
+        if !self.stem.first_time(id) {
+            // The stem looped back here. The source re-routes its own message;
+            // a relay spreads it now instead of waiting for the embargo, which
+            // reveals only the relay.
+            let avoid: Vec<PeerId> = [Some(from), self.stem.own_successor()].into_iter().flatten().collect();
+            if !self.retry_own(id, &data, &avoid) {
+                self.fluff(data);
+            }
+            return;
+        }
+        if is_measurement(&data) {
+            self.report(from, true);
+        }
+        self.stem_step(Some(from), id, data);
+    }
+
+    /// Publish into GossipSub. A duplicate means the message is already out.
+    fn fluff(&mut self, data: Vec<u8>) -> String {
+        match self.swarm.behaviour_mut().gossipsub.publish(IdentTopic::new("Test"), data) {
+            Ok(_) => "ok".to_string(),
+            Err(gossipsub::PublishError::Duplicate) => "duplicate".to_string(),
+            Err(e) => format!("failed: {e:?}"),
+        }
+    }
+
+    fn report(&self, prop_id: PeerId, stem: bool) {
+        self.response_channel
+            .send(PeerOut {
+                observer: *self.swarm.local_peer_id(),
+                prop_id,
+                at: Instant::now(),
+                stem,
+            })
+            .unwrap();
+    }
+
     fn handle_event(&mut self, event: SwarmEvent<MyBehaviourEvent>) {
         match event {
             SwarmEvent::ConnectionEstablished { peer_id, .. } => {
@@ -476,15 +650,34 @@ impl Peer {
                 message,
                 ..
             })) => {
-                if String::from_utf8_lossy(&message.data[..4]) == "Stop" {
-                    let observer = *self.swarm.local_peer_id();
-                    self.response_channel
-                        .send(PeerOut {
-                            observer,
-                            prop_id: peer_id,
-                            at: Instant::now(),
-                        })
-                        .unwrap();
+                self.stem.seen_in_gossip(message_id(&message.data));
+                if is_measurement(&message.data) {
+                    self.report(peer_id, false);
+                }
+            }
+            SwarmEvent::Behaviour(MyBehaviourEvent::Stem(request_response::Event::Message {
+                peer,
+                message,
+            })) => match message {
+                request_response::Message::Request { request, channel, .. } => {
+                    let _ = self.swarm.behaviour_mut().stem.send_response(channel, StemAck);
+                    self.on_stem(peer, request.data);
+                }
+                request_response::Message::Response { request_id, .. } => {
+                    self.stem_pending.remove(&request_id);
+                }
+            },
+            SwarmEvent::Behaviour(MyBehaviourEvent::Stem(request_response::Event::OutboundFailure {
+                peer,
+                request_id,
+                ..
+            })) => {
+                // The successor did not take it. The source tries another hop;
+                // a relay spreads it from here.
+                if let Some(data) = self.stem_pending.remove(&request_id) {
+                    if !self.retry_own(message_id(&data), &data, &[peer]) {
+                        self.fluff(data);
+                    }
                 }
             }
             //e => println!("{:?}",e)
@@ -497,6 +690,11 @@ impl Peer {
             interval.tick().await;
         }
     }
+}
+
+/// The measurement message, as opposed to background traffic.
+fn is_measurement(data: &[u8]) -> bool {
+    data.starts_with(b"Stop")
 }
 
 fn generate_random_string(len: usize) -> String {
