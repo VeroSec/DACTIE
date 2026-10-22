@@ -1402,18 +1402,37 @@ impl MyOpenMls {
     }
 
     pub fn get_channel(&self, topic: Vec<u8>) -> String {
-        // If topic is an ASCII number 0..9, map directly to that channel index.
-        if let Ok(s) = std::str::from_utf8(&topic) {
-            if let Ok(n) = s.parse::<usize>() {
-                if n < NUM_CHANNELS as usize {
-                    return format!("channel_{}", n);
-                }
-            }
-        }
-        // Otherwise hash to one of NUM_CHANNELS buckets.
-        let mut hasher = DefaultHasher::new();
-        topic.hash(&mut hasher);
-        format!("channel_{}", hasher.finish() % NUM_CHANNELS)
+        channel_of(&topic)
+    }
+
+    /// Encrypts a broadcast for the common group, with the topic inside the
+    /// ciphertext and only its channel in clear.
+    pub fn seal_broadcast(
+        &self,
+        topic: &str,
+        data: Vec<u8>,
+    ) -> Result<shared_structs::MessageBody, MyOpenMLSError> {
+        let channel = channel_of(topic.as_bytes());
+        let (_, ciphertext, nonce) = self.encrypt_with_group_key(
+            self.get_common_group_id()?,
+            encode_broadcast(topic, data)?,
+        )?;
+        Ok(shared_structs::MessageBody::BroadcastEnc {
+            channel,
+            data: ciphertext,
+            nonce,
+        })
+    }
+
+    /// Decrypts a broadcast that arrived on `channel` and returns its topic and
+    /// data. Fails if the topic inside does not belong to that channel.
+    pub fn open_broadcast(
+        &self,
+        channel: &str,
+        ciphertext: Vec<u8>,
+        nonce: Vec<u8>,
+    ) -> Result<(String, Vec<u8>), MyOpenMLSError> {
+        decode_broadcast(channel, &self.decrypt_broadcast(ciphertext, nonce)?)
     }
 
     //Returns Channel, if not already subscribed
@@ -1545,6 +1564,45 @@ impl GroupStorage {
     }
 }
 
+/// The channel (GossipSub topic) a topic is published on.
+pub fn channel_of(topic: &[u8]) -> String {
+    // If topic is an ASCII number 0..9, map directly to that channel index.
+    if let Ok(s) = std::str::from_utf8(topic) {
+        if let Ok(n) = s.parse::<usize>() {
+            if n < NUM_CHANNELS as usize {
+                return format!("channel_{}", n);
+            }
+        }
+    }
+    // Otherwise hash to one of NUM_CHANNELS buckets.
+    let mut hasher = DefaultHasher::new();
+    topic.hash(&mut hasher);
+    format!("channel_{}", hasher.finish() % NUM_CHANNELS)
+}
+
+/// The plaintext of a broadcast: topic and data together.
+pub fn encode_broadcast(topic: &str, data: Vec<u8>) -> Result<Vec<u8>, MyOpenMLSError> {
+    bincode::serialize(&shared_structs::BroadcastPlain {
+        topic: topic.to_owned(),
+        data,
+    })
+    .map_err(|e| MyOpenMLSError::SerializationError(e.to_string()))
+}
+
+/// Unpacks a decrypted broadcast that arrived on `channel`. A topic that does
+/// not belong to that channel is rejected: its sender bypassed `channel_of`.
+pub fn decode_broadcast(channel: &str, plain: &[u8]) -> Result<(String, Vec<u8>), MyOpenMLSError> {
+    let inner: shared_structs::BroadcastPlain = bincode::deserialize(plain)
+        .map_err(|e| MyOpenMLSError::SerializationError(e.to_string()))?;
+    if channel_of(inner.topic.as_bytes()) != channel {
+        return Err(MyOpenMLSError::ChannelMismatch {
+            topic: inner.topic,
+            channel: channel.to_owned(),
+        });
+    }
+    Ok((inner.topic, inner.data))
+}
+
 #[derive(Debug, Error)]
 pub enum MyOpenMLSError {
     #[error("Could not find group in storage")]
@@ -1559,6 +1617,8 @@ pub enum MyOpenMLSError {
     GroupAddMember { group_id: GroupId, reason: String },
     #[error("Deserialization Error, in Encryption")]
     SerializationError(String),
+    #[error("Topic `{topic}` does not belong to channel `{channel}`")]
+    ChannelMismatch { topic: String, channel: String },
     #[error("Not subscribed to topic: `{topic:?}`")]
     NoSubscriptionError { topic: Vec<u8> },
     #[error("Already subscribed to topic: `{topic:?}`")]
@@ -1625,4 +1685,45 @@ pub enum MyOpenMLSError {
     DecryptionError,
     #[error("The path to the keystore is not valid or the file is corrupted")]
     KeyMaterialFileError,
+}
+
+#[cfg(test)]
+mod broadcast_tests {
+    use super::*;
+
+    /// Topic and data come back out, and the channel is the topic's own.
+    #[test]
+    fn broadcast_plaintext_round_trips() {
+        let channel = channel_of(b"Perforce Helix Core");
+        let plain = encode_broadcast("Perforce Helix Core", b"IOC".to_vec()).unwrap();
+        let (topic, data) = decode_broadcast(&channel, &plain).unwrap();
+        assert_eq!(topic, "Perforce Helix Core");
+        assert_eq!(data, b"IOC");
+    }
+
+    /// A topic that does not belong to the channel it arrived on is rejected.
+    #[test]
+    fn topic_outside_its_channel_is_rejected() {
+        let plain = encode_broadcast("3", b"x".to_vec()).unwrap();
+        assert_eq!(channel_of(b"3"), "channel_3");
+        assert!(matches!(
+            decode_broadcast("channel_4", &plain),
+            Err(MyOpenMLSError::ChannelMismatch { .. })
+        ));
+    }
+
+    /// The channel mapping is unchanged: topics "0".."9" map directly, others by
+    /// hash, as `get_channel` always did.
+    #[test]
+    fn channels_follow_the_existing_mapping() {
+        for n in 0..NUM_CHANNELS {
+            assert_eq!(channel_of(n.to_string().as_bytes()), format!("channel_{n}"));
+        }
+        let mut hasher = DefaultHasher::new();
+        b"Perforce Helix Core".to_vec().hash(&mut hasher);
+        assert_eq!(
+            channel_of(b"Perforce Helix Core"),
+            format!("channel_{}", hasher.finish() % NUM_CHANNELS)
+        );
+    }
 }

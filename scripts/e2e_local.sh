@@ -7,7 +7,8 @@
 # and a member cannot register more than k. peer2 publishes, both archives approve the opening,
 # and the AA must name peer1's member and list peer2's PeerID. An observer node that never
 # registered subscribes to the same topic and must not receive any gossip; the AA keeps at
-# most 5 such connections open and closes each after 60 s.
+# most 5 such connections open and closes each after 60 s. A second member's peer then publishes
+# a broadcast through the stem of member 1's peers, and its opening must name member 2.
 # Run with the setup in e2e_common.sh, which also describes the requirements.
 source "$(dirname "$0")/e2e_common.sh"
 
@@ -67,12 +68,45 @@ SIG=$(grep -A6 "camera-ready-e2e" "$W/p1.log" | grep -A1 '^Signature:' | tail -1
 grep -A6 "camera-ready-e2e" "$W/p1.log" | grep -q 'Sender: anonymous' || fail "the broadcast was not shown as anonymous"
 echo "OK broadcast: peer1 received peer2's message, sender anonymous"
 
+# Only the channel travels in clear; the topic is inside the ciphertext. "other2"
+# shares channel_9 with "t" (channel_of in mls_wrapper.rs), so peer1 receives and
+# decrypts it, but must not show it: it subscribed to "t" only.
+send p2 "broad other2 same-channel-e2e"
+sleep 2
+send p2 "broad t after-other-e2e"
+wait_count "$W/p1.log" 'after-other-e2e' 1 30
+sleep 2
+if grep -q 'same-channel-e2e' "$W/p1.log"; then fail "peer1 showed a broadcast on a topic it did not subscribe to"; fi
+ROW=$(docker exec $S-pg1 psql -U archive -d archivedb -tAc "SELECT channel, topic FROM broadcast WHERE data = convert_to('same-channel-e2e', 'UTF8')")
+[ "$ROW" = "channel_9|other2" ] || fail "archive1 stored '$ROW' instead of channel_9|other2"
+echo "OK topic inside the ciphertext: peer1 dropped another topic of its channel, archive1 stored channel and topic"
+
+# Stem phase (Dandelion++): anonymous broadcasts first travel along a stem of
+# admitted sharing peers; only a diffuser publishes them into GossipSub.
+grep -q 'Stem: sent own message ' "$W/p2.log" || fail "peer2's anonymous broadcasts did not enter the stem"
+STEMMED=$(grep -c 'Stem: sent own message ' "$W/p2.log")
+echo "OK stem: peer2's anonymous broadcasts entered the stem ($STEMMED times)"
+
 # Attributed: the signature names peer1's member, whose MemberID only the AA logged.
 MID=$(grep -o 'Created Key Material for member [0-9]*' "$W/aa.log" | head -1 | awk '{print $NF}')
 send p2 "attr_broad t attributed-e2e"
 wait_count "$W/p1.log" 'attributed-e2e' 1 30
 grep -A6 "attributed-e2e" "$W/p1.log" | grep -q "Attributed to member: $MID" || fail "the attributed broadcast did not name member $MID"
 echo "OK attribution: peer1 saw the attributed message as from member $MID"
+[ "$(grep -c 'Stem: sent own message ' "$W/p2.log")" = "$STEMMED" ] || fail "the attributed broadcast went through the stem"
+echo "OK stem: the attributed broadcast was published directly"
+
+# A second member whose sharing peer m2 is the source. Its stem can only run through member 1's
+# peers, so one of them publishes the message; the opening at the end must still name member 2.
+join_member m2 member2
+M2=$(peer_id m2)
+send m2 "sub t"
+sleep 10
+send m2 "broad t member2-e2e"
+wait_count "$W/p1.log" 'member2-e2e' 1 60
+grep -q 'Stem: sent own message ' "$W/m2.log" || fail "member 2's broadcast did not enter the stem"
+SIG2=$(grep -A6 "member2-e2e" "$W/p1.log" | grep -A1 '^Signature:' | tail -1 | tr -d '[:space:]')
+echo "OK stem: member 2's broadcast went into the stem of member 1's peers"
 sleep 3
 grep -q "Connection established peer=$AA" "$W/obs.log" \
     || fail "observer never connected to the AA, so the check below proves nothing"
@@ -94,6 +128,31 @@ left=$((OBS_START + 75 - $(date +%s)))
 grep -q "Closing connection to $OBS: not admitted" "$W/aa.log" || fail "the AA kept the observer connected past the grace period"
 echo "OK grace: the AA closed the observer's connection after 60 s"
 
+# Over a minute after the broadcasts. peer3 does not subscribe to t's channel, so it never sees
+# a stem message arrive in GossipSub and must not arm an embargo (it would publish late copies).
+FORWARDED=$(grep -c 'Stem: relayed a message' "$W/p3.log")
+grep -q 'Stem: embargo ran out' "$W/p3.log" && fail "peer3, outside the channel, published after an embargo"
+echo "OK stem: peer3, outside the channel, forwarded $FORWARDED stem messages and armed no embargo"
+# A peer that ends a stem shows its stem predecessor as the propagating peer, never itself.
+for n in p1 p2 p3; do
+    grep -q "Propagating Peer: $(peer_id $n)" "$W/$n.log" && fail "$n showed itself as the propagating peer"
+done
+echo "OK stem: no peer showed itself as the propagating peer"
+# A peer that publishes a stem message itself must cancel its own embargo; otherwise the timer
+# fires later and the peer shows (and after 60 s re-sends) the message a second time.
+for n in p1 p2 p3; do
+    TWICE=$(grep -A1 'Got Broadcastmessage' "$W/$n.log" | grep -v -e 'Got Broadcastmessage' -e '^--' | sort | uniq -d)
+    [ -z "$TWICE" ] || fail "$n showed a broadcast twice: $TWICE"
+done
+echo "OK stem: no peer showed a broadcast twice"
+# A source never sends one of its messages to the same peer twice: after a loop it picks a peer
+# that does not have it yet, so no hop learns for sure that its predecessor is the source.
+for n in p2 m2; do
+    DUP=$(grep -oE 'Stem: (sent|re-routing) own message [0-9a-f]+ to [A-Za-z0-9]+' "$W/$n.log" | awk '{print $5, $7}' | sort | uniq -d)
+    [ -z "$DUP" ] || fail "$n sent its own message to the same peer twice: $DUP"
+done
+echo "OK stem: sources re-routed $(cat "$W/p2.log" "$W/m2.log" | grep -c 'Stem: re-routing own message') looped messages to peers without them, $(cat "$W/p2.log" "$W/m2.log" | grep -c 'back to the first hop') back to the first hop (all stem peers had them)"
+
 send aa "req_open $SIG"
 for i in 1 2; do
     wait_count "$W/arc$i.log" 'Opening request [0-9a-f]* from the authority is pending' 1 30
@@ -110,4 +169,23 @@ grep -q 'Name:peer1' "$W/aa.log" || fail "opening did not name peer1"
 P2=$(peer_id p2)
 echo "peer2 PeerId: ${P2:-unknown}"
 if [ -n "$P2" ]; then grep -q "PeerID:.*$P2" "$W/aa.log" || fail "opening did not list peer2's PeerID"; fi
+
+# Member 2's message, published by one of member 1's peers: no stem hop may be taken for the author.
+grep -q 'Stem: embargo ran out' "$W/m2.log" && fail "m2 published its own message after the embargo, so no stem hop did"
+send aa "req_open $SIG2"
+for i in 1 2; do
+    wait_count "$W/arc$i.log" 'Opening request [0-9a-f]* from the authority is pending' 2 30
+    ID=$(grep -o 'Opening request [0-9a-f]*' "$W/arc$i.log" | tail -1 | awk '{print $3}')
+    send arc$i "approve $ID"
+    wait_count "$W/arc$i.log" "Submitted this archive's partial opening" 2 30
+done
+sleep 3
+send aa "open $SIG2"
+wait_count "$W/aa.log" 'Signature belongs to ID' 2 60
+sleep 2
+OPENED=$(awk '/Signature belongs to ID/{n++} n==2' "$W/aa.log" | grep 'Signature belongs')
+echo "$OPENED" | grep -q 'Name:member2' || fail "the opening of member 2's message did not name member2"
+echo "$OPENED" | grep -q "PeerID:.*$M2" || fail "the opening of member 2's message did not list m2's PeerID"
+echo "$OPENED" | grep -q 'Name:peer1' && fail "the opening named member 1, whose peers carried the stem"
+echo "OK authorship: member 1's peers published member 2's message; the opening named member2 and m2"
 echo "PASS"

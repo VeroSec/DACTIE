@@ -73,6 +73,7 @@ Console: `pending`, `approve <id>`, `deny <id>` (section 7).
 ```text
 dactie-peer -K <dir> -b <AA PeerID> -B <AA multiaddr> [-p <port>] [--advertise-addr <multiaddr>]
             [--archive <multiaddr>/p2p/<PeerID>]... [--conn-low <n>] [--conn-high <n>]
+            [--stem-fluff-probability <q>] [--stem-epoch-secs <s>] [--stem-embargo-secs <s>]
             [--metrics-addr <ip:port>]
 ```
 
@@ -86,6 +87,9 @@ dactie-peer -K <dir> -b <AA PeerID> -B <AA multiaddr> [-p <port>] [--advertise-a
 | `--archive <multiaddr>/p2p/<PeerID>` | none | A trusted archive, configured out of band; repeat for each archive. Before the peer uses the archive keys the AA hands out (join, `get_opener_keys`), it asks each archive for its own key and refuses on a mismatch, so a dishonest AA cannot substitute keys it holds. Without it, the peer logs a warning and uses the AA's keys unverified. |
 | `--conn-high <n>` | `100` | The most connections the peer holds; further ones are refused before the handshake. Incoming connections take at most 80% of them, so the peer can always still dial out, and at most 32 incoming handshakes may be in progress. |
 | `--conn-low <n>` | `50` | Once the peer reaches `--conn-high`, it closes random connections older than 20 s down to this number, never its GossipSub mesh peers, the AA or trusted archives. |
+| `--stem-fluff-probability <q>` | `0.2` | Stem phase (see [Stem phase](#stem-phase-dandelion)): probability that the peer is a diffuser in an epoch. `0` turns the stem off; anonymous broadcasts are then published directly. |
+| `--stem-epoch-secs <s>` | `600` | How long the peer keeps its two stem successors and its role (plus up to 30 s of jitter). |
+| `--stem-embargo-secs <s>` | `39` | Mean of the exponential fail-safe after which a peer that sent a message on the stem publishes it itself if it has not shown up in GossipSub. |
 | `--metrics-addr <ip:port>` | off | Serves Prometheus metrics, e.g. `127.0.0.1:9898`. The endpoint is unauthenticated: bind it to loopback unless the network is trusted. |
 | `-n, --n-memkey <n>`, `-l, --load-file <file>` | | Not used. |
 
@@ -102,7 +106,7 @@ All nodes use libp2p over TCP with Noise and Yamux. GossipSub is configured as f
 
 ### Admission to GossipSub
 
-Any libp2p node can connect to a DACTIE node, e.g. to register with the AA or to fetch archive keys, and GossipSub itself has no access control. Every node therefore scores its GossipSub peers by admission (`dactie-utils/src/admission.rs`): PeerIDs in the common MLS group, i.e. the AA, the archives and every registered sharing peer, score 0; all others score −60, below GossipSub's publish threshold. A node never grafts a peer with a negative score into a mesh, prunes such peers at every heartbeat, and sends them neither its own or forwarded messages nor gossip. Subscriptions of non-admitted peers are still recorded, so a new peer joins meshes as soon as the commit that admits it arrives. Like members, non-admitted peers still see which channels a node subscribes to. Nodes re-score their peers whenever the common group changes.
+Any libp2p node can connect to a DACTIE node, e.g. to register with the AA or to fetch archive keys, and GossipSub itself has no access control. Every node therefore scores its GossipSub peers by admission (`dactie-utils/src/admission.rs`): PeerIDs in the common MLS group, i.e. the AA, the archives and every registered sharing peer, score 0; all others score −60, below GossipSub's publish threshold. A node never grafts a peer with a negative score into a mesh, prunes such peers at every heartbeat, and sends them neither its own or forwarded messages nor gossip. Subscriptions of non-admitted peers are still recorded, so a new peer joins meshes as soon as the commit that admits it arrives. Like members, non-admitted peers still see which channels a node subscribes to. Nodes re-score their peers whenever the common group changes. A node publishing to a channel it does not subscribe to (the AA, or a stem diffuser) uses GossipSub's fanout; at the pinned rust-libp2p rev the heartbeat tops a fanout up with peers *below* the publish threshold, so every node sets the fanout TTL to zero and each publish picks fresh fanout peers (`admission::FANOUT_TTL`).
 
 Non-admitted nodes would still occupy connection slots, and PeerIDs cost nothing, so an unregistered node could fill every slot and cut a node off from members. Once a node is admitted itself, it keeps at most 5 non-admitted connections open at once, refuses further ones, and closes each after 60 s, enough to register with the AA or fetch archive keys (`admission::Gate`). Before a node is admitted, the gate does nothing, so a newcomer can reach the AA and the archives.
 
@@ -114,7 +118,7 @@ A topic is not a GossipSub topic of its own. `get_channel` in `dactie-utils/src/
 channel = "channel_" + (hash(topic) mod 10)      // topics "0".."9" map directly to their channel
 ```
 
-A peer subscribes to a channel in GossipSub when it subscribes to the first topic in that channel. It receives every message on the channel, but delivers only messages whose topic it subscribed to. Private MLS groups use the channel of their group ID. Archives subscribe to all channels.
+A peer subscribes to a channel in GossipSub when it subscribes to the first topic in that channel. It receives and decrypts every broadcast on the channel, but delivers only those whose topic it subscribed to. Private MLS groups use the channel of their group ID. Archives subscribe to all channels.
 
 ### Gossip messages and validation
 
@@ -126,6 +130,18 @@ A gossip message is the bincode encoding of `Message { body: MessageBody, signat
 4. reports `MessageAcceptance::Reject` if the signature is invalid, so the message is dropped and not forwarded.
 
 Direct requests (libp2p request-response) carry an optional group signature. Which requests must be signed is noted in each flow below.
+
+### Stem phase (Dandelion++)
+
+Without it, a sharing peer hands its broadcast to all its mesh peers, and a colluder holding one of those mesh slots names the source with first-spy. With the stem, a peer's own anonymous broadcasts (`broad`, `enc_broad`) first travel along a random path of sharing peers, one hop at a time, and only the peer at its end publishes them into GossipSub. Attributed broadcasts and MLS control messages are published directly.
+
+- **Protocol:** `/dactie/stem/1` (libp2p request-response, length-prefixed bincode). The request is `StemMessage { channel, payload }`: the signed gossip message exactly as it would be published, and its channel. The answer is an empty acknowledgement.
+- **Epochs:** every `--stem-epoch-secs` (plus up to 30 s of jitter) a peer picks two successors among its connected, admitted peers whose identify info lists the protocol (so never the AA or an archive), and becomes a diffuser with probability `--stem-fluff-probability`. For the whole epoch, each predecessor is mapped to one successor, and the peer's own messages always go to the same successor, so repeated messages take the same path.
+- **Relays:** a peer accepts stem messages only from admitted peers, at most 20 per predecessor and second. It forwards only a `BroadcastEnc` or `GroupEnc` with a valid group signature whose channel matches the request. A diffuser publishes it; any other peer passes it to its mapped successor.
+- **Source:** a peer's own messages enter the stem even if it is a diffuser. It never publishes them itself: if the stem loops back to it or its hop fails, it re-routes the message to a peer that does not have it yet (its other successor, else a spare connection), up to three times, and otherwise leaves it to the embargo. It sends a message to the same peer twice only if every connected stem peer has it already, and then back to its first hop: only a source ever sends a message twice, so that peer learns its predecessor is the source, but as the first hop it got the message straight from the source anyway. It does not show its own message again when it comes back through GossipSub.
+- **Fail-safe:** a peer that sent a message on the stem and subscribes to its channel publishes it itself if it has not arrived through GossipSub when an exponential embargo (mean `--stem-embargo-secs`) runs out. A peer outside the channel never sees the message in GossipSub and arms no embargo: its timer would always run out, and the late copy would mark it as a stem member and, after GossipSub's 60 s duplicate cache, be delivered a second time. Relays also publish when their hop fails or the stem loops back.
+- **Authorship:** the stem carries the source's signed message unchanged, and every hop checks the group signature, so an opening still names the real author, never a relay. Peers show the sender as the signature states it (anonymous, or the attributed member). A peer that ends a stem and is itself a recipient shows its stem predecessor as the propagating peer, as it shows the forwarding neighbour for gossip.
+- **Limits:** the first stem hop sees the source's PeerID; if it colludes, first-spy succeeds. In the anonymity harness, first-spy success fell from 62% to 10% with 20 of 200 colluders (about the colluding share) at q = 0.2, at about 0.6 s more median latency (docs/DANDELION.md).
 
 ## 1. Archive initialization
 
@@ -223,13 +239,13 @@ A sharing peer's registration lasts until the end of its tag's epoch.
 | Console | Gossip message | Encryption | Readable by |
 | --- | --- | --- | --- |
 | `sub <topic>` | none (subscribes to the topic's channel) | — | — |
-| `broad <topic> <msg>` | `BroadcastEnc { topic, data, nonce }` | AES-256-GCM with a random 96-bit nonce, under a key exported from the common MLS group's current epoch | all members (the common group) |
+| `broad <topic> <msg>` | `BroadcastEnc { channel, data, nonce }`, where `data` encrypts `BroadcastPlain { topic, data }` | AES-256-GCM with a random 96-bit nonce, under a key exported from the common MLS group's current epoch | all members (the common group) |
 | `enc_broad <group> <msg>` | `GroupEnc { group_id, enc_data, nonce }` | AES-256-GCM under a key exported from the private group's current epoch | members of that private group |
 | `attr_broad <topic> <msg>`, `attr_enc_broad <group> <msg>` | as above, with `attributed_to: MemberID` | as above | as above; receivers also see the sender's MemberID (see Attribution) |
 
-Topic and group ID travel unencrypted, so that peers can filter messages before decrypting them. The exported keys change with every MLS epoch. The sender signs the whole encoded body (topic or group ID, ciphertext, nonce) with its group signature and publishes it on the channel of the topic or group.
+Only the channel of a broadcast travels unencrypted; its topic is inside the ciphertext, so nobody without the common-group key learns what a message is about, and an archive queried by channel learns only the channel. The group ID of a private-group message travels unencrypted. The exported keys change with every MLS epoch. The sender signs the whole encoded body (channel or group ID, ciphertext, nonce) with its group signature and publishes it on the channel of the topic or group.
 
-A receiver validates the signature (see [Gossip messages and validation](#gossip-messages-and-validation)). It then decrypts a `BroadcastEnc` only if it subscribed to the topic, and a `GroupEnc` only if it is a member of the group. It ignores all other messages, but still forwards them.
+A receiver first rejects a `BroadcastEnc` whose signed channel differs from the GossipSub topic it arrived on, so a broadcast cannot be replayed on another channel, and then validates the signature (see [Gossip messages and validation](#gossip-messages-and-validation)). It decrypts every `BroadcastEnc`, drops it if the topic inside does not belong to the channel, and delivers it only if it subscribed to that topic. It decrypts a `GroupEnc` only if it is a member of the group. It ignores all other messages, but still forwards them.
 
 Messages are anonymous: neither the gossip message nor the group signature identifies the sender.
 
@@ -249,7 +265,7 @@ Each archive writes to its own PostgreSQL database (`init.sql`):
 
 | Table | Content | Form |
 | --- | --- | --- |
-| `broadcast(id, topic, data)` | common-group messages | **decrypted** (archives are members of the common group) |
+| `broadcast(id, channel, topic, data)` | common-group messages, indexed by channel | **decrypted** (archives are members of the common group) |
 | `group_enc(id, group_id, data, nonce)` | private-group messages | ciphertext (archives are not members of private groups) |
 | `proposal`, `commit` | MLS proposals, commits and welcomes, with group ID and epoch | as received |
 | `id_shares(id, enc_share, commits)` | one encrypted share per MemberID | ElGamal ciphertext |

@@ -1060,7 +1060,9 @@ version = "0.1.0"
 dependencies = [
  "aead",
  "aes-gcm",
+ "async-trait",
  "bincode",
+ "futures",
  "hex",
  "libp2p",
  "log",
@@ -1069,6 +1071,7 @@ dependencies = [
  "openmls_memory_storage",
  "openmls_rust_crypto",
  "openmls_traits",
+ "rand 0.8.5",
  "serde",
  "serde_json",
  "thiserror",

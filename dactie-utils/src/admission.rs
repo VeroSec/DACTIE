@@ -37,6 +37,14 @@ pub const GRACE: Duration = Duration::from_secs(60);
 /// Below the default publish threshold (-50), above the default graylist threshold (-80).
 const NOT_ADMITTED_SCORE: f64 = -60.0;
 
+/// GossipSub `fanout_ttl` for every node that calls [`enable`]. At the pinned rust-libp2p rev
+/// (32e917f) the heartbeat tops up a fanout with peers *below* the publish threshold (fixed
+/// upstream since), i.e. with exactly the non-admitted nodes, so a node publishing to a topic it
+/// does not subscribe to (the AA, or a stem diffuser) would send to them. A zero TTL drops each
+/// fanout at the next heartbeat, before that top-up; the fanout a publish creates itself only
+/// holds peers at or above the threshold.
+pub const FANOUT_TTL: Duration = Duration::ZERO;
+
 /// The admitted PeerIDs the scores were last set for. One node per process.
 static SCORED: Mutex<Option<HashSet<PeerId>>> = Mutex::new(None);
 

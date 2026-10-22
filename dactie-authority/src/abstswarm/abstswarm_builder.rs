@@ -76,7 +76,9 @@ where
             libp2p::SwarmBuilder::with_existing_identity(self.keypair)
                 .with_tokio()
                 .with_tcp(
-                    tcp::Config::default(),
+                    // Nagle off: libp2p's default sets TCP_NODELAY to false, which
+                    // holds small writes back for up to one round trip per hop.
+                    tcp::Config::default().nodelay(true),
                     noise::Config::new,
                     yamux::Config::default,
                 )?
