@@ -41,9 +41,11 @@ at most at 0.70 of it for coalitions of five or fewer peers.
 
 ## Eclipse attacks: `eclipse_parsed.csv`
 
-One row per run: network size, honest and attacker peers, the attacker share
-(`attacker_ratio`) and the share of honest peers that received the victim's
-message (`message_ratio`).
+One row per run, 847 in all: network size, honest and attacker peers, the
+attacker share (`attacker_ratio`), the share of honest peers that received the
+victim's message (`message_ratio`), and the source folder of
+`dactie-experiment-eclipse/` (`series`: `output` or `old_output`). Rebuild it
+with `dactie-experiment-eclipse/parse_eclipse_output.py`.
 
 ## Latency: `latency/`
 

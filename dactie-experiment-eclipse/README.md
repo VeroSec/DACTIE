@@ -71,8 +71,6 @@ Across all 847 runs:
 So DACTIE stays available with flood publishing disabled, unless an attacker controls almost the entire network.
 
 ## Reproducing the figures
-`parse_eclipse_output.py` collects `output/*/ex*.csv` into `eclipse_parsed.csv` and adds `attacker_ratio` and `message_ratio = received_messages / (honest_peers - 1)`. The paper's earlier figure plotted `message_ratio` against `honest_peers` and against `attacker_ratio`.
-
-Note: the glob `ex*.csv` also matches the `experiment_avg_*.csv` files. `eclipse_parsed.csv` therefore mixes single runs with per-setting averages: 759 rows, some of them averages and seemingly also older outputs, against 375 raw runs in `output/`. The counts above use only the raw `experiment_<n>_…csv` files. To rebuild the CSV from raw runs only, change the glob to `experiment_[0-9]*.csv`.
+`python3 parse_eclipse_output.py` collects the single runs of `output/` and `old_output/` into `eclipse_parsed.csv`, one row per run (847 rows). It skips the `experiment_avg_*.csv` files, which hold per-setting averages, and adds `attacker_ratio`, `message_ratio = received_messages / (honest_peers - 1)` and the source folder as `series`. The paper's eclipse figure plots `message_ratio` against `honest_peers` and against `attacker_ratio`.
 
 Options added after these runs (`--flood-publish`, `-D/--mesh-n`, `--mesh-n-low`, …) are listed by `--help`.
