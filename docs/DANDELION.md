@@ -100,7 +100,7 @@ About 2 days for the harness and the adversary model, 2 to 3 days for the sharin
 
 - The first stem hop learns the source's PeerID if it colludes. Reaching that hop through an
   onion service (the Tor mode) removes this, and is the natural next step.
-- Each stem hop adds latency: at q = 0.2 the harness measured a median of 0.64 s (p90 1.4 s)
+- Each stem hop adds latency: at q = 0.2 the harness measured a median of 0.67 s (p90 1.4 s)
   against 77 ms without the stem, more than one link delay per hop, probably because every hop
   opens a substream and negotiates the protocol first.
 - Peers that learn the stem graph over many epochs can narrow the source down; the epoch

@@ -72,3 +72,28 @@ and maximum latency in ms, resident memory in MB and established connections.
 ## Microbenchmarks
 
 See `benchmark/README.md`.
+
+## Stem phase: `coalition/stem/`
+
+The coalition grid with the Dandelion++ stem (one 64-vCPU AMD EPYC 7763 server,
+`q ∈ {0.1, 0.2, 0.5}`, same `D`, `|N_c|` and coalition sizes as above, five runs each).
+`stem_q*.csv` average first-spy and uniform-guess success over the runs whose measurement
+message entered the stem: in 15 of 240 runs (`publish_methods.txt`, `ok` instead of `stem`)
+the source published directly, because its first stem epoch began before its first connection
+(fixed in `ce18a68`). `scripts/stem_coalition_filtered.py` rebuilds them. The paper's
+coalition figure plots `stem_q0.2.csv`.
+
+## Latency re-measurement: `latency/rerun-2026-10-22.csv`
+
+Four hosts (the testbed of `RUNBOOK.md`), the publisher `peer_4` at 40 msg/s (5 msg/s for
+the complete MISP event and ATT&CK ICS feed), receivers `peer_1` and `peer_2` on other hosts
+and `peer_3` on the publisher's host. Per run and receiver: mean and p95 latency over 1,000
+deliveries, after dropping the previous run's tail and the first 2 s.
+
+| Runs | Code | Note |
+| --- | --- | --- |
+| `misp-*`, `stix-*` | `b36ebc7` | Nagle off, publisher without stem; the paper's table (`peer_1`) |
+| `misp-16KiB-stem` | `b36ebc7` | invalid: the publisher never used the stem (startup bug, `ce18a68`) |
+| `misp-16KiB-v2`, `misp-16KiB-stem-v2` | `ce18a68` | stem row invalid: the 20/s stem rate limit dropped half the messages (`d33449a`) |
+| `v3-off-*`, `v3-on-*` | `d33449a` | Nagle off vs on (`--tcp-nodelay`), same day; `v3-off-misp-16KiB-stem` is the valid stem row |
+
