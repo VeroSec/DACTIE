@@ -101,6 +101,11 @@ pub(crate) struct MeshConfig {
     pub(crate) latency: LatencyRange,
     /// Stem phase (Dandelion++), see `stem`; off by default.
     pub(crate) stem: StemConfig,
+    /// Report receipts of background messages too, as `Payload::Background`.
+    /// The statistical-disclosure attack of `multi_message` needs them to
+    /// learn how often each peer relays other sources' messages; single-message
+    /// runs leave this off, since it sends every receipt of the run.
+    pub(crate) background_tally: bool,
 }
 
 impl MeshConfig {
@@ -142,6 +147,7 @@ impl MeshConfig {
             spawn_per_sec: 0,
             latency: LatencyRange::OFF,
             stem: StemConfig::OFF,
+            background_tally: false,
         }
     }
 
@@ -157,6 +163,11 @@ impl MeshConfig {
 
     pub(crate) fn with_stem(mut self, stem: StemConfig) -> Self {
         self.stem = stem;
+        self
+    }
+
+    pub(crate) fn with_background_tally(mut self, on: bool) -> Self {
+        self.background_tally = on;
         self
     }
 
@@ -190,6 +201,19 @@ pub(crate) struct PeerOut {
     pub(crate) at: Instant,
     /// Received on the stem rather than through GossipSub.
     pub(crate) stem: bool,
+    /// Which message was received.
+    pub(crate) payload: Payload,
+}
+
+/// What a reported message was.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Payload {
+    /// The measurement message of a single-message run.
+    Measurement,
+    /// Measurement message number n of a multi-message run.
+    Numbered(u32),
+    /// Background traffic, reported only with `MeshConfig::background_tally`.
+    Background,
 }
 
 #[derive(Clone, Debug)]
@@ -197,6 +221,8 @@ pub(crate) enum ControlSignal {
     Run,
     Stop,
     Pub(PeerId),
+    /// The peer publishes measurement message number n (multi-message runs).
+    PubSeq(PeerId, u32),
 }
 
 #[derive(Clone, Debug)]
@@ -473,6 +499,11 @@ impl Peer {
                                 );
                             }
                         }
+                        ControlSignal::PubSeq(val, n) => {
+                            if val == self.get_peer_id() {
+                                self.publish_own(numbered_measurement(n));
+                            }
+                        }
                     }
 
                 },
@@ -602,9 +633,7 @@ impl Peer {
             }
             return;
         }
-        if is_measurement(&data) {
-            self.report(from, true);
-        }
+        self.report(from, true, &data);
         self.stem_step(Some(from), id, data);
     }
 
@@ -617,13 +646,18 @@ impl Peer {
         }
     }
 
-    fn report(&self, prop_id: PeerId, stem: bool) {
+    fn report(&self, prop_id: PeerId, stem: bool, data: &[u8]) {
+        let payload = payload(data);
+        if payload == Payload::Background && !self.mesh.background_tally {
+            return;
+        }
         self.response_channel
             .send(PeerOut {
                 observer: *self.swarm.local_peer_id(),
                 prop_id,
                 at: Instant::now(),
                 stem,
+                payload,
             })
             .unwrap();
     }
@@ -651,9 +685,7 @@ impl Peer {
                 ..
             })) => {
                 self.stem.seen_in_gossip(message_id(&message.data));
-                if is_measurement(&message.data) {
-                    self.report(peer_id, false);
-                }
+                self.report(peer_id, false, &message.data);
             }
             SwarmEvent::Behaviour(MyBehaviourEvent::Stem(request_response::Event::Message {
                 peer,
@@ -695,6 +727,29 @@ impl Peer {
 /// The measurement message, as opposed to background traffic.
 fn is_measurement(data: &[u8]) -> bool {
     data.starts_with(b"Stop")
+}
+
+/// Measurement message number n of a multi-message run, as long as the
+/// single-run one. The number keeps the messages apart: GossipSub and the stem
+/// address messages by content and drop one whose content they have seen.
+fn numbered_measurement(n: u32) -> Vec<u8> {
+    let mut data = format!("Stop#{n}#").into_bytes();
+    data.resize(120, b'.');
+    data
+}
+
+fn payload(data: &[u8]) -> Payload {
+    if let Some(rest) = data.strip_prefix(b"Stop#") {
+        let digits = rest.iter().take_while(|b| b.is_ascii_digit()).count();
+        if let Some(n) = std::str::from_utf8(&rest[..digits]).ok().and_then(|d| d.parse().ok()) {
+            return Payload::Numbered(n);
+        }
+    }
+    if is_measurement(data) {
+        Payload::Measurement
+    } else {
+        Payload::Background
+    }
 }
 
 fn generate_random_string(len: usize) -> String {
@@ -740,6 +795,19 @@ mod tests {
                 "D={n} rejected: {mesh:?}"
             );
         }
+    }
+
+    /// Numbered measurement messages are told apart by their number, the
+    /// single-run message and background traffic are not mistaken for one.
+    #[test]
+    fn payloads_are_classified() {
+        for n in [0, 7, 49, u32::MAX] {
+            assert_eq!(numbered_measurement(n).len(), 120);
+            assert_eq!(payload(&numbered_measurement(n)), Payload::Numbered(n));
+        }
+        assert_ne!(numbered_measurement(1), numbered_measurement(10));
+        assert_eq!(payload("Stop".repeat(30).as_bytes()), Payload::Measurement);
+        assert_eq!(payload(generate_random_string(120).as_bytes()), Payload::Background);
     }
 
     /// A pinned band, which is what a bound-validation run uses, must build too.
