@@ -1,7 +1,7 @@
 """Cost of the source's loop re-send in the Dandelion++ stem, replaying the harness routing.
 
-Usage: python3 scripts/stem_loop_cost.py <graphs> <messages per graph>  (FUTURE_WORK.md 3.1 used
-100 500). Rules for the source's own message when the stem brings it back: `back` to the
+Usage: python3 scripts/stem_loop_cost.py <graphs> <messages per graph>  (the published
+numbers used 100 500). Rules for the source's own message when the stem brings it back: `back` to the
 successor that already has it, `random2` one of its two successors (the sharing peer before the
 loop-rule decision), `fresh` the other successor (the harness), `randconn` a random connection.
 Graphs follow the harness: 50 to 100 connections per peer, two successors per epoch, one fixed

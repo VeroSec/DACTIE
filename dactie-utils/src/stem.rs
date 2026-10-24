@@ -6,7 +6,7 @@
 //! random path of admitted peers, one hop at a time (`/dactie/stem/1`), and only
 //! the peer at its end (a diffuser) publishes it into GossipSub. In the
 //! anonymity harness this brought first-spy success down to about the colluding
-//! share c/N (docs/DANDELION.md, docs/FUTURE_WORK.md 3.1).
+//! share c/N (docs/DANDELION.md).
 //!
 //! Parameters follow Dandelion++ as deployed: two successors per epoch, a
 //! diffuser probability q per epoch (Monero 0.2, BIP 156 and Grin 0.1), epochs

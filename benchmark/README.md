@@ -66,8 +66,7 @@ Laptop as above, 3 archives, t = 3, 500 members with one sharing peer each (1,00
 | archive partial open | 1.69 s | 1.71 s |
 | combine | 3.11 s | 0.88 s |
 
-Server (AMD EPYC 7763), 2026-10-13, single core (`taskset -c 4`), after hoisting,
-commit `fa0827f`:
+Server (AMD EPYC 7763), 2026-10-13, single core (`taskset -c 4`), after hoisting:
 
 | Operation | n = 10 | n = 100 | n = 500 |
 | --- | --- | --- | --- |

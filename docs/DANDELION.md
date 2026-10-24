@@ -1,8 +1,9 @@
 # Stem phase against coalition first-spy (Dandelion++ for DACTIE)
 
-Status: designed 2026-10-13; implemented in the anonymity harness (branch `feat/stem`) and in
-the sharing peer (branch `feat/stem-peer`), not merged. Results and open questions:
-`docs/FUTURE_WORK.md`, item 3.1, and "Implementation notes" below.
+Status: implemented in the sharing peer (`dactie-utils/src/stem.rs`, `dactie-peer/src/stem_relay.rs`)
+and in the anonymity harness (`dactie-experiment-anonymity/src/stem.rs`). Measured results are in
+`results/README.md` and `evaluation_performance.md`; where the code departs from the design below,
+see "Implementation notes".
 
 Parameter sources: BIP 156 (fluff 10%, routes rebuilt every ten minutes on average, random
 embargo), Monero `src/cryptonote_config.h` (2 stems, fluff 20%, epoch 10 min + 30 s, embargo
@@ -13,7 +14,7 @@ average 39 s), Grin `pool/src/types.rs` (epoch 600 s, stem 90%, embargo 180 s).
 A sharing peer publishes a broadcast by handing it to its GossipSub mesh peers directly
 (10 to 24 of them with the deployed band 10/12/24). A coalition that holds even one of those
 mesh slots receives the message from the source first and names it with the first-spy
-estimator. With simulated link latency (coalition data v6, D = 12, |N_c| = 200), first-spy
+estimator. With simulated link latency (D = 12, |N_c| = 200), first-spy
 succeeds against a single attacker in 5.2% of cases (uniform guess: 0.5%), against 5 colluders
 in 22% and against 20 colluders in 63%. The bound P_SML(c) holds, but it is high, because it is
 driven by the source's direct adjacency to D peers.
@@ -69,14 +70,15 @@ inject unsigned traffic or to amplify floods.
 1. The experiment peer gets the same stem protocol, a `--stem-fluff-probability q` flag
    (0 = off, today's behaviour) and per-epoch routing as above.
 2. Peers record stem receipts as observations too: `(observer, predecessor, time)` with a
-   flag for stem or gossip. An analysis that logs only GossipSub receipts overstates the anonymity of the stem, because it never counts a colluder on the stem.
+   flag for stem or gossip. An analysis that logs only GossipSub receipts overstates the
+   anonymity of the stem, because it never counts a colluder on the stem.
 3. The first-spy estimator becomes stem-aware: if a colluder received the message on the stem,
    the coalition names the predecessor of the earliest such colluder; otherwise it falls back
    to first-spy on the gossip observations. The other estimators stay as they are.
 4. Metrics per configuration: first-spy success, delivery ratio, stem length distribution,
    latency p50/p95 (each stem hop adds one simulated link delay, about 45 ms on average).
 
-**Experiments.** The v6/v7 coalition grid (D in {6, 8, 10, 12}, |N_c| in {50, 100, 150, 200},
+**Experiments.** The coalition grid (D in {6, 8, 10, 12}, |N_c| in {50, 100, 150, 200},
 5 runs, the same coalition sizes) with q in {0.1, 0.2, 0.5}, compared against q = 0. Later: a
 source publishing repeatedly within one epoch, to check the intersection defence.
 
@@ -90,11 +92,6 @@ source publishing repeatedly within one epoch, to check the intersection defence
 4. DACTIE end-to-end (`scripts/e2e_local.sh`, `e2e_expiry.sh`) with the stem on: broadcasts
    reach all registered peers and the archives; the unregistered observer still gets nothing.
 5. The coalition grid described above.
-
-## Effort
-
-About 2 days for the harness and the adversary model, 2 to 3 days for the sharing peer,
-1 to 2 days of experiments.
 
 ## Limitations
 
@@ -117,7 +114,7 @@ Where the code differs from the design above, or adds to it:
   that does not have it yet, its other successor, else a spare connection, at most three times, then leaves it to the embargo. Sending it back to a peer
   that has it would tell that peer for sure that its predecessor is the source, since relays
   never send a message twice. The extra first hop costs a factor 1 + P_loop on first-spy
-  success, 1.5% at 200 peers (`FUTURE_WORK.md` 3.1). Only if every connected stem peer has
+  success, 1.5% at 200 peers (`scripts/stem_loop_cost.py`). Only if every connected stem peer has
   the message (a tiny network, as in the E2E scripts) does it go back to the first hop, which
   got it straight from the source anyway; first-spy success does not change. The harness does
   the same on the first loop; on a rare second loop it may reuse the other successor.
@@ -132,7 +129,7 @@ Where the code differs from the design above, or adds to it:
   count. The harness does not distinguish directions; its passive coalition at random
   positions is unaffected.
 - **Rate limit.** 100 stem messages per second per predecessor (`--stem-rate-limit`). The first
-  value, 20, dropped half of a single publisher's 40 msg/s on the minerva testbed: one edge can
+  value, 20, dropped half of a single publisher's 40 msg/s on the four-host testbed: one edge can
   carry most of a small network's stem traffic.
 - **Fanout.** A diffuser often does not subscribe to the message's channel and publishes
   through GossipSub's fanout. At the pinned rust-libp2p rev the fanout top-up picks

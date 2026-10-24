@@ -1,10 +1,10 @@
 """Stem coalition results without the runs whose measurement message skipped the stem
-(startup bug: the source's epoch began without successors; fixed in ce18a68).
+(startup bug: the source's epoch began without successors; since fixed).
 
     python3 scripts/stem_coalition_filtered.py DIR
 
 DIR holds publish_methods.txt ("q0.2/D12_N200 <run> <stem|ok>", from each cell's run.log)
-and stem2/q*/D*_N*/adversary_*.csv as in ~/anonymity-results-stem2/coalition on the server.
+and stem2/q*/D*_N*/adversary_*.csv, the layout the anonymity harness writes.
 Writes DIR/filtered_q*.csv in the format of coalition_figure_data.py."""
 import csv, glob, os, sys, collections, statistics as st
 S = sys.argv[1]

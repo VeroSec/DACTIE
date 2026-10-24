@@ -129,7 +129,7 @@ concurrent traffic; the tail widens (p95 110 → 151 ms) while the mean moves 3.
 
 Two qualifications. These queries return an empty result set, so they measure the round
 trip rather than transfer of a backlog. Group-signature verification does **not** explain the gap to the 22 ms dissemination
-path: the `benchmark/` crate measures one Cam20 verification at 7.53 ms on the server's EPYC
+path: the `benchmark/` crate measures one Cam20 verification at 7.53 ms on the EPYC server
 7763 and 4.97 ms on a Core Ultra 7 165U (single thread), so it would take 14 to 20
 verifications per query to fill 105 ms. An empty-result query verifies at most one signature. The remaining
 ~100 ms is the database round trip and request handling, which has not been profiled.
@@ -156,7 +156,7 @@ not a performance claim.
 
 ## Re-measurement 2026-10-22: Nagle off, and the stem
 
-Same testbed and payloads, current code (`b36ebc7`: Nagle off on all nodes, the stem on by
+Same testbed and payloads, current code (Nagle off on all nodes, the stem on by
 default but off at the publisher, `STEM_Q=0`). Receiver `peer_1` on another host, 1,000
 deliveries per row after dropping the first 2 s. Clocks within 0.06 ms (chrony).
 
@@ -169,7 +169,7 @@ deliveries per row after dropping the first 2 s. Clocks within 0.06 ms (chrony).
 | 256 KiB | 24.4 / 32 ms | 24.5 / 31 ms | 26.3 / 36, 26.5 / 36 |
 | Complete event / feed (5 msg/s) | 104.5 / 117 ms | 116.9 / 133 ms | 89.8 / 99, 102.2 / 113 |
 
-**Nagle on vs off, same build and day** (`d33449a`, `--tcp-nodelay`), mean / p95 in ms:
+**Nagle on vs off, same build and day** (`--tcp-nodelay`), mean / p95 in ms:
 
 | Run | peer_1 | peer_2 | peer_3 (publisher's host) |
 |---|---|---|---|
@@ -185,12 +185,12 @@ therefore comes from other changes since then, not from Nagle. The complete even
 vary by up to 11 ms between runs (MISP 104.5 and 93.3 ms with Nagle off), and are not slower
 because of Nagle.
 
-**Stem on the publisher** (`STEM_Q=0.2`, `d33449a`): 16 KiB MISP events took 80.1 / 104 ms at
+**Stem on the publisher** (`STEM_Q=0.2`): 16 KiB MISP events took 80.1 / 104 ms at
 `peer_1`, 65.3 / 84 ms at `peer_2` and 78.7 / 104 ms at `peer_3`, against about 20 ms without
 the stem, in this four-peer network. Two earlier stem runs were invalid and taught two fixes:
 the publisher starts sending right after a restart, before identify reports stem peers, and
-kept its empty first epoch for 10 minutes (`ce18a68`); and the relay's limit of 20 stem
-messages per second and predecessor dropped half of the 40 msg/s (`d33449a`, now 100/s).
+kept its empty first epoch for 10 minutes (now topped up); and the relay's limit of 20 stem
+messages per second and predecessor dropped half of the 40 msg/s (now 100/s).
 
 Data: `results/latency/rerun-2026-10-22.csv`.
 
