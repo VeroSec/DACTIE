@@ -7,7 +7,7 @@ build.sh
 /key_material
 **/key_material.json
 **/storage.json
-**/slots.json
+**/slots.json*
 **/group_saves
 **/.*.tmp
 

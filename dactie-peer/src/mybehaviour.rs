@@ -830,16 +830,12 @@ impl MyBehaviour {
 
     /// Claims a free slot of `epoch` in the slots.json next to the member's key file.
     fn claim_slot(member_dir: &Path, epoch: u64, k: usize) -> Result<u32, AbstSwarmError> {
-        let mut slots = SlotStore::load(member_dir)
-            .map_err(|e| AbstSwarmError::SlotStoreError { reason: e.to_string() })?;
-        let slot = slots.claim(epoch, k).ok_or(AbstSwarmError::NoFreeSlot {
-            dir: member_dir.display().to_string(),
-            epoch,
-        })?;
-        slots
-            .save(member_dir)
-            .map_err(|e| AbstSwarmError::SlotStoreError { reason: e.to_string() })?;
-        Ok(slot)
+        SlotStore::claim_in(member_dir, epoch, k)
+            .map_err(|e| AbstSwarmError::SlotStoreError { reason: e.to_string() })?
+            .ok_or(AbstSwarmError::NoFreeSlot {
+                dir: member_dir.display().to_string(),
+                epoch,
+            })
     }
 
     // Register this Peer at authority with existing identity
