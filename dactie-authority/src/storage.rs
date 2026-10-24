@@ -5,6 +5,7 @@ use crate::storage::MyStorageError::{
 };
 use dactie_utils::key_store::StoredKeyMaterial;
 use dactie_utils::mls_wrapper::{key_package_belongs_to, MyOpenMls};
+use dactie_utils::persist;
 use libp2p::PeerId;
 use openmls::prelude::KeyPackage;
 use serde::{Deserialize, Serialize};
@@ -460,30 +461,15 @@ impl Storage {
     Functions to save storage to a file.
     **/
     pub(crate) fn to_file(&self) -> Result<(), MyStorageError> {
-        // Serialize to a sibling temp file and rename over the target. File::create
-        // truncates immediately, so writing in place turns any mid-write failure into
-        // an unparseable storage.json that the authority cannot start from.
-        let mut tmp_path = self.path_buf.clone();
-        let mut name = tmp_path
-            .file_name()
-            .map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_else(|| "storage.json".to_string());
-        name.push_str(".tmp");
-        tmp_path.set_file_name(name);
-
-        let file = File::create(&tmp_path).map_err(|e| FileAccessError {
+        // Writing in place would turn any mid-write failure into an unparseable storage.json
+        // that the authority cannot start from. The file holds the group manager key, so it
+        // is readable by its owner only.
+        let bytes = serde_json::to_vec_pretty(self).map_err(|e| SerializationError {
             reason: e.to_string(),
         })?;
-        serde_json::to_writer_pretty(&file, self).map_err(|e| SerializationError {
+        persist::write_atomic(&self.path_buf, &bytes).map_err(|e| FileAccessError {
             reason: e.to_string(),
-        })?;
-        file.sync_all().map_err(|e| FileAccessError {
-            reason: e.to_string(),
-        })?;
-        std::fs::rename(&tmp_path, &self.path_buf).map_err(|e| FileAccessError {
-            reason: e.to_string(),
-        })?;
-        Ok(())
+        })
     }
 
     pub(crate) fn from_file(path: PathBuf) -> Result<Storage, MyStorageError> {

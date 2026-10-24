@@ -1,6 +1,7 @@
 mod mls_crypto_provider;
 
 use crate::key_store::{JoinKeyMaterial, StoredKeyMaterial};
+use crate::persist;
 use crate::shared_structs;
 use crate::shared_structs::Instruction;
 use aes_gcm::aead::generic_array::GenericArray;
@@ -29,6 +30,11 @@ use MyOpenMLSError::*;
 const NUM_CHANNELS: u64 = 10;
 //NETWORK_DELAY in seconds, makes sure that all nodes have received the necessary proposals
 const NETWORK_DELAY: u64 = 2;
+// Files in group_saves/: the groups and the OpenMLS key store, saved together.
+const GROUP_STATE: &str = "state";
+// The two files that held them separately before.
+const LEGACY_GROUPS: &str = "mstore";
+const LEGACY_PROVIDER: &str = "provider";
 
 type LoadState = (
     Mutex<Option<GroupId>>,
@@ -76,12 +82,15 @@ impl MyOpenMls {
         group_path.push("group_saves");
 
         let (common_group, group_ids, group_store, provider) =
-            Self::load_from_file(group_path.clone(), instruction_tx.clone()).unwrap_or((
-                Mutex::new(None),
-                Mutex::new(Vec::new()),
-                Mutex::new(HashMap::new()),
-                OpenMlsRustCrypto::default(),
-            ));
+            match Self::load_from_file(group_path.clone(), instruction_tx.clone())? {
+                Some(state) => state,
+                None => (
+                    Mutex::new(None),
+                    Mutex::new(Vec::new()),
+                    Mutex::new(HashMap::new()),
+                    OpenMlsRustCrypto::default(),
+                ),
+            };
 
         let (credential_with_key, signer) =
             generate_openmls_credentials(&provider, key_store.get_skp(), key_store.get_peer_id())?;
@@ -107,6 +116,16 @@ impl MyOpenMls {
         })
     }
 
+    /// Writes the key store to key_material.json in this node's folder.
+    fn save_key_store(&self) -> Result<(), MyOpenMLSError> {
+        let path = self.load_files_path.join("key_material.json");
+        self.key_store
+            .lock()
+            .unwrap()
+            .to_file(path)
+            .map_err(KeyMaterialWriteError)
+    }
+
     pub fn generate_join_key_material(
         &self,
         id: usize,
@@ -121,13 +140,7 @@ impl MyOpenMls {
             .unwrap()
             .generate_join_key_material(id, n, grpkey, &opener_pubkeys, threshold)
             .map_err(InvalidKeyMaterial)?;
-        let mut path = self.load_files_path.clone();
-        path.push("key_material.json");
-        self.key_store
-            .lock()
-            .unwrap()
-            .to_file(path)
-            .map_err(|_| KeyMaterialFileError)?;
+        self.save_key_store()?;
         Ok(res)
     }
 
@@ -231,13 +244,7 @@ impl MyOpenMls {
             .unwrap()
             .generate_elgamal_key_pair()
             .map_err(|_| GPKUndefinedError)?;
-        let mut path = self.load_files_path.clone();
-        path.push("key_material.json");
-        self.key_store
-            .lock()
-            .unwrap()
-            .to_file(path)
-            .map_err(|_| KeyMaterialFileError)
+        self.save_key_store()
     }
 
     pub fn get_elgamal_pubkey(&self) -> Result<thressig::G2, MyOpenMLSError> {
@@ -264,14 +271,7 @@ impl MyOpenMls {
             .unwrap()
             .set_grpkey(grpkey)
             .map_err(InvalidKeyMaterial)?;
-        let mut path = self.load_files_path.clone();
-        path.push("key_material.json");
-        self.key_store
-            .lock()
-            .unwrap()
-            .to_file(path)
-            .map_err(|_| KeyMaterialFileError)?;
-        Ok(())
+        self.save_key_store()
     }
 
     pub fn set_memkey(&self, memkey: Vec<u8>) -> Result<(), MyOpenMLSError> {
@@ -280,26 +280,12 @@ impl MyOpenMls {
             .unwrap()
             .set_memkey(memkey)
             .map_err(InvalidKeyMaterial)?;
-        let mut path = self.load_files_path.clone();
-        path.push("key_material.json");
-        self.key_store
-            .lock()
-            .unwrap()
-            .to_file(path)
-            .map_err(|_| KeyMaterialFileError)?;
-        Ok(())
+        self.save_key_store()
     }
 
     pub fn set_id(&self, id: usize) -> Result<(), MyOpenMLSError> {
         self.key_store.lock().unwrap().set_id(id);
-        let mut path = self.load_files_path.clone();
-        path.push("key_material.json");
-        self.key_store
-            .lock()
-            .unwrap()
-            .to_file(path)
-            .map_err(|_| KeyMaterialFileError)?;
-        Ok(())
+        self.save_key_store()
     }
 
     pub fn add_partial_memkey(&self, partial_memkey: Vec<u8>) -> Result<(), MyOpenMLSError> {
@@ -308,14 +294,7 @@ impl MyOpenMls {
             .unwrap()
             .add_partial_memkey(partial_memkey)
             .map_err(InvalidKeyMaterial)?;
-        let mut path = self.load_files_path.clone();
-        path.push("key_material.json");
-        self.key_store
-            .lock()
-            .unwrap()
-            .to_file(path)
-            .map_err(|_| KeyMaterialFileError)?;
-        Ok(())
+        self.save_key_store()
     }
 
     pub fn set_opener_threshold(&self, threshold: usize) {
@@ -337,14 +316,7 @@ impl MyOpenMls {
             .lock()
             .unwrap()
             .extend_from_slice(opener_pubkeys);
-        let mut path = self.load_files_path.clone();
-        path.push("key_material.json");
-        self.key_store
-            .lock()
-            .unwrap()
-            .to_file(path)
-            .map_err(|_| KeyMaterialFileError)?;
-        Ok(())
+        self.save_key_store()
     }
 
     pub fn store_to_file(&self) -> Result<(), MyOpenMLSError> {
@@ -362,36 +334,54 @@ impl MyOpenMls {
         if !path.exists() {
             create_dir_all(path.clone())?;
         }
-        let mut ms_path = path.clone();
-        ms_path.push("mstore");
-        fs::write(ms_path, x)?;
-        let mut p_path = path.clone();
-        p_path.push("provider");
-        self.provider
-            .save_keystore(p_path)
-            .map_err(|reason| StoreError { reason })?;
+        // The groups and the OpenMLS key store describe the same groups and must match, so
+        // they are written together in one file, which replaces the former mstore and provider.
+        let state = bincode::serialize(&(x, self.provider.keystore_values()))
+            .map_err(|e| SerializationError(e.to_string()))?;
+        persist::write_atomic(&path.join(GROUP_STATE), &state)?;
+        for legacy in [LEGACY_GROUPS, LEGACY_PROVIDER] {
+            let _ = fs::remove_file(path.join(legacy));
+        }
 
         Ok(())
     }
 
+    /// Restores the saved groups, or returns None if this node never saved any. Saved state
+    /// that cannot be read is an error: starting without it would silently drop the node's
+    /// groups.
     fn load_from_file(
         dir: PathBuf,
         instruction_tx: mpsc::UnboundedSender<Instruction>,
-    ) -> Result<LoadState, MyOpenMLSError> {
-        let mut path = dir.clone();
-        path.push("mstore");
-        let x = fs::read(path)?;
+    ) -> Result<Option<LoadState>, MyOpenMLSError> {
+        let load_error = |reason: String| LoadError { reason };
+        let mut provider = OpenMlsRustCrypto::default();
+        let x = match fs::read(dir.join(GROUP_STATE)) {
+            Ok(state) => {
+                let (x, values): (Vec<u8>, HashMap<Vec<u8>, Vec<u8>>) =
+                    bincode::deserialize(&state)
+                        .map_err(|e| load_error(format!("{GROUP_STATE}: {e}")))?;
+                provider.restore_keystore(values);
+                x
+            }
+            // Saved by an earlier version, as two files.
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                match fs::read(dir.join(LEGACY_GROUPS)) {
+                    Ok(x) => {
+                        provider
+                            .load_keystore(dir.join(LEGACY_PROVIDER))
+                            .map_err(|e| load_error(format!("{LEGACY_PROVIDER}: {e}")))?;
+                        x
+                    }
+                    Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+                    Err(e) => return Err(e.into()),
+                }
+            }
+            Err(e) => return Err(e.into()),
+        };
         let (common_group, groups, topics): StoredGroupData =
             serde_json::from_slice(&x).map_err(|e| SerializationError(e.to_string()))?;
         let mut group_ids = Vec::new();
         let mut group_store = HashMap::new();
-        let mut path = dir.clone();
-        path.push("provider");
-
-        let mut provider = OpenMlsRustCrypto::default();
-        provider
-            .load_keystore(path)
-            .map_err(|e| LoadError { reason: e })?;
 
         for (group, owned) in groups {
             let group_id = group.group_id().clone();
@@ -421,12 +411,12 @@ impl MyOpenMls {
                     reason: e.to_string(),
                 })?;
         }
-        Ok((
+        Ok(Some((
             Mutex::new(common_group),
             Mutex::new(group_ids),
             Mutex::new(group_store),
             provider,
-        ))
+        )))
     }
 
     /*
@@ -1174,7 +1164,9 @@ impl MyOpenMls {
             .validate(self.provider.crypto(), ProtocolVersion::Mls10)
             .map_err(|e| InvalidKeyPackage(e.to_string()))?;
         if !key_package_belongs_to(&key_package, peer_id) {
-            return Err(InvalidKeyPackage(format!("it does not belong to {peer_id}")));
+            return Err(InvalidKeyPackage(format!(
+                "it does not belong to {peer_id}"
+            )));
         }
         Ok(key_package)
     }
@@ -1729,6 +1721,8 @@ pub enum MyOpenMLSError {
     KeyMaterialFileError,
     #[error("Invalid key material: {0}")]
     InvalidKeyMaterial(String),
+    #[error("Could not write the key material file: {0}")]
+    KeyMaterialWriteError(String),
     #[error("Invalid KeyPackage: {0}")]
     InvalidKeyPackage(String),
 }
@@ -1804,7 +1798,9 @@ mod remote_input_tests {
             node.add_group_from_welcome(not_a_welcome, Vec::new()),
             Err(JoinGroupError { .. })
         ));
-        assert!(node.add_group_from_welcome(vec![1, 2, 3], Vec::new()).is_err());
+        assert!(node
+            .add_group_from_welcome(vec![1, 2, 3], Vec::new())
+            .is_err());
     }
 
     /// A KeyPackage is used only for the PeerID that both its credential and its signature
@@ -1813,7 +1809,9 @@ mod remote_input_tests {
     fn key_package_must_belong_to_its_sender() {
         let node = node("keypackage");
         let key_package = node.generate_key_package().unwrap().key_package().clone();
-        assert!(node.validate_key_package(key_package.clone(), node.get_peerid()).is_ok());
+        assert!(node
+            .validate_key_package(key_package.clone(), node.get_peerid())
+            .is_ok());
         assert!(matches!(
             node.insert_foreign_kp(PeerId::random(), key_package),
             Err(InvalidKeyPackage(_))
@@ -1842,5 +1840,63 @@ mod remote_input_tests {
             node.add_partial_memkey(vec![0; 16]),
             Err(InvalidKeyMaterial(_))
         ));
+    }
+}
+
+#[cfg(test)]
+mod group_saves_tests {
+    use super::*;
+
+    fn node(
+        dir: &std::path::Path,
+        key_store: &StoredKeyMaterial,
+    ) -> Result<MyOpenMls, MyOpenMLSError> {
+        let (group_commit_tx, _) = mpsc::unbounded_channel();
+        let (instruction_tx, _) = mpsc::unbounded_channel();
+        MyOpenMls::new(
+            key_store.clone(),
+            group_commit_tx,
+            instruction_tx,
+            dir.to_path_buf(),
+            PeerId::random(),
+        )
+    }
+
+    /// Groups survive a restart, also from the two files an earlier version wrote, and a
+    /// damaged save stops the node instead of starting it without its groups.
+    #[test]
+    fn groups_are_restored_or_the_node_refuses_to_start() {
+        let dir = std::env::temp_dir().join(format!("dactie-group-saves-{}", std::process::id()));
+        let saves = dir.join("group_saves");
+        let key_store = StoredKeyMaterial::new(None, None, None, None);
+        let first = node(&dir, &key_store).unwrap();
+        let group_number = first.create_empty_mls_group().unwrap();
+        first.move_to_common(group_number);
+        first.store_to_file().unwrap();
+        let common = first.get_common_group_id().unwrap();
+        let restored = || {
+            node(&dir, &key_store)
+                .unwrap()
+                .get_common_group_id()
+                .unwrap()
+        };
+        assert_eq!(restored(), common);
+
+        // The former layout: groups in mstore, the key store in provider.
+        let (groups, _): (Vec<u8>, HashMap<Vec<u8>, Vec<u8>>) =
+            bincode::deserialize(&fs::read(saves.join(GROUP_STATE)).unwrap()).unwrap();
+        fs::write(saves.join(LEGACY_GROUPS), groups).unwrap();
+        let provider = fs::File::create(saves.join(LEGACY_PROVIDER)).unwrap();
+        first.provider.storage().save_to_file(&provider).unwrap();
+        fs::remove_file(saves.join(GROUP_STATE)).unwrap();
+        assert_eq!(restored(), common);
+
+        // A save replaces the former files.
+        first.store_to_file().unwrap();
+        assert!(!saves.join(LEGACY_GROUPS).exists());
+
+        fs::write(saves.join(GROUP_STATE), b"truncated").unwrap();
+        assert!(node(&dir, &key_store).is_err());
+        fs::remove_dir_all(dir).ok();
     }
 }

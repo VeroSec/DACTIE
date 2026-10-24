@@ -72,15 +72,28 @@ async fn main() -> Result<(), Box<dyn Error>> {
     km_path.push("key_material.json");
     let mut store_path = PathBuf::from_str(&args.km_dir).unwrap();
     store_path.push("storage.json");
-    let (storage, key_material) = if km_path.exists() && store_path.exists() {
-        let storage = Storage::from_file(store_path)?;
-        let key_material = StoredKeyMaterial::from_file(km_path)?;
-        (storage, key_material)
-    } else {
-        let (storage, key_material) = Storage::new(store_path);
-        storage.to_file()?;
-        key_material.to_file(km_path)?;
-        (storage, key_material)
+    let (storage, key_material) = match (km_path.exists(), store_path.exists()) {
+        (true, true) => {
+            let storage = Storage::from_file(store_path)?;
+            let key_material = StoredKeyMaterial::from_file(km_path)?;
+            (storage, key_material)
+        }
+        (false, false) => {
+            let (storage, key_material) = Storage::new(store_path);
+            storage.to_file()?;
+            key_material.to_file(km_path)?;
+            (storage, key_material)
+        }
+        // Starting over would mint a new PeerID and group key, and every node would have to
+        // join again.
+        _ => {
+            return Err(format!(
+                "Only one of {} and {} exists. Restore the other, or delete both to start a new network.",
+                km_path.display(),
+                store_path.display()
+            )
+            .into())
+        }
     };
 
     // Deployments whose init phase ended before the threshold was stored created every

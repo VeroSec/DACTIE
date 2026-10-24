@@ -209,7 +209,7 @@ pub(crate) enum AbstSwarmError {
     MessageValidationError,
     #[error("All slots of epoch {epoch} are used by this member (see {dir}/slots.json)")]
     NoFreeSlot { dir: String, epoch: u64 },
-    #[error("Could not record the used slot: {reason}")]
+    #[error("Could not read or record the used slots in slots.json: {reason}")]
     SlotStoreError { reason: String },
     #[error("Epoch length and slots are unknown; run get_opener_keys first")]
     NoEpochPolicy,

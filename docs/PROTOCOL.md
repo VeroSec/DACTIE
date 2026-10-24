@@ -29,6 +29,8 @@ All statements describe the code in this repository. Message names refer to `dac
 
 Each node is one binary. It takes its options on the command line and reads console commands from stdin (with Docker: `docker attach <container>`, detach with Ctrl-P Ctrl-Q). `RUST_LOG=info` shows the log lines this document refers to. Multiaddrs have the form `/ip4/<address>/tcp/<port>`.
 
+A node writes its state files (below) atomically and readable by its owner only, and refuses to start from a file it cannot read rather than start over without it. It exits with status 1 if its network event loop ends or panics, so that Docker restarts it.
+
 ### dactie-authority
 
 ```text
@@ -38,7 +40,7 @@ dactie-authority -K <dir> [-p <port>] [--advertise-addr <multiaddr>]
 
 | Option | Default | What it does |
 | --- | --- | --- |
-| `-K, --km-dir <dir>` | required | Folder of the AA's state: `key_material.json` (its libp2p key and the group manager key) and `storage.json` (members, archives, threshold, used slot tags, registered sharing peers). The AA keeps its PeerID only if both files exist; delete them together to start a new network. |
+| `-K, --km-dir <dir>` | required | Folder of the AA's state: `key_material.json` (its libp2p key and the group manager key) and `storage.json` (members, archives, threshold, used slot tags, registered sharing peers). The AA keeps its PeerID only if both files exist, and refuses to start if only one does; delete them together to start a new network. |
 | `-p, --port <port>` | `10001` | TCP port the AA listens on, on all interfaces. Archives and peers reach it at `-B /ip4/<host>/tcp/<port>`. |
 | `--advertise-addr <multiaddr>` | none | Address the AA announces to others, e.g. `/ip4/10.244.192.116/tcp/10001`, for hosts with several interfaces or behind NAT. Ignored for `127.0.0.1`. |
 | `--threshold <t>` | strict majority, `⌊n/2⌋ + 1` | How many of the `n` archives must approve before a signature can be opened. It takes effect when `end_init_archive` closes the init phase, and is fixed from then on, because every member shares its key for it; a different value on a later start is ignored with a warning. Allowed: `1 ≤ t ≤ n`. The AA warns at `t ≤ n/2` (a minority of archives can open signatures) and at `t = n` (one unavailable archive blocks every opening). |
@@ -80,7 +82,7 @@ dactie-peer -K <dir> -b <AA PeerID> -B <AA multiaddr> [-p <port>] [--advertise-a
 
 | Option | Default | What it does |
 | --- | --- | --- |
-| `-K, --km-dir <dir>` | required | Folder of the peer's state: `key_material.json` (libp2p key and member key), `slots.json` (the slots its member has used) and `group_saves/` (MLS groups and subscribed topics, restored on restart). Other sharing peers of the same member point `peer_from_sig` and `renew` at this `key_material.json`. |
+| `-K, --km-dir <dir>` | required | Folder of the peer's state: `key_material.json` (libp2p key and member key), `slots.json` (the slots its member has used) and `group_saves/` (MLS groups, their OpenMLS key store and subscribed topics, restored on restart). Other sharing peers of the same member point `peer_from_sig` and `renew` at this `key_material.json`. |
 | `-b, --authority-peer-id <PeerID>` | required | The AA's PeerID. |
 | `-B, --bootstrap-addr <multiaddr>` | `/ip4/127.0.0.1/tcp/5005` | The AA's address. The peer finds other peers through it, and a join's throwaway identity connects to it. Set it explicitly: the default port is not the AA's default `10001`. |
 | `-p, --port <port>` | random | TCP port the peer listens on. |

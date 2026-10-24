@@ -3,7 +3,7 @@ use libp2p::PeerId;
 use openmls::prelude::Ciphersuite;
 use openmls_basic_credential::SignatureKeyPair;
 use serde::{Deserialize, Serialize};
-use std::fs::{File, OpenOptions};
+use std::fs::OpenOptions;
 use std::path::PathBuf;
 use thressig::structs::{EncShare, Grpkey, Memkey};
 use thressig::{create_enc_shares, join_mem1, FieldElement, G2};
@@ -125,14 +125,21 @@ impl StoredKeyMaterial {
 
     pub fn add_partial_memkey(&mut self, memkey: Vec<u8>) -> Result<(), String> {
         // The sk comes from generate_join_key_material; a member key without it is useless.
-        let sk = self.memkey.as_ref().ok_or("no join in progress")?.sk.clone();
+        let sk = self
+            .memkey
+            .as_ref()
+            .ok_or("no join in progress")?
+            .sk
+            .clone();
         let grpkey = self.grpkey.as_ref().ok_or("no group key")?;
         let id = self.id.ok_or("no MemberID")?;
         let mut partial_memkey =
             Memkey::from_bytes(&memkey).map_err(|e| format!("member key: {e}"))?;
         partial_memkey.sk = sk;
         if !thressig::verify_memkey(&partial_memkey, grpkey, id) {
-            return Err("the member key is not the manager's credential on this member's sk".to_string());
+            return Err(
+                "the member key is not the manager's credential on this member's sk".to_string(),
+            );
         }
         self.memkey = Some(partial_memkey);
         Ok(())
@@ -169,10 +176,10 @@ impl StoredKeyMaterial {
         self.id = Some(id);
     }
 
+    /// Writes the file atomically and readable by its owner only, see persist::write_atomic.
     pub fn to_file(&self, path: PathBuf) -> Result<(), String> {
-        let file = File::create(path).map_err(|e| e.to_string())?;
-        serde_json::to_writer_pretty(file, self).map_err(|e| e.to_string())?;
-        Ok(())
+        let bytes = serde_json::to_vec_pretty(self).map_err(|e| e.to_string())?;
+        crate::persist::write_atomic(&path, &bytes).map_err(|e| format!("{}: {e}", path.display()))
     }
 }
 

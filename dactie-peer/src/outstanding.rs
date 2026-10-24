@@ -54,8 +54,14 @@ impl Asked {
                 | (Asked::Identity, R::IdentityVerified { .. })
                 | (Asked::MemKey, R::MemKey { .. })
                 | (Asked::Registration, R::PeerAdded | R::PeerRefused { .. })
-                | (Asked::Renewal, R::PeerRenewed { .. } | R::RenewRefused { .. })
-                | (Asked::OpenerKeys, R::OpenerKeys { .. } | R::ArchiveOpenerKey { .. })
+                | (
+                    Asked::Renewal,
+                    R::PeerRenewed { .. } | R::RenewRefused { .. }
+                )
+                | (
+                    Asked::OpenerKeys,
+                    R::OpenerKeys { .. } | R::ArchiveOpenerKey { .. }
+                )
         )
     }
 }
@@ -88,9 +94,11 @@ mod tests {
         assert!(!Asked::of(&RequestMessage::RequestOpenerKeys).answered_by(&memkey));
         assert!(Asked::MemKey.answered_by(&memkey));
         assert!(Asked::KeyPackage.answered_by(&ResponseMessage::KeyPackage(vec![1])));
-        assert!(Asked::Registration.answered_by(&ResponseMessage::PeerRefused {
-            reason: String::new()
-        }));
+        assert!(
+            Asked::Registration.answered_by(&ResponseMessage::PeerRefused {
+                reason: String::new()
+            })
+        );
         assert!(!Asked::Other.answered_by(&ResponseMessage::JoinGroup));
     }
 }

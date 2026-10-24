@@ -37,8 +37,8 @@ What the options in `docker-compose.yml` mean is in
 ## Rules that still matter
 
 1. **The authority needs BOTH `key_material.json` and `storage.json` to keep its
-   identity.** Delete one and it mints a new PeerId, invalidating every `boot_id.env`.
-   Always delete the pair together.
+   identity.** If only one of them exists, it refuses to start; with neither, it mints a new
+   PeerId, invalidating every `boot_id.env`. Always delete the pair together.
 2. **`env_file` is read at container CREATE time.** Editing `boot_id.env` under a running
    container changes nothing: use `up -d --force-recreate`.
 3. **Never `stop` a container you just started.** `restart: unless-stopped` does not
@@ -48,7 +48,10 @@ What the options in `docker-compose.yml` mean is in
 5. **Files written by containers belong to root.** Delete key material through a container
    (Phase 2), and replace root-owned files such as `boot_id.env` with `rm -f` + write, which
    only needs write access to the folder (Phase 4).
-6. **A truncated `storage.json` is fatal and not self-healing.** Check with
+6. **A damaged state file is fatal and not self-healing.** Nodes replace `storage.json`,
+   `key_material.json`, `slots.json` and `group_saves/state` atomically, so a crash leaves
+   the old or the new version, and they refuse to start from a file they cannot read instead
+   of starting over. Check `storage.json` with
    `python3 -c "import json;json.load(open('key_material/key_material_0/storage.json'))"`.
    Recovery is Phase 2 and a fresh run.
 7. **`end_init_archive` is irreversible.** No archive can join afterwards; adding one means a
