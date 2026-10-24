@@ -1,5 +1,6 @@
 use crate::adversary::Observation;
 use crate::peer::{ControlSignal, Directory, MeshConfig, Peer, PubInterval};
+use crate::timing::Topology;
 use futures::future::join_all;
 use libp2p::PeerId;
 use std::collections::{HashMap, HashSet};
@@ -17,6 +18,8 @@ pub(crate) struct RunOutcome {
     pub(crate) observations: Vec<Observation>,
     pub(crate) source: PeerId,
     pub(crate) all_peers: Vec<PeerId>,
+    /// The mesh and link delays at the measurement, for the timing attack.
+    pub(crate) topology: Topology,
 }
 
 impl RunOutcome {
@@ -121,7 +124,7 @@ pub(crate) async fn experiment_prop_peer_id(
         }
     }
 
-    let mut stop_peer = Peer::new(control_tx.subscribe(), response_tx.clone(), mesh, directory)?;
+    let mut stop_peer = Peer::new(control_tx.subscribe(), response_tx.clone(), mesh, directory.clone())?;
 
     let stop_peer_addr = stop_peer.get_peer_id();
     all_peers.push(stop_peer_addr);
@@ -195,6 +198,7 @@ pub(crate) async fn experiment_prop_peer_id(
         observations,
         source: stop_peer_addr,
         all_peers,
+        topology: directory.topology(mesh.latency),
     })
 }
 
@@ -219,6 +223,7 @@ mod tests {
                 .collect(),
             source: p,
             all_peers: vec![p],
+            topology: Topology::default(),
         }
     }
 

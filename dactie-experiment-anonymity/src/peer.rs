@@ -1,6 +1,7 @@
 use crate::conn_cap::ConnCap;
 use crate::link_latency::{Delayed, LatencyRange};
 use crate::stem::{message_id, Route, StemAck, StemConfig, StemMessage, StemState};
+use crate::timing::Topology;
 use futures::StreamExt;
 use libp2p::gossipsub::IdentTopic;
 use libp2p::request_response::{self, OutboundRequestId, ProtocolSupport};
@@ -44,16 +45,32 @@ const CONN_GRACE: Duration = Duration::from_secs(20);
 /// XOR-close peers that Kademlia lookups give it, and without their bootstrap
 /// traffic, which dominated the CPU of large runs.
 #[derive(Clone, Default)]
-pub(crate) struct Directory(Arc<RwLock<Vec<(PeerId, Multiaddr)>>>);
+pub(crate) struct Directory {
+    addrs: Arc<RwLock<Vec<(PeerId, Multiaddr)>>>,
+    /// Each peer's GossipSub mesh at the measurement, for the topology-aware
+    /// adversary (`timing`).
+    meshes: Arc<RwLock<HashMap<PeerId, Vec<PeerId>>>>,
+}
 
 impl Directory {
     fn register(&self, peer: PeerId, addr: Multiaddr) {
-        self.0.write().expect("directory lock").push((peer, addr));
+        self.addrs.write().expect("directory lock").push((peer, addr));
+    }
+
+    fn record_mesh(&self, peer: PeerId, mesh: Vec<PeerId>) {
+        self.meshes.write().expect("directory lock").insert(peer, mesh);
+    }
+
+    /// The propagation graph the peers reported at the measurement.
+    pub(crate) fn topology(&self, latency: LatencyRange) -> Topology {
+        let addrs = self.addrs.read().expect("directory lock");
+        let meshes = self.meshes.read().expect("directory lock");
+        Topology::from_meshes(&addrs, &meshes, latency)
     }
 
     /// Up to `k` random entries for which `skip` is false.
     fn sample(&self, k: usize, skip: impl Fn(&PeerId) -> bool) -> Vec<(PeerId, Multiaddr)> {
-        let entries = self.0.read().expect("directory lock");
+        let entries = self.addrs.read().expect("directory lock");
         entries
             .choose_multiple(&mut rand::thread_rng(), entries.len())
             .filter(|(peer, _)| !skip(peer))
@@ -464,6 +481,9 @@ impl Peer {
                             let connected = self.swarm.connected_peers().count();
                             let mesh = self.swarm.behaviour().gossipsub.mesh_peers(&topic.hash()).count();
                             println!("peer_state {connected} {mesh}");
+                            let me = *self.swarm.local_peer_id();
+                            let meshed = self.swarm.behaviour().gossipsub.mesh_peers(&topic.hash()).copied().collect();
+                            self.directory.record_mesh(me, meshed);
                             if val == self.get_peer_id() {
                                 println!("Stopping");
                                 let message = "Stop".repeat(30);

@@ -9,6 +9,7 @@ mod timing;
 use crate::adversary::{clamp_coalition_size, coalition_size_for, run_attack, Estimator};
 use crate::experiment::experiment_prop_peer_id;
 use crate::peer::{MeshConfig, PubInterval};
+use crate::timing::{TimingEstimator, TimingModel};
 use clap::Parser;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
@@ -430,6 +431,19 @@ async fn start_experiment_series(args: StartExperimentSeriesArgs) -> Result<(), 
                 )
                 .collect();
 
+            // Shortest paths from every peer, once per run for all coalitions.
+            let timing_model =
+                TimingModel::calibrated(&outcome.topology, &outcome.all_peers, &outcome.observations);
+            let fit = timing_model.fit_from(outcome.source);
+            println!(
+                "Timing model: processing {:.0} us/hop, hop {:.0} us ({} relay steps); from the source: RMS residual {:.0} us, {} receipts unreachable",
+                timing_model.processing_us,
+                timing_model.hop_us,
+                timing_model.relay_steps,
+                fit.map_or(f64::NAN, |f| f.0),
+                fit.map_or(0, |f| f.1),
+            );
+
             for c in sizes {
                 // The stream must depend on the coalition size too, or every
                 // size restarts the same one and the curves are not independent.
@@ -445,9 +459,20 @@ async fn start_experiment_series(args: StartExperimentSeriesArgs) -> Result<(), 
                     args.adversary_trials,
                     &mut rng,
                 );
+                let timing_rates = timing::run_attack(
+                    &timing_model,
+                    &outcome.observations,
+                    outcome.source,
+                    c,
+                    args.adversary_trials,
+                    &mut rng,
+                );
                 let f_effective = c as f64 / n_peers as f64;
-                for estimator in Estimator::ALL {
-                    let rate = rates[&estimator];
+                let rows = Estimator::ALL
+                    .iter()
+                    .map(|e| (e.to_string(), rates[e]))
+                    .chain(TimingEstimator::ALL.iter().map(|e| (e.to_string(), timing_rates[e])));
+                for (estimator, rate) in rows {
                     println!("  attack c={c} (f={f_effective:.4}) {estimator}: {rate:.4}");
                     writeln!(
                         &args.adv_file,
