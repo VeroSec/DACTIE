@@ -120,37 +120,39 @@ pub(crate) fn regime(stem: &StemConfig, plan: &Plan, warmup: Duration) -> &'stat
 /// What each peer received of the background traffic, by relay.
 #[derive(Debug, Default)]
 pub(crate) struct Background {
-    observers: HashMap<PeerId, Tally>,
+    /// Per observer, its receipts through GossipSub and on the stem.
+    observers: HashMap<PeerId, (Tally, Tally)>,
 }
 
+/// One observer's background receipts on the stem or through GossipSub.
 #[derive(Debug, Default)]
 struct Tally {
-    /// Background messages received through GossipSub, which hands each over once.
-    messages: u64,
-    /// Receipts per relay, on the stem and through GossipSub.
+    total: u64,
     from: HashMap<PeerId, u64>,
 }
 
 impl Background {
     pub(crate) fn record(&mut self, observer: PeerId, relay: PeerId, stem: bool) {
         let tally = self.observers.entry(observer).or_default();
+        let tally = if stem { &mut tally.1 } else { &mut tally.0 };
+        tally.total += 1;
         *tally.from.entry(relay).or_insert(0) += 1;
-        if !stem {
-            tally.messages += 1;
-        }
     }
 
-    /// How many of the colluders' observations of a background message name
-    /// `relay`, on average: each colluder adds the share of its background
-    /// receipts that came from it. The same scale as the count of a linked
-    /// message, which is one per colluder observation.
-    pub(crate) fn expected(&self, colluders: &[PeerId], relay: &PeerId) -> f64 {
-        colluders
-            .iter()
-            .filter_map(|c| self.observers.get(c))
-            .filter(|t| t.messages > 0)
-            .map(|t| *t.from.get(relay).unwrap_or(&0) as f64 / t.messages as f64)
-            .sum()
+    /// The share of the colluders' background receipts, on the stem or
+    /// through GossipSub, that came from `relay`.
+    pub(crate) fn share(&self, colluders: &[PeerId], relay: &PeerId, stem: bool) -> f64 {
+        let (mut from, mut total) = (0, 0);
+        for (gossip, on_stem) in colluders.iter().filter_map(|c| self.observers.get(c)) {
+            let tally = if stem { on_stem } else { gossip };
+            from += tally.from.get(relay).copied().unwrap_or(0);
+            total += tally.total;
+        }
+        if total == 0 {
+            0.0
+        } else {
+            from as f64 / total as f64
+        }
     }
 }
 
@@ -163,7 +165,7 @@ pub(crate) enum Aggregate {
     FirstSpy,
     /// The first-spy guess named most often over messages 1..m.
     Vote,
-    /// Statistical disclosure over messages 1..m, see `disclosure`.
+    /// Statistical disclosure over messages 1..m, see `Evidence`.
     Disclosure,
 }
 
@@ -200,39 +202,75 @@ pub(crate) fn plurality<R: Rng>(votes: &HashMap<PeerId, usize>, rng: &mut R) -> 
     top.choose(rng).copied()
 }
 
-/// Statistical disclosure (Danezis 2003), with relays in place of receivers.
+/// What the statistical-disclosure attack has gathered over the linked
+/// messages so far: Danezis' attack (2003) with relays in place of receivers.
 ///
-/// `counts[p]` is how many colluder observations of the m linked messages name
-/// p as relay. A peer that relays much traffic to the coalition, e.g. one in
-/// several colluders' meshes, has a high count for every source's messages,
-/// so the count alone names such hubs; the score subtracts what p's relaying
-/// of background messages predicts, `expected(p)` per message. The source
-/// stands out because it relays its own messages to its mesh peers, or to its
-/// first stem hop, every time. Colluders are never named, since each knows it
-/// is not the source.
-pub(crate) fn disclosure<R: Rng>(
-    counts: &HashMap<PeerId, usize>,
-    m: usize,
-    mut expected: impl FnMut(&PeerId) -> f64,
-    coalition: &HashSet<PeerId>,
-    rng: &mut R,
-) -> Option<PeerId> {
-    let scores: Vec<(PeerId, f64)> = counts
-        .iter()
-        .filter(|(p, _)| !coalition.contains(*p))
-        .map(|(p, n)| (*p, *n as f64 / m as f64 - expected(p)))
-        .collect();
-    let max = scores
-        .iter()
-        .map(|(_, s)| *s)
-        .fold(f64::NEG_INFINITY, f64::max);
-    // Scores are sums of fractions, so equal evidence can differ in the last bits.
-    let top: Vec<PeerId> = scores
-        .iter()
-        .filter(|(_, s)| max - *s <= 1e-9)
-        .map(|(p, _)| *p)
-        .collect();
-    top.choose(rng).copied()
+/// Each message counts its relays as first-spy judges it: by the stem
+/// observations if a colluder sat on the stem, else by the gossip ones. Every
+/// message weighs one in all, shared among the relays its observations name,
+/// so a message that many colluders received through peers near the diffuser
+/// does not outweigh one a colluder saw at the first stem hop.
+#[derive(Debug, Default)]
+pub(crate) struct Evidence {
+    /// Per relay, its summed share of the messages.
+    shares: HashMap<PeerId, f64>,
+    /// Messages judged on stem observations and on gossip observations.
+    on_stem: usize,
+    in_gossip: usize,
+}
+
+impl Evidence {
+    /// Add the coalition's observations of one more linked message.
+    pub(crate) fn add(&mut self, seen: &[&Observation]) {
+        let stem = seen.iter().any(|o| o.stem);
+        let judged: Vec<&Observation> = seen.iter().copied().filter(|o| o.stem == stem).collect();
+        if judged.is_empty() {
+            return;
+        }
+        for o in &judged {
+            *self.shares.entry(o.prop_id).or_insert(0.0) += 1.0 / judged.len() as f64;
+        }
+        if stem {
+            self.on_stem += 1;
+        } else {
+            self.in_gossip += 1;
+        }
+    }
+
+    /// The relay whose shares most exceed what its share of the coalition's
+    /// background receipts of the same kind predicts. Without that baseline,
+    /// a peer that relays much of everyone's traffic to the coalition, e.g.
+    /// one in several colluders' meshes, would be named for every source.
+    /// `background(p, stem)` is p's background share on the stem or in gossip.
+    /// Colluders are never named, since each knows it is not the source.
+    pub(crate) fn disclose<R: Rng>(
+        &self,
+        mut background: impl FnMut(&PeerId, bool) -> f64,
+        coalition: &HashSet<PeerId>,
+        rng: &mut R,
+    ) -> Option<PeerId> {
+        let scores: Vec<(PeerId, f64)> = self
+            .shares
+            .iter()
+            .filter(|(p, _)| !coalition.contains(*p))
+            .map(|(p, share)| {
+                let expected = self.on_stem as f64 * background(p, true)
+                    + self.in_gossip as f64 * background(p, false);
+                (*p, share - expected)
+            })
+            .collect();
+        let max = scores
+            .iter()
+            .map(|(_, s)| *s)
+            .fold(f64::NEG_INFINITY, f64::max);
+        // Scores are sums of fractions, so equal evidence can differ in the last bits.
+        let top: Vec<PeerId> = scores
+            .iter()
+            .filter(|(_, s)| max - *s <= 1e-9)
+            .map(|(p, _)| *p)
+            .collect();
+        top.choose(rng).copied()
+    }
 }
 
 /// One of the member's messages as the coalition links it.
@@ -264,10 +302,10 @@ fn guesses<R: Rng>(
     rng: &mut R,
 ) -> Vec<[Option<PeerId>; 4]> {
     let mut votes: HashMap<PeerId, usize> = HashMap::new();
-    let mut counts: HashMap<PeerId, usize> = HashMap::new();
-    let mut expected: HashMap<PeerId, f64> = HashMap::new();
+    let mut evidence = Evidence::default();
+    let mut shares: HashMap<(PeerId, bool), f64> = HashMap::new();
     let mut out = Vec::with_capacity(linked.len());
-    for (j, message) in linked.iter().enumerate() {
+    for message in linked {
         let seen: Vec<&Observation> = colluders
             .iter()
             .filter_map(|c| message.get(c))
@@ -278,18 +316,14 @@ fn guesses<R: Rng>(
         if let Some(g) = first {
             *votes.entry(g).or_insert(0) += 1;
         }
-        for o in &seen {
-            *counts.entry(o.prop_id).or_insert(0) += 1;
-        }
+        evidence.add(&seen);
         let random = candidates.choose(rng).copied();
         let vote = plurality(&votes, rng);
-        let sda = disclosure(
-            &counts,
-            j + 1,
-            |p| {
-                *expected
-                    .entry(*p)
-                    .or_insert_with(|| background.expected(colluders, p))
+        let sda = evidence.disclose(
+            |p, stem| {
+                *shares
+                    .entry((*p, stem))
+                    .or_insert_with(|| background.share(colluders, p, stem))
             },
             coalition,
             rng,
@@ -328,7 +362,8 @@ pub(crate) fn run_multi_attack<R: Rng>(
         })
         .collect();
 
-    let mut hits: Vec<HashMap<Aggregate, (usize, usize)>> = vec![HashMap::new(); linked.len()];
+    let mut hits: Vec<HashMap<Aggregate, (usize, usize)>> =
+        vec![Aggregate::ALL.iter().map(|e| (*e, (0, 0))).collect(); linked.len()];
     let mut shuffled = pool;
     for _ in 0..trials {
         shuffled.shuffle(rng);
@@ -349,7 +384,7 @@ pub(crate) fn run_multi_attack<R: Rng>(
         );
         for (j, row) in rows.into_iter().enumerate() {
             for (estimator, g) in Aggregate::ALL.into_iter().zip(row) {
-                let h = hits[j].entry(estimator).or_insert((0, 0));
+                let h = hits[j].get_mut(&estimator).unwrap();
                 if g == Some(linked[j].sender) {
                     h.0 += 1;
                 }
@@ -366,8 +401,8 @@ pub(crate) fn run_multi_attack<R: Rng>(
                 .into_iter()
                 .map(|(e, (p, m))| {
                     let success = Success {
-                        peer_id: p as f64 / trials as f64,
-                        member: m as f64 / trials as f64,
+                        peer_id: p as f64 / trials.max(1) as f64,
+                        member: m as f64 / trials.max(1) as f64,
                     };
                     (e, success)
                 })
@@ -530,6 +565,14 @@ pub(crate) async fn start_multi_series(args: MultiSeriesArgs) -> Result<(), Box<
         peer_ids: *ks.last().unwrap_or(&1),
         spacing: Duration::from_secs_f64(args.multi.message_spacing_secs.max(0.001)),
     };
+    // A coalition needs at least one peer that is not the member's.
+    if plan.peer_ids + 1 >= args.min_n {
+        return Err(format!(
+            "--peer-ids-per-source {} leaves no room for a coalition in {} peers",
+            plan.peer_ids, args.min_n
+        )
+        .into());
+    }
     let stem = args.mesh.stem;
     let regime = regime(&stem, &plan, Duration::from_secs(args.time));
     println!(
@@ -736,11 +779,10 @@ mod tests {
         assert!((4_700..5_300).contains(&ones), "tie split {ones}");
     }
 
-    /// The colluders' expectation sums each colluder's share of background
-    /// receipts from the relay; non-colluders and stem receipts' message
-    /// count are left out.
+    /// Background shares are pooled over the colluders and kept apart for the
+    /// stem and for gossip; peers outside the coalition do not count.
     #[test]
-    fn background_expectation_is_per_colluder_share() {
+    fn background_shares_are_pooled_per_kind() {
         let (a, b, x, h) = (pid(1), pid(2), pid(3), pid(4));
         let mut bg = Background::default();
         for _ in 0..3 {
@@ -748,38 +790,65 @@ mod tests {
         }
         bg.record(a, x, false);
         bg.record(a, x, true);
-        bg.record(b, h, false);
         bg.record(b, x, false);
-        // a: 4 messages, 3 from h, 2 receipts from x (one on the stem).
-        assert!((bg.expected(&[a], &h) - 0.75).abs() < 1e-12);
-        assert!((bg.expected(&[a], &x) - 0.5).abs() < 1e-12);
-        assert!((bg.expected(&[a, b], &h) - 1.25).abs() < 1e-12);
-        assert_eq!(bg.expected(&[pid(9)], &h), 0.0);
+        bg.record(pid(9), h, true);
+        assert!((bg.share(&[a], &h, false) - 0.75).abs() < 1e-12);
+        assert!((bg.share(&[a, b], &h, false) - 0.6).abs() < 1e-12);
+        assert!((bg.share(&[a, b], &x, false) - 0.4).abs() < 1e-12);
+        assert_eq!(bg.share(&[a, b], &x, true), 1.0);
+        assert_eq!(bg.share(&[a, b], &h, true), 0.0);
+        assert_eq!(bg.share(&[pid(8)], &h, false), 0.0);
     }
 
-    /// A hub relays two of every message to the coalition, the source one.
-    /// Counting alone names the hub; against its background rate the source
-    /// stands out. Colluders are never named, however often they relay.
+    /// A message is judged by its stem observations if there are any, and
+    /// weighs one in all however many colluders saw it.
+    #[test]
+    fn evidence_prefers_the_stem_and_weighs_messages_equally() {
+        let (source, relay, near) = (pid(1), pid(2), pid(3));
+        let colluders: Vec<PeerId> = (10..14).map(pid).collect();
+        let first_hop = Observation {
+            stem: true,
+            ..obs(colluders[0], source, 40)
+        };
+        let gossip: Vec<Observation> = colluders[1..].iter().map(|c| obs(*c, near, 5)).collect();
+        let mut evidence = Evidence::default();
+        let mut seen: Vec<&Observation> = gossip.iter().collect();
+        seen.push(&first_hop);
+        evidence.add(&seen);
+        evidence.add(&gossip.iter().collect::<Vec<_>>());
+        let split = [obs(colluders[1], relay, 5), obs(colluders[2], near, 6)];
+        evidence.add(&split.iter().collect::<Vec<_>>());
+        evidence.add(&[]);
+        assert_eq!(evidence.shares[&source], 1.0);
+        assert_eq!(evidence.shares[&near], 1.5);
+        assert_eq!(evidence.shares[&relay], 0.5);
+        assert_eq!((evidence.on_stem, evidence.in_gossip), (1, 2));
+    }
+
+    /// A hub relays every message to the coalition, the source a third of
+    /// them. Shares alone name the hub; against its background share the
+    /// source stands out. Colluders are never named, however often they relay.
     #[test]
     fn disclosure_names_the_excess_not_the_hub() {
         let mut rng = StdRng::seed_from_u64(3);
         let (source, hub, colluder) = (pid(1), pid(2), pid(3));
-        let m = 4;
-        let counts = HashMap::from([(hub, 2 * m), (source, m), (colluder, 5 * m)]);
+        let evidence = Evidence {
+            shares: HashMap::from([(hub, 4.0), (source, 2.0), (colluder, 6.0)]),
+            on_stem: 0,
+            in_gossip: 6,
+        };
         let coalition = HashSet::from([colluder]);
-        let expected = |p: &PeerId| if *p == hub { 2.0 } else { 0.1 };
+        let background = |p: &PeerId, _| if *p == hub { 0.6 } else { 0.01 };
         assert_eq!(
-            disclosure(&counts, m, expected, &coalition, &mut rng),
+            evidence.disclose(background, &coalition, &mut rng),
             Some(source)
         );
         assert_eq!(
-            disclosure(&counts, m, |_| 0.0, &coalition, &mut rng),
+            evidence.disclose(|_, _| 0.0, &coalition, &mut rng),
             Some(hub)
         );
-        assert_eq!(
-            disclosure(&HashMap::new(), m, |_| 0.0, &coalition, &mut rng),
-            None
-        );
+        let empty = Evidence::default();
+        assert_eq!(empty.disclose(|_, _| 0.0, &coalition, &mut rng), None);
     }
 
     /// Fixed routes: every message reaches the coalition first from the same
@@ -816,8 +885,8 @@ mod tests {
             .map(|r| r[&Aggregate::FirstSpy].member)
             .collect();
         assert_eq!(single, vec![1.0, 0.0, 0.0, 1.0, 0.0]);
-        // Without background traffic the disclosure score is the count, which
-        // here ranks peers as the vote does.
+        // With one observation per message and no background traffic, the
+        // disclosure score is the vote count.
         for estimator in [Aggregate::Vote, Aggregate::Disclosure] {
             let pooled: Vec<f64> = rates.iter().map(|r| r[&estimator].member).collect();
             assert_eq!(pooled[0], 1.0, "{estimator}");
