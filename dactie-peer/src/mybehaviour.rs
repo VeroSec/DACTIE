@@ -138,13 +138,16 @@ impl crate::abstswarm::StemTick for MyBehaviour {
             state.due(now)
         };
         for (message, from) in due {
-            log::info!("Stem: embargo ran out, publishing");
             let result = match from {
                 None => {
+                    log::debug!("Stem: embargo ran out for an own message, publishing");
                     stem_relay::state().in_gossip(stem::message_id(&message.payload));
                     self.publish_to(&message.channel, message.payload)
                 }
-                Some(from) => self.publish_relayed(notification_tx, my_open_mls, message, from),
+                Some(from) => {
+                    log::info!("Stem: embargo ran out, publishing");
+                    self.publish_relayed(notification_tx, my_open_mls, message, from)
+                }
             };
             if let Err(e) = result {
                 log::warn!("Stem: could not publish after the embargo: {e}");
@@ -426,7 +429,8 @@ impl MyBehaviour {
         stem::prefer_outbound(candidates, &stem_relay::outbound())
     }
 
-    /// Sends one of this peer's own messages into the stem.
+    /// Sends one of this peer's own messages into the stem. Lines about own messages are
+    /// logged at debug: at info, collected logs would show which peer a message started at.
     fn stem_publish_own(&mut self, channel: String, payload: Vec<u8>) -> Result<(), AbstSwarmError> {
         let id = stem::message_id(&payload);
         let candidates = self.stem_candidates();
@@ -438,12 +442,12 @@ impl MyBehaviour {
         };
         match route {
             Route::Forward(next) => {
-                log::info!("Stem: sent own message {id:016x} to {next}");
+                log::debug!("Stem: sent own message {id:016x} to {next}");
                 self.send_stem(next, id, StemMessage { channel, payload }, None);
                 Ok(())
             }
             Route::Fluff => {
-                log::info!("Stem: no stem peer available, publishing directly");
+                log::debug!("Stem: no stem peer available, publishing directly");
                 self.publish_to(&channel, payload)
             }
         }
@@ -494,14 +498,14 @@ impl MyBehaviour {
         );
         match next {
             Some(Resend::Fresh(next)) => {
-                log::info!("Stem: re-routing own message {id:016x} to {next}");
+                log::debug!("Stem: re-routing own message {id:016x} to {next}");
                 self.send_stem(next, id, message.clone(), None);
             }
             Some(Resend::FirstHop(next)) => {
-                log::info!("Stem: every stem peer has own message {id:016x}, back to the first hop {next}");
+                log::debug!("Stem: every stem peer has own message {id:016x}, back to the first hop {next}");
                 self.send_stem(next, id, message.clone(), None);
             }
-            None => log::info!("Stem: own message left to the embargo"),
+            None => log::debug!("Stem: own message left to the embargo"),
         }
         true
     }

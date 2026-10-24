@@ -56,10 +56,11 @@ start_network() {
     wait_count "$W/arc1.log" 'Got a new ID Share' 1 30   # the AA's own share (member 0)
 }
 
-# Starts a peer node.
+# Starts a peer node. A peer logs what it does with its own stem messages at debug only, and
+# the stem checks need those lines.
 start_peer() { # window [RUST_LOG]
     mkdir -p "$W/$1"
-    run "$1" "$BIN/dactie-peer -K $W/$1 -b $AA -B /ip4/127.0.0.1/tcp/$AA_PORT" "${2:-info}"
+    run "$1" "$BIN/dactie-peer -K $W/$1 -b $AA -B /ip4/127.0.0.1/tcp/$AA_PORT" "${2:-info,dactie_peer::mybehaviour=debug}"
 }
 
 # Registers a member from a new peer node. The node joins from a throwaway identity and then
