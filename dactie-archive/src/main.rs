@@ -162,8 +162,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let abstswarm = abstswarm_builder.build()?;
 
-    // Start network event loop
-    tokio::spawn(abstswarm.run()).await?;
-
-    Ok(())
+    // Start network event loop. The archive has nothing else to do: if the loop ends or
+    // panics, exit non-zero so that Docker restarts it. exit() also ends the operator
+    // console's pending stdin read, which returning from main would wait for.
+    match tokio::spawn(abstswarm.run()).await {
+        Ok(()) => log::error!("Network event loop ended, exiting"),
+        Err(e) => log::error!("Network event loop failed, exiting: {e}"),
+    }
+    exit(1);
 }

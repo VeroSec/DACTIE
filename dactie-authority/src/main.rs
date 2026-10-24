@@ -157,10 +157,24 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let client = MyClient::new(instruction_tx, notification_rx);
 
     // Start network event loop
-    tokio::spawn(abstswarm.run());
+    let network = tokio::spawn(abstswarm.run());
 
     // Start client event loop
-    tokio::spawn(client.run()).await??;
+    let client = tokio::spawn(client.run());
+
+    // Without its event loop the node only looks alive, e.g. after a panic in a handler:
+    // exit non-zero so that Docker restarts it. exit() also ends a pending stdin read, which
+    // returning from main would wait for.
+    tokio::select! {
+        result = network => {
+            match result {
+                Ok(()) => log::error!("Network event loop ended, exiting"),
+                Err(e) => log::error!("Network event loop failed, exiting: {e}"),
+            }
+            exit(1);
+        }
+        result = client => result??,
+    }
 
     Ok(())
 }

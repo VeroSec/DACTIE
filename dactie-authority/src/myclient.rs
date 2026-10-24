@@ -31,7 +31,10 @@ impl MyClient {
         loop {
             tokio::select! {
                 Ok(Some(line)) = self.stdin.next_line() => {
-                    Self::handle_user_input(&mut self, &line).await?
+                    // A mistyped command must not end the node.
+                    if let Err(e) = Self::handle_user_input(&mut self, &line).await {
+                        log::error!("Command failed: {e}");
+                    }
                 }
                 Some(notification) = self.notification_rx.recv() =>  {
                      Self::handle_notification(notification).await?
