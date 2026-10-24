@@ -94,7 +94,7 @@ pub(crate) fn clamp_coalition_size(c: usize, n: usize) -> usize {
 /// failure. `Random` is the exception: a random guesser needs no observations,
 /// so it always answers and lands on exactly 1/|N|. That is what makes it the
 /// baseline, so do not "fix" it to depend on `seen`.
-fn guess<R: Rng>(
+pub(crate) fn guess<R: Rng>(
     estimator: Estimator,
     seen: &[&Observation],
     candidates: &[PeerId],

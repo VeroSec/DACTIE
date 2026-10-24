@@ -3,6 +3,7 @@ mod conn_cap;
 mod link_latency;
 mod stem;
 mod experiment;
+mod multi_message;
 mod peer;
 
 use crate::adversary::{clamp_coalition_size, coalition_size_for, run_attack, Estimator};
@@ -130,6 +131,9 @@ struct Args {
     #[clap(long, default_value_t = 39.0)]
     stem_embargo_secs: f64,
 
+    #[command(flatten)]
+    multi: multi_message::MultiArgs,
+
     /// Colluding fractions f to evaluate the source-anonymity attack at. Each is
     /// converted to a coalition size of ceil(f * N), capped at the N-1 peers that
     /// are not the source.
@@ -199,6 +203,45 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let args = Args::parse();
     raise_fd_limit((args.n_peers_max * args.conn_high) as u64 * 5 / 4 + 1024);
 
+    let mesh = MeshConfig::new(
+        args.mesh_n,
+        args.mesh_n_low,
+        args.mesh_n_high,
+        args.gossip_factor,
+        args.gossip_lazy,
+    )
+    .with_conn_limits(args.conn_low, args.conn_high)
+    .with_plaintext(args.plaintext)
+    .with_heartbeat(args.heartbeat_secs)
+    .with_spawn_rate(args.spawn_per_sec)
+    .with_link_latency(args.link_latency_ms)
+    .with_stem(stem::StemConfig {
+        q: args.stem_fluff_probability,
+        epoch: tokio::time::Duration::from_secs(args.stem_epoch_secs),
+        embargo_mean: tokio::time::Duration::from_secs_f64(args.stem_embargo_secs.max(0.001)),
+    });
+
+    if let Some(messages) = args.multi.messages_per_source {
+        return multi_message::start_multi_series(multi_message::MultiSeriesArgs {
+            min_n: args.n_peers_min,
+            max_n: args.n_peers_max,
+            n_step_size: args.n_peers_step_size,
+            repetitions: args.repetitions,
+            time: args.time,
+            interval: args.interval,
+            mesh,
+            out_path: args.out_path,
+            adversary_fractions: args.adversary_fractions,
+            coalition_sizes: args.coalition_sizes,
+            adversary_trials: args.adversary_trials,
+            adversary_seed: args.adversary_seed,
+            min_delivery: args.min_delivery,
+            messages,
+            multi: args.multi,
+        })
+        .await;
+    }
+
     let mut x = args.out_path.clone();
     let mut avg = args.out_path.clone();
     // D belongs in the name. The adversary file already carries it, but these
@@ -261,23 +304,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         file,
         avg_file: file_avg,
         adv_file,
-        mesh: MeshConfig::new(
-            args.mesh_n,
-            args.mesh_n_low,
-            args.mesh_n_high,
-            args.gossip_factor,
-            args.gossip_lazy,
-        )
-        .with_conn_limits(args.conn_low, args.conn_high)
-        .with_plaintext(args.plaintext)
-        .with_heartbeat(args.heartbeat_secs)
-        .with_spawn_rate(args.spawn_per_sec)
-        .with_link_latency(args.link_latency_ms)
-        .with_stem(stem::StemConfig {
-            q: args.stem_fluff_probability,
-            epoch: tokio::time::Duration::from_secs(args.stem_epoch_secs),
-            embargo_mean: tokio::time::Duration::from_secs_f64(args.stem_embargo_secs.max(0.001)),
-        }),
+        mesh,
         adversary_fractions: args.adversary_fractions,
         coalition_sizes: args.coalition_sizes,
         adversary_trials: args.adversary_trials,
