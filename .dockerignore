@@ -1,2 +1,28 @@
+# The images copy the build context with `COPY . .`: everything not needed to build stays out.
 /target
 build.sh
+
+# Key material and node state, wherever a node was run from. key_material/ holds the
+# authority's group manager key (storage.json).
+/key_material
+**/key_material.json
+**/storage.json
+**/slots.json
+**/group_saves
+**/.*.tmp
+
+# Compose variables such as ARCHIVE_DB_PASSWORD, and other env files.
+.env
+**/*.env
+
+# Repository metadata and local data
+.git
+.idea/
+*.swp
+results/
+exp/
+dataSources/
+Thesis/
+ACSAC_Submission*.pdf
+rebut.md
+docs/FUTURE_WORK.md

@@ -60,7 +60,7 @@ dactie-archive -K <dir> -u <postgres-url> -a <AA PeerID> -B <AA multiaddr> -i <n
 | Option | Default | What it does |
 | --- | --- | --- |
 | `-K, --km-dir <dir>` | required | Folder of the archive's `key_material.json`: its libp2p key, its ElGamal opening key, and the group key. The archive registers with the AA whenever this file holds no group key yet. |
-| `-u, --url <url>` | required | PostgreSQL URL of this archive's own database, e.g. `postgres://archive:archivepw@127.0.0.1:5432/archivedb`. The tables are in `init.sql`. The archive exits at startup if the database is unreachable. |
+| `-u, --url <url>` | required | PostgreSQL URL of this archive's own database, e.g. `postgres://archive@127.0.0.1:5432/archivedb`, with the password in `PGPASSWORD` rather than in the URL (`docker-compose.yml` takes it from `ARCHIVE_DB_PASSWORD`). The log shows the database, host, port and user, never the URL. The tables are in `init.sql`. The archive exits at startup if the database is unreachable. |
 | `-a, --aa-id <PeerID>` | required | The AA's PeerID, as in the AA's log line `Local PeerId`. |
 | `-B, --aa-addr <multiaddr>` | `/ip4/127.0.0.1/tcp/20011` | The AA's address. Set it explicitly: the default port is not the AA's default `10001`. |
 | `-i, --identity <name>` | required | The name this archive registers with at the AA, e.g. `archive1`. Free text, unrelated to Docker profiles or container names. The AA derives the archive's ID from it and refuses empty names and names it has already registered, so every archive needs its own. It is used only for registration and shows in the AA's log as `Verified identity <name> from <PeerID>`. |

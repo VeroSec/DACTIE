@@ -5,7 +5,7 @@ use dactie_utils::key_store::StoredKeyMaterial;
 use dactie_utils::mls_wrapper::MyOpenMls;
 use dactie_utils::shared_structs::Instruction;
 use libp2p::{Multiaddr, PeerId};
-use sqlx::postgres::PgPoolOptions;
+use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use std::error::Error;
 use std::path::PathBuf;
 use std::process::exit;
@@ -29,7 +29,8 @@ struct Args {
     #[arg(short, long)]
     port: Option<usize>,
 
-    /// PostgreSQL URL of this archive's database, e.g. postgres://archive:archivepw@127.0.0.1:5432/archivedb
+    /// PostgreSQL URL of this archive's database, e.g. postgres://archive@127.0.0.1:5432/archivedb.
+    /// Leave the password out and set PGPASSWORD instead, so that the process list does not show it
     #[arg(short, long)]
     url: String,
 
@@ -107,12 +108,20 @@ async fn main() -> Result<(), Box<dyn Error>> {
         key_material
     };
 
-    // Connect to the database
-    log::info!("Connecting to Postgres at {}", args.url);
+    // Connect to the database. The log names the database but never the URL, which may
+    // contain the password.
+    let db = PgConnectOptions::from_str(&args.url)?;
+    log::info!(
+        "Connecting to Postgres database {} at {}:{} as {}",
+        db.get_database().unwrap_or_default(),
+        db.get_host(),
+        db.get_port(),
+        db.get_username()
+    );
     let pool = PgPoolOptions::new()
         .max_connections(5)
         .acquire_timeout(Duration::from_secs(5))
-        .connect(&args.url)
+        .connect_with(db)
         .await?;
     log::info!("Postgres connection established");
     mybehaviour::ensure_pending_opens_table(&pool).await?;

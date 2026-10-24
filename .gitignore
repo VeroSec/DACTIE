@@ -18,3 +18,6 @@ Thesis/
 
 # Internal working notes, kept out of the repository
 docs/FUTURE_WORK.md
+
+# Compose variables such as ARCHIVE_DB_PASSWORD — never commit
+.env

@@ -10,8 +10,8 @@ Last full run: 2026-10-13, all checks in Phase 9 passed.
 | Host | ssh | IP | Profile | Services | Ports |
 | --- | --- | --- | --- | --- | --- |
 | minerva1 | `ssh minerva1` | 10.244.192.116 | `node116` | `authority_node` | 10001 |
-| minerva2 | `ssh minerva2` | 10.244.192.117 | `node117` | `db`, `adminer`, `archive_node1`, `peer_1` | 5432, 8080, 20011, 21011, 9898 |
-| minerva3 | `ssh minerva3` | 10.244.192.118 | `node118` | `db2`, `archive_node2`, `peer_2` | 5433, 20012, 21012, 9898 |
+| minerva2 | `ssh minerva2` | 10.244.192.117 | `node117` | `db`, `adminer`, `archive_node1`, `peer_1` | 5432 and 8080 (loopback), 20011, 21011, 9898 |
+| minerva3 | `ssh minerva3` | 10.244.192.118 | `node118` | `db2`, `archive_node2`, `peer_2` | 5433 (loopback), 20012, 21012, 9898 |
 | minerva4 | `ssh minerva4` | 10.244.192.119 | `node119` | `peer_3`, `peer_4` | 21013, 21014, 9898, 9899 |
 
 The checkout is `/opt/vero/dactie` on all four hosts. You are in the `docker` group there, so
@@ -203,6 +203,14 @@ logs()  { docker logs "$@" 2>&1 | sed 's/\x1b\[[0-9;]*m//g'; }
 ```
 
 ## Phase 5 — Archives
+
+The archives' database password has no default. On minerva2 and minerva3, write it once into
+`/opt/vero/dactie/.env`, where compose reads it, and keep it as long as the database volume:
+PostgreSQL stores it when the volume is created (Phase 2 deletes the volume).
+
+```bash
+[ -f .env ] || { umask 077; echo "ARCHIVE_DB_PASSWORD=$(openssl rand -hex 16)" > .env; }
+```
 
 **minerva2:**
 

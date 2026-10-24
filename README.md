@@ -22,12 +22,12 @@ This is an explanation of how to build the concept from source. For the Docker V
 3. Build the project by running `cargo build`
 4. Create an empty key material folder for each of the 5 peers (e.g. ./key_material/key_material_0..4)
 5. Open four terminals and navigate to the dactie folder
-6. Start two databases. Either use an own PostgresDB or start the docker container with `docker compose start db db2`
+6. Start two databases. Either use an own PostgresDB or start the docker containers with `ARCHIVE_DB_PASSWORD=<password> docker compose --profile node117 --profile node118 up -d db db2`
 
 In each terminal start:
 1. Start authorization authority(aa) with `RUST_LOG=info cargo run --package dactie-authority -- -K <folder aa_key_material>`. Optional: `--peers-per-member <k>` (default 5) and `--epoch-secs <seconds>` (default 30 days) set how many sharing peers a member can register per epoch, see [Create new Peer with identity of Peer1](#create-new-peer-with-identity-of-peer1-peer2).
-2. Start archive1 with `RUST_LOG=info cargo run --package dactie-archive --bin dactie-archive -- -K <folder archive_key_material> -u "postgres://archive:archivepw@localhost/archivedb" -i archive1 -a <peer_id_aa> -B /ip4/127.0.0.1/tcp/10001`
-3. Start archive2 with `RUST_LOG=info cargo run --package dactie-archive --bin dactie-archive -- -K <folder archive_key_material> -u "postgres://archive:archivepw@localhost:5433/archivedb" -i archive2 -a <peer_id_aa> -B /ip4/127.0.0.1/tcp/10001`
+2. Start archive1 with `PGPASSWORD=<password> RUST_LOG=info cargo run --package dactie-archive --bin dactie-archive -- -K <folder archive_key_material> -u "postgres://archive@localhost/archivedb" -i archive1 -a <peer_id_aa> -B /ip4/127.0.0.1/tcp/10001`
+3. Start archive2 with `PGPASSWORD=<password> RUST_LOG=info cargo run --package dactie-archive --bin dactie-archive -- -K <folder archive_key_material> -u "postgres://archive@localhost:5433/archivedb" -i archive2 -a <peer_id_aa> -B /ip4/127.0.0.1/tcp/10001`
 4. Start peer1 with `RUST_LOG=info cargo run --package dactie-peer --bin dactie-peer -- -K <folder peer1_key_material> -b <peer_id_aa> -B /ip4/127.0.0.1/tcp/10001`
 5. Start peer2 with `RUST_LOG=info cargo run --package dactie-peer --bin dactie-peer -- -K <folder peer2_key_material> -b <peer_id_aa> -B /ip4/127.0.0.1/tcp/10001`
 
@@ -41,12 +41,13 @@ Only registered peers take part in GossipSub: a node that has not registered get
 ### Docker
 This section explains the docker setup. If docker is choosen the part above can be ignored
 1. Clone the GitRepo and move to the folder
-2. Run `build.sh` to create the Docker-Images and create the Key-Material folders
-3. Run only the authority node with docker containers with `docker compose up authority_node`. This creates a new peer ID.
-4. Copy the BootPeerID into `./key_material/boot_id.env`.  The authority can be stopped after copying the address
-5. Start the whole network with `docker compose up`
-6. Attach to each container by using `docker attach <container_id>`
-7. adminer interface can be found under [https://localhost:8080](https://localhost:8080) with credentials `Username: archive`, `Password: archivepw` and `Database: archivedb`
+2. Run `build.sh` to create the Docker-Images and create the Key-Material folders. The images do not contain `key_material/` or `.env` (see `.dockerignore`).
+3. Put the database password into `.env` next to `docker-compose.yml`: `ARCHIVE_DB_PASSWORD=<password>`. There is no default.
+4. Run only the authority node with docker containers with `docker compose up authority_node`. This creates a new peer ID.
+5. Copy the BootPeerID into `./key_material/boot_id.env`.  The authority can be stopped after copying the address
+6. Start the whole network with `docker compose up`
+7. Attach to each container by using `docker attach <container_id>`
+8. adminer interface can be found under [http://localhost:8080](http://localhost:8080), on the Docker host only, with credentials `Username: archive`, `Password: <ARCHIVE_DB_PASSWORD>` and `Database: archivedb`. The databases and Adminer are published on 127.0.0.1; set `DB_PUBLISH_ADDR` to publish them elsewhere.
 
 ### End the Archive Initialization Progress(Authority):
 `end_init_archive`

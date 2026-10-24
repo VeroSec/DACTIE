@@ -34,7 +34,7 @@ start_network() {
     for i in 1 2; do
         docker run -d --rm --name $S-pg$i -e POSTGRES_USER=archive -e POSTGRES_PASSWORD=archivepw \
             -e POSTGRES_DB=archivedb -v "$REPO/init.sql:/docker-entrypoint-initdb.d/init.sql:ro" \
-            -p $((PG_PORT + i)):5432 postgres:16 >/dev/null || fail "postgres $i"
+            -p 127.0.0.1:$((PG_PORT + i)):5432 postgres:16 >/dev/null || fail "postgres $i"
     done
     # During init the server listens on the socket only, so TCP readiness means init.sql ran.
     for i in 1 2; do
@@ -48,7 +48,7 @@ start_network() {
     AA=$(peer_id aa)
     echo "AA $AA"
     for i in 1 2; do
-        run arc$i "$BIN/dactie-archive -K $W/arc$i -u postgres://archive:archivepw@127.0.0.1:$((PG_PORT + i))/archivedb -i archive$i -a $AA -B /ip4/127.0.0.1/tcp/$AA_PORT"
+        run arc$i "PGPASSWORD=archivepw $BIN/dactie-archive -K $W/arc$i -u postgres://archive@127.0.0.1:$((PG_PORT + i))/archivedb -i archive$i -a $AA -B /ip4/127.0.0.1/tcp/$AA_PORT"
     done
     sleep 8
     send aa end_init_archive
