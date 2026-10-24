@@ -58,6 +58,7 @@ To publish a message to a topic, the `broad` command can be used.
 
 ## Private Groups
 Private Groups support all MLS functionality. Peers can create groups, add new members, remove members and update their key material.
+Private groups are nested inside the common group: only admitted peers can be added, messages are encrypted with the private group's key and then with the common group's key, and a group's owner removes the peers that the AA removed from the common group.
 For all commands that add new peers to a group the keypackage of the other peer is required, and should be requested with `req_kps`.
 
 At the time of this work no decentralized version of MLS was available, we used the work around of P2Panda. Only Group Owners can create commits.
