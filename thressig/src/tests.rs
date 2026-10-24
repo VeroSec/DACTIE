@@ -415,3 +415,22 @@ fn test_attributed_signature() {
     let members: HashSet<usize> = [id].into_iter().collect();
     assert_eq!(open(&sig, &grpkey, &members, &all_sj), vec![id]);
 }
+
+/// Keys and signatures arrive from the network: malformed bytes are an error, not a panic.
+#[test]
+fn test_malformed_bytes_rejected() {
+    let garbage = [0xffu8; 7];
+    assert!(Memkey::from_bytes(&garbage).is_err());
+    assert!(Grpkey::from_bytes(&garbage).is_err());
+    assert!(Signature::from_bytes(&garbage).is_err());
+    assert!(EncShare::from_bytes(&garbage).is_err());
+    assert!("AAAA".parse::<Signature>().is_err());
+    let (grpkey, _) = setup();
+    assert!(Grpkey::from_bytes(&grpkey.to_bytes()).is_ok());
+}
+
+/// A join or registration that names no archives has no share to check.
+#[test]
+fn test_share_layout_without_openers() {
+    assert!(check_share_layout(&[], &[G1::random()], 0).is_err());
+}

@@ -246,12 +246,12 @@ impl MyBehaviour {
         enc_shares: &[EncShare],
         commits: &[thressig::G1],
     ) -> Result<(), AbstSwarmError> {
-        for (i, peer_id) in archvive_peer_ids.iter().enumerate() {
+        for (peer_id, enc_share) in archvive_peer_ids.iter().zip(enc_shares) {
             self.request_response.send_request(
                 peer_id,
                 my_open_mls.sign(RequestMessage::AddIDShare {
                     id,
-                    enc_share: enc_shares[i].clone(),
+                    enc_share: enc_share.clone(),
                     commits: commits.to_owned(),
                 })?,
             );
@@ -267,12 +267,12 @@ impl MyBehaviour {
         enc_shares: &[EncShare],
         commits: &[thressig::G1],
     ) -> Result<(), AbstSwarmError> {
-        for (i, peer_id) in archvive_peer_ids.iter().enumerate() {
+        for (peer_id, enc_share) in archvive_peer_ids.iter().zip(enc_shares) {
             self.request_response.send_request(
                 peer_id,
                 my_open_mls.sign(RequestMessage::AddPeerShare {
                     peer_id: requester_peer_id,
-                    enc_share: enc_shares[i].clone(),
+                    enc_share: enc_share.clone(),
                     commits: commits.to_owned(),
                 })?,
             );
@@ -782,7 +782,7 @@ impl MyBehaviour {
                             };
                             self.request_response
                                 .send_response(channel, my_open_mls.sign(res)?)
-                                .unwrap();
+                                .unwrap_or(());
                         }
 
                         _ => {}

@@ -267,7 +267,8 @@ pub fn check_share_layout(
     commits: &[G1],
     n_openers: usize,
 ) -> Result<G1, String> {
-    if enc_shares.len() != n_openers || commits.is_empty() {
+    // Without openers there is no share to check, and enc_shares[0] below would panic.
+    if n_openers == 0 || enc_shares.len() != n_openers || commits.is_empty() {
         return Err(String::from("Wrong number of shares or commitments"));
     }
     let h_blind = enc_shares[0].h_blind.clone();

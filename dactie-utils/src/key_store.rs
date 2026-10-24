@@ -91,8 +91,8 @@ impl StoredKeyMaterial {
         grpkey: Vec<u8>,
         opener_pubkeys: &[G2],
         threshold: usize,
-    ) -> JoinKeyMaterial {
-        let grpkey = Grpkey::from_bytes(&grpkey);
+    ) -> Result<JoinKeyMaterial, String> {
+        let grpkey = Grpkey::from_bytes(&grpkey).map_err(|e| format!("group key: {e}"))?;
         let (g_sk, h_sk, pi1, pi2, pi3, sk, enc_shares, commits) =
             join_mem1(id, n, &grpkey, threshold, opener_pubkeys);
         self.memkey = Some(Memkey {
@@ -102,7 +102,7 @@ impl StoredKeyMaterial {
             e1: None,
         });
         self.grpkey = Some(grpkey);
-        (g_sk, h_sk, pi1, pi2, pi3, enc_shares, commits) //Return everything except sk
+        Ok((g_sk, h_sk, pi1, pi2, pi3, enc_shares, commits)) //Return everything except sk
     }
 
     pub fn generate_enc_shares(
@@ -117,33 +117,45 @@ impl StoredKeyMaterial {
     }
 
     pub fn generate_elgamal_key_pair(&mut self) -> Result<(), String> {
-        let g_tilde = &self.grpkey.as_ref().expect("Grpkey has to be set").g_tilde;
+        let g_tilde = &self.grpkey.as_ref().ok_or("Grpkey has to be set")?.g_tilde;
         self.elgamal_keypair = Some(thressig::elgamal_keygen(g_tilde));
         Ok(())
     }
 
-    pub fn add_partial_memkey(&mut self, memkey: Vec<u8>) {
-        let mut partial_memkey = Memkey::from_bytes(&memkey);
-        partial_memkey.sk = self.memkey.clone().unwrap().sk;
+    pub fn add_partial_memkey(&mut self, memkey: Vec<u8>) -> Result<(), String> {
+        // The sk comes from generate_join_key_material; a member key without it is useless.
+        let sk = self.memkey.as_ref().ok_or("no join in progress")?.sk.clone();
+        let mut partial_memkey =
+            Memkey::from_bytes(&memkey).map_err(|e| format!("member key: {e}"))?;
+        partial_memkey.sk = sk;
         self.memkey = Some(partial_memkey);
+        Ok(())
     }
 
     pub fn from_file(path: PathBuf) -> Result<StoredKeyMaterial, Box<dyn std::error::Error>> {
         let key_material_file = OpenOptions::new().read(true).open(path)?;
 
-        Ok(serde_json::from_reader(key_material_file)?)
+        let key_material: StoredKeyMaterial = serde_json::from_reader(key_material_file)?;
+        // get_keypair and get_peer_id rely on a valid Ed25519 key.
+        let private = key_material.signature_key_pair.private();
+        if private.len() < 32 || Keypair::ed25519_from_bytes(private[..32].to_vec()).is_err() {
+            return Err("the file holds no valid Ed25519 signature key".into());
+        }
+        Ok(key_material)
     }
 
     //Sets the grpkey
-    pub fn set_grpkey(&mut self, grpkey: Vec<u8>) {
-        let grpkey = Grpkey::from_bytes(&grpkey);
+    pub fn set_grpkey(&mut self, grpkey: Vec<u8>) -> Result<(), String> {
+        let grpkey = Grpkey::from_bytes(&grpkey).map_err(|e| format!("group key: {e}"))?;
         self.grpkey = Some(grpkey);
+        Ok(())
     }
 
     //Sets the memkey
-    pub fn set_memkey(&mut self, memkey: Vec<u8>) {
-        let memkey = Memkey::from_bytes(&memkey);
+    pub fn set_memkey(&mut self, memkey: Vec<u8>) -> Result<(), String> {
+        let memkey = Memkey::from_bytes(&memkey).map_err(|e| format!("member key: {e}"))?;
         self.memkey = Some(memkey);
+        Ok(())
     }
 
     //Sets the ID

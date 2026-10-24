@@ -696,7 +696,7 @@ impl MyBehaviour {
         my_open_mls: &MyOpenMls,
     ) -> Result<(), AbstSwarmError> {
         let group_number = my_open_mls.create_mls_group(&peer_ids)?;
-        let group_id = my_open_mls.get_groups().get(group_number).unwrap().clone();
+        let group_id = my_open_mls.get_group_id(group_number)?;
         //Subscribes to partitionedchannel and adds groupid to topic list
         self.subscribe(group_id.to_vec(), my_open_mls)?;
 

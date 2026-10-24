@@ -115,13 +115,12 @@ impl MyOpenMls {
     ) -> Result<JoinKeyMaterial, MyOpenMLSError> {
         let opener_pubkeys = self.opener_pubkeys.lock().unwrap().clone();
         let threshold = self.get_opener_threshold()?;
-        let res = self.key_store.lock().unwrap().generate_join_key_material(
-            id,
-            n,
-            grpkey,
-            &opener_pubkeys,
-            threshold,
-        );
+        let res = self
+            .key_store
+            .lock()
+            .unwrap()
+            .generate_join_key_material(id, n, grpkey, &opener_pubkeys, threshold)
+            .map_err(InvalidKeyMaterial)?;
         let mut path = self.load_files_path.clone();
         path.push("key_material.json");
         self.key_store
@@ -260,7 +259,11 @@ impl MyOpenMls {
     }
 
     pub fn set_grpkey(&self, grpkey: Vec<u8>) -> Result<(), MyOpenMLSError> {
-        self.key_store.lock().unwrap().set_grpkey(grpkey);
+        self.key_store
+            .lock()
+            .unwrap()
+            .set_grpkey(grpkey)
+            .map_err(InvalidKeyMaterial)?;
         let mut path = self.load_files_path.clone();
         path.push("key_material.json");
         self.key_store
@@ -272,7 +275,11 @@ impl MyOpenMls {
     }
 
     pub fn set_memkey(&self, memkey: Vec<u8>) -> Result<(), MyOpenMLSError> {
-        self.key_store.lock().unwrap().set_memkey(memkey);
+        self.key_store
+            .lock()
+            .unwrap()
+            .set_memkey(memkey)
+            .map_err(InvalidKeyMaterial)?;
         let mut path = self.load_files_path.clone();
         path.push("key_material.json");
         self.key_store
@@ -299,7 +306,8 @@ impl MyOpenMls {
         self.key_store
             .lock()
             .unwrap()
-            .add_partial_memkey(partial_memkey);
+            .add_partial_memkey(partial_memkey)
+            .map_err(InvalidKeyMaterial)?;
         let mut path = self.load_files_path.clone();
         path.push("key_material.json");
         self.key_store
@@ -526,8 +534,12 @@ impl MyOpenMls {
             .map_err(|x| SerializationError(x.to_string()))?;
         let welcome = match mls_message_in.extract() {
             MlsMessageBodyIn::Welcome(welcome) => welcome,
-            // We know it's a welcome message, so we ignore all other cases.
-            _ => unreachable!("Unexpected message type."),
+            // The message comes from the network and can be anything.
+            _ => {
+                return Err(JoinGroupError {
+                    reason: "not a Welcome message".to_string(),
+                })
+            }
         };
 
         // ... and inspect the message.
@@ -1685,6 +1697,8 @@ pub enum MyOpenMLSError {
     DecryptionError,
     #[error("The path to the keystore is not valid or the file is corrupted")]
     KeyMaterialFileError,
+    #[error("Invalid key material: {0}")]
+    InvalidKeyMaterial(String),
 }
 
 #[cfg(test)]
@@ -1725,5 +1739,49 @@ mod broadcast_tests {
             channel_of(b"Perforce Helix Core"),
             format!("channel_{}", hasher.finish() % NUM_CHANNELS)
         );
+    }
+}
+
+#[cfg(test)]
+mod remote_input_tests {
+    use super::*;
+
+    fn node(name: &str) -> MyOpenMls {
+        let dir = std::env::temp_dir().join(format!("dactie-mls-{name}-{}", std::process::id()));
+        let (group_commit_tx, _) = mpsc::unbounded_channel();
+        let (instruction_tx, _) = mpsc::unbounded_channel();
+        MyOpenMls::new(
+            StoredKeyMaterial::new(None, None, None, None),
+            group_commit_tx,
+            instruction_tx,
+            dir,
+            PeerId::random(),
+        )
+        .unwrap()
+    }
+
+    /// A JoinGroup request carries whatever MLS message its sender put in it.
+    #[test]
+    fn join_group_without_a_welcome_is_refused() {
+        let node = node("welcome");
+        let key_package = node.generate_key_package().unwrap().key_package().clone();
+        let not_a_welcome = MlsMessageOut::from(key_package)
+            .tls_serialize_detached()
+            .unwrap();
+        assert!(matches!(
+            node.add_group_from_welcome(not_a_welcome, Vec::new()),
+            Err(JoinGroupError { .. })
+        ));
+        assert!(node.add_group_from_welcome(vec![1, 2, 3], Vec::new()).is_err());
+    }
+
+    /// A member key that arrives before this node started a join is refused.
+    #[test]
+    fn member_key_without_a_join_is_refused() {
+        let node = node("memkey");
+        assert!(matches!(
+            node.add_partial_memkey(vec![0; 16]),
+            Err(InvalidKeyMaterial(_))
+        ));
     }
 }

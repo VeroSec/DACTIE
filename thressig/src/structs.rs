@@ -145,7 +145,7 @@ impl FromStr for Signature {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let bytes = general_purpose::STANDARD.decode(s)?;
-        Ok(Signature::from_bytes(&bytes))
+        Ok(Signature::from_bytes(&bytes)?)
     }
 }
 
@@ -155,9 +155,9 @@ impl Signature {
         bincode::serialize(self).expect("Serialization failed")
     }
 
-    pub fn from_bytes(bytes: &[u8]) -> Self {
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, bincode::Error> {
         // Deserialize the bytes back into the struct using bincode
-        bincode::deserialize(bytes).expect("Deserialization failed")
+        bincode::deserialize(bytes)
     }
 }
 
@@ -167,9 +167,9 @@ impl Memkey {
         bincode::serialize(self).expect("Serialization failed")
     }
 
-    pub fn from_bytes(bytes: &[u8]) -> Self {
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, bincode::Error> {
         // Deserialize the bytes back into the struct using bincode
-        bincode::deserialize(bytes).expect("Deserialization failed")
+        bincode::deserialize(bytes)
     }
 }
 
@@ -179,9 +179,9 @@ impl Grpkey {
         bincode::serialize(self).expect("Serialization failed")
     }
 
-    pub fn from_bytes(bytes: &[u8]) -> Self {
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, bincode::Error> {
         // Deserialize the bytes back into the struct using bincode
-        bincode::deserialize(bytes).expect("Deserialization failed")
+        bincode::deserialize(bytes)
     }
 }
 
@@ -191,8 +191,8 @@ impl EncShare {
         bincode::serialize(self).expect("Serialization failed")
     }
 
-    pub fn from_bytes(bytes: &[u8]) -> Self {
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, bincode::Error> {
         // Deserialize the bytes back into the struct using bincode
-        bincode::deserialize(bytes).expect("Deserialization failed")
+        bincode::deserialize(bytes)
     }
 }
