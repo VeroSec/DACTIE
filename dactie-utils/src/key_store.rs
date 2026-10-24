@@ -102,6 +102,7 @@ impl StoredKeyMaterial {
             e1: None,
         });
         self.grpkey = Some(grpkey);
+        self.id = Some(id);
         Ok((g_sk, h_sk, pi1, pi2, pi3, enc_shares, commits)) //Return everything except sk
     }
 
@@ -125,9 +126,14 @@ impl StoredKeyMaterial {
     pub fn add_partial_memkey(&mut self, memkey: Vec<u8>) -> Result<(), String> {
         // The sk comes from generate_join_key_material; a member key without it is useless.
         let sk = self.memkey.as_ref().ok_or("no join in progress")?.sk.clone();
+        let grpkey = self.grpkey.as_ref().ok_or("no group key")?;
+        let id = self.id.ok_or("no MemberID")?;
         let mut partial_memkey =
             Memkey::from_bytes(&memkey).map_err(|e| format!("member key: {e}"))?;
         partial_memkey.sk = sk;
+        if !thressig::verify_memkey(&partial_memkey, grpkey, id) {
+            return Err("the member key is not the manager's credential on this member's sk".to_string());
+        }
         self.memkey = Some(partial_memkey);
         Ok(())
     }
@@ -167,5 +173,50 @@ impl StoredKeyMaterial {
         let file = File::create(path).map_err(|e| e.to_string())?;
         serde_json::to_writer_pretty(file, self).map_err(|e| e.to_string())?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+    use thressig::GroupElement;
+
+    /// Only the manager's credential on this member's sk and MemberID replaces the member key.
+    #[test]
+    fn member_key_must_fit_the_join() {
+        let (grpkey, mgrkey) = thressig::setup();
+        let pks = vec![thressig::elgamal_keygen(&grpkey.g_tilde).1];
+        let n = thressig::join_mgr1();
+        let mut key_store = StoredKeyMaterial::new(None, None, None, None);
+        let (g_sk, h_sk, pi1, pi2, pi3, enc_shares, commits) = key_store
+            .generate_join_key_material(7, n.clone(), grpkey.to_bytes(), &pks, 1)
+            .unwrap();
+        let partial = thressig::join_mgr2(
+            7,
+            thressig::JoinMgr2Args {
+                gml: &mut HashMap::new(),
+                name: "member".to_string(),
+                mgrkey: &mgrkey,
+                grpkey: &grpkey,
+                n: &n,
+                g_sk: &g_sk,
+                h_sk: &h_sk,
+                opener_pubkeys: &pks,
+                commits: &commits,
+                pi1,
+                pi2,
+                pi3,
+                enc_shares: &enc_shares,
+            },
+        )
+        .unwrap();
+
+        let mut forged = partial.clone();
+        forged.sigma2 = Some(thressig::G1::random());
+        assert!(key_store.add_partial_memkey(forged.to_bytes()).is_err());
+        assert!(key_store.get_memkey().unwrap().sigma1.is_none());
+        assert!(key_store.add_partial_memkey(partial.to_bytes()).is_ok());
+        assert_eq!(key_store.get_memkey().unwrap().sigma1, partial.sigma1);
     }
 }

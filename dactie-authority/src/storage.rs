@@ -4,8 +4,7 @@ use crate::storage::MyStorageError::{
     ThresholdNotSetError,
 };
 use dactie_utils::key_store::StoredKeyMaterial;
-use dactie_utils::mls_wrapper::MyOpenMls;
-use libp2p::identity::ed25519::PublicKey;
+use dactie_utils::mls_wrapper::{key_package_belongs_to, MyOpenMls};
 use libp2p::PeerId;
 use openmls::prelude::KeyPackage;
 use serde::{Deserialize, Serialize};
@@ -161,28 +160,13 @@ impl Storage {
         }
     }
 
-    pub(crate) fn verify_key_package(
-        key_package: &KeyPackage,
-        sender_peer_id: PeerId,
-    ) -> Result<bool, MyStorageError> {
-        let pub_mls_key = key_package.leaf_node().signature_key().as_slice();
-        let peer_id = libp2p::identity::PublicKey::from(
-            PublicKey::try_from_bytes(pub_mls_key).map_err(|_| SerializationError {
-                reason: "PeerID".to_string(),
-            })?,
-        )
-        .to_peer_id();
-
-        Ok(peer_id == sender_peer_id)
-    }
-
     // Adds new Peer to network
     pub(crate) fn allow_peer(
         &self,
         key_package: &KeyPackage,
         sender_peer_id: PeerId,
     ) -> Result<(), MyStorageError> {
-        if Self::verify_key_package(key_package, sender_peer_id)? {
+        if key_package_belongs_to(key_package, sender_peer_id) {
             {
                 let mut vec = self.allowed_peers.lock().unwrap();
                 if !vec.contains(&sender_peer_id) {

@@ -2,6 +2,7 @@ use crate::mybehaviour::MyBehaviourError::PubSubBehaviourError;
 use async_trait::async_trait;
 use dactie_utils::net::{is_unroutable_addr, MESH_N, MESH_N_HIGH, MESH_N_LOW};
 use crate::join_relay;
+use crate::outstanding::{self, Asked};
 use dactie_utils::admission;
 use dactie_utils::conn_cap;
 use dactie_utils::stem::{self, Resend, Route, StemAck, StemCodec, StemConfig, StemMessage, STEM_PROTOCOL};
@@ -12,7 +13,7 @@ use libp2p::gossipsub::{IdentTopic, MessageAcceptance};
 use libp2p::identity::{Keypair, ParseError};
 use libp2p::kad::store::MemoryStore;
 use libp2p::kad::{Mode, PROTOCOL_NAME};
-use libp2p::request_response::ProtocolSupport;
+use libp2p::request_response::{OutboundRequestId, ProtocolSupport};
 use libp2p::swarm::{NetworkBehaviour, SwarmEvent};
 use libp2p::{gossipsub, identify, kad, request_response, Multiaddr, PeerId, StreamProtocol};
 use openmls::key_packages::KeyPackage;
@@ -273,6 +274,14 @@ impl MyBehaviour {
         if let Err(e) = notification_tx.send(Notification::Err(error)) {
             log::error!("Failed to send notification back to router through mpsc channel: {e}");
         }
+    }
+
+    /// Sends a direct request and records what it asks for, see `outstanding`.
+    fn send_request(&mut self, peer_id: &PeerId, request: Request) -> OutboundRequestId {
+        let asked = Asked::of(&request.body);
+        let request_id = self.request_response.send_request(peer_id, request);
+        outstanding::sent(request_id, asked);
+        request_id
     }
 
     //Subscribe to Gossipsub topic
@@ -684,7 +693,7 @@ impl MyBehaviour {
     ) -> Result<(), AbstSwarmError> {
         for peer_id in peer_ids {
             let request: Request = my_open_mls.sign(RequestMessage::KeyPackage)?;
-            self.request_response.send_request(&peer_id, request);
+            self.send_request(&peer_id, request);
         }
         Ok(())
     }
@@ -784,7 +793,7 @@ impl MyBehaviour {
                 .ok_or(GroupNotAvailable(
                     "Could not find group mentioned in update req".to_string(),
                 ))?;
-            let _req_id = self.request_response.send_request(
+            let _req_id = self.send_request(
                 &peer_id,
                 my_open_mls.sign(RequestMessage::Update {
                     group_id: group_id.to_vec(),
@@ -891,8 +900,7 @@ impl MyBehaviour {
             tag,
             proof,
         };
-        self.request_response
-            .send_request(&peer_id, my_open_mls.sign(body)?);
+        self.send_request(&peer_id, my_open_mls.sign(body)?);
         Ok(())
     }
 
@@ -911,7 +919,7 @@ impl MyBehaviour {
         let (tag, proof) =
             my_open_mls.prove_renewal(&my_open_mls.get_peerid().to_bytes(), epoch + 1, slot)?;
         log::info!("Renewing with slot {slot} of epoch {}", epoch + 1);
-        self.request_response.send_request(
+        self.send_request(
             &authority,
             Request {
                 body: RequestMessage::RenewPeer { tag, proof },
@@ -926,7 +934,7 @@ impl MyBehaviour {
             body: RequestMessage::RequestOpenerKeys,
             signature: None,
         };
-        self.request_response.send_request(&peer_id, request);
+        self.send_request(&peer_id, request);
         Ok(())
     }
 
@@ -1282,7 +1290,7 @@ impl MyBehaviour {
         ratchet_tree: Vec<u8>,
     ) -> Result<(), AbstSwarmError> {
         for peer_id in peer_ids {
-            self.request_response.send_request(
+            self.send_request(
                 &peer_id,
                 my_open_mls.sign(RequestMessage::JoinGroup {
                     welcome: welcome.clone(),
@@ -1383,7 +1391,7 @@ impl MyBehaviour {
             if join.is_some() {
                 join_relay::send(*archive, request);
             } else {
-                self.request_response.send_request(archive, request);
+                self.send_request(archive, request);
             }
         }
         *archive_keys::pending().lock().unwrap() = Some(archive_keys::Pending {
@@ -1478,6 +1486,9 @@ impl MyBehaviour {
         my_open_mls: &MyOpenMls,
     ) -> Result<(), AbstSwarmError> {
         log::debug!("Received Request::Event: {:?}", request_event);
+        if let request_response::Event::OutboundFailure { request_id, .. } = &request_event {
+            outstanding::take(request_id);
+        }
         if let request_response::Event::Message { peer, message } = request_event {
             match message {
                 request_response::Message::Request {
@@ -1541,18 +1552,24 @@ impl MyBehaviour {
                         _ => {}
                     }
                 }
-                //It is not checked if a response belongs to a send request, this could cause security issues
                 request_response::Message::Response {
                     response,
-                    request_id: _request_id,
+                    request_id,
                     ..
                 } => {
                     // Round trip of an archive query, measured in bench builds only.
                     #[cfg(feature = "bench")]
-                    let rtt = archive_query_timing::finished(&_request_id);
+                    let rtt = archive_query_timing::finished(&request_id);
                     #[cfg(not(feature = "bench"))]
                     let rtt: Option<std::time::Duration> = None;
-                    self.handle_response(peer, response, rtt, my_open_mls)?;
+                    match outstanding::take(&request_id) {
+                        Some(asked) if asked.answered_by(&response.body) => {
+                            self.handle_response(peer, response, rtt, my_open_mls)?
+                        }
+                        asked => log::warn!(
+                            "Ignoring a response from {peer} that does not answer its request ({asked:?})"
+                        ),
+                    }
                 }
             }
         }
@@ -1585,7 +1602,9 @@ impl MyBehaviour {
                 log::info!("Response with KeyPackage from {}", peer.to_string());
                 let keypackage: KeyPackage = bincode::deserialize(val)
                     .map_err(|x| SerializationError(x.to_string()))?;
-                my_open_mls.insert_foreign_kp(peer, keypackage)
+                if let Err(e) = my_open_mls.insert_foreign_kp(peer, keypackage) {
+                    log::warn!("Not using the KeyPackage from {peer}: {e}");
+                }
             }
             ResponseMessage::JoinGroup => {
                 //Nothing to do for now
@@ -1623,6 +1642,10 @@ impl MyBehaviour {
                 epoch_secs,
                 peers_per_member,
             } => {
+                if peer != my_open_mls.get_authorityid() {
+                    log::warn!("Ignoring an identity verification from {peer}, which is not the authority");
+                    return Ok(());
+                }
                 log::info!("Identity was verified, proceeding with memkey creation.");
                 my_open_mls.set_epoch_policy(epoch_secs, peers_per_member);
                 let (Some(n), Some(opener_pubkeys), Some(threshold)) =
@@ -1643,14 +1666,22 @@ impl MyBehaviour {
                     my_open_mls,
                 )?;
             }
-            ResponseMessage::MemKey { partial_memkey } => {
-                if let Some(memkey) = partial_memkey {
+            ResponseMessage::MemKey { ref partial_memkey } => {
+                // Only the AA hands out member keys, signed, and only during this node's join.
+                // add_partial_memkey then checks the credential against the member's sk.
+                if peer != my_open_mls.get_authorityid() || !join_relay::active() {
+                    log::warn!("Ignoring a member key from {peer}: not the authority, or no join in progress");
+                    return Ok(());
+                }
+                if let Err(e) = my_open_mls.verify(response.clone()) {
+                    log::warn!("Ignoring a member key from {peer} without a valid signature: {e}");
+                    return Ok(());
+                }
+                if let Some(memkey) = partial_memkey.clone() {
                     my_open_mls.add_partial_memkey(memkey)?;
-                    if join_relay::active() {
-                        join_relay::finish();
-                        log::info!("Joined as a member; registering this node as a sharing peer");
-                        self.register_self(my_open_mls, peer)?;
-                    }
+                    join_relay::finish();
+                    log::info!("Joined as a member; registering this node as a sharing peer");
+                    self.register_self(my_open_mls, peer)?;
                 }
             }
             ResponseMessage::PeerAdded => {}
@@ -1660,6 +1691,10 @@ impl MyBehaviour {
                 epoch_secs,
                 peers_per_member,
             } => {
+                if peer != my_open_mls.get_authorityid() {
+                    log::warn!("Ignoring opener keys from {peer}, which is not the authority");
+                    return Ok(());
+                }
                 log::info!("Got Opener Keys.");
                 my_open_mls.set_epoch_policy(epoch_secs, peers_per_member);
                 let Some(threshold) = threshold else {

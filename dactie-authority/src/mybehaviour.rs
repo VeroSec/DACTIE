@@ -580,6 +580,7 @@ impl MyBehaviour {
                             if storage.remove_n(&peer).is_some() {
                                 let keypackage: KeyPackage = bincode::deserialize(&keypackage)
                                     .map_err(|x| SerializationError(x.to_string()))?;
+                                let keypackage = my_open_mls.validate_key_package(keypackage, peer)?;
                                 let res = ResponseMessage::MemKey {
                                     partial_memkey: None,
                                 };
@@ -595,7 +596,7 @@ impl MyBehaviour {
                                     .is_ok()
                                 {
                                     storage.allow_peer(&keypackage, peer)?;
-                                    my_open_mls.insert_foreign_kp(peer, keypackage);
+                                    my_open_mls.insert_foreign_kp(peer, keypackage)?;
                                     storage.add_archive_key(peer, elgamal_pk);
                                     log::info!(
                                         "Archive '{}' registered ({} total)",
@@ -673,8 +674,10 @@ impl MyBehaviour {
                             //Verify Keypackage belongs to Peer
                             let keypackage: KeyPackage = bincode::deserialize(&keypackage)
                                 .map_err(|x| SerializationError(x.to_string()))?;
-                            if refusal.is_none() && !Storage::verify_key_package(&keypackage, peer)? {
-                                refusal = Some("the KeyPackage does not belong to the peer".to_string());
+                            if refusal.is_none() {
+                                if let Err(e) = my_open_mls.validate_key_package(keypackage.clone(), peer) {
+                                    refusal = Some(format!("the KeyPackage does not belong to the peer: {e}"));
+                                }
                             }
 
                             if refusal.is_none() && !Self::shares_match_network(storage, &enc_shares, &commits) {

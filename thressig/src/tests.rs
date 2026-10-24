@@ -434,3 +434,26 @@ fn test_malformed_bytes_rejected() {
 fn test_share_layout_without_openers() {
     assert!(check_share_layout(&[], &[G1::random()], 0).is_err());
 }
+
+/// A member uses only the key the manager made for its own sk and MemberID.
+#[test]
+fn test_member_checks_its_key() {
+    let (grpkey, mgrkey, pks, _, n) = join_setup(3);
+    let id = 21usize;
+    let material = join_mem1(id, n.clone(), &grpkey, 2, &pks);
+    let (_, _, _, _, _, sk, enc_shares, commits) = &material;
+    let partial = try_join(id, &grpkey, &mgrkey, &pks, &n, &material, enc_shares, commits).unwrap();
+    let memkey = join_mem2(sk, &partial);
+    assert!(verify_memkey(&memkey, &grpkey, id));
+
+    // Another MemberID, another sk, a changed credential, or another manager's group key.
+    assert!(!verify_memkey(&memkey, &grpkey, id + 1));
+    assert!(!verify_memkey(&join_mem2(&FieldElement::random(), &partial), &grpkey, id));
+    let mut forged = memkey.clone();
+    forged.sigma2 = Some(G1::random());
+    assert!(!verify_memkey(&forged, &grpkey, id));
+    let (other_grpkey, _) = setup();
+    assert!(!verify_memkey(&memkey, &other_grpkey, id));
+    // The partial key the manager sends has no sk yet.
+    assert!(!verify_memkey(&partial, &grpkey, id));
+}

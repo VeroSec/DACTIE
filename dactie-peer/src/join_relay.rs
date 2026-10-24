@@ -7,9 +7,10 @@
 //! once the member key has arrived. The node then registers its own PeerID as a sharing peer
 //! with a slot tag, which does not reveal the member.
 
+use crate::outstanding::Asked;
 use dactie_utils::shared_structs::{Request, Response};
 use libp2p::futures::StreamExt;
-use libp2p::request_response::{self, ProtocolSupport};
+use libp2p::request_response::{self, OutboundRequestId, ProtocolSupport};
 use libp2p::swarm::{NetworkBehaviour, SwarmEvent};
 use libp2p::{noise, tcp, yamux, Multiaddr, PeerId, StreamProtocol, Swarm};
 use std::collections::{HashMap, VecDeque};
@@ -62,6 +63,9 @@ pub(crate) struct RelayBehaviour {
 #[derive(Default)]
 pub(crate) struct JoinRelay {
     swarm: Option<Swarm<RelayBehaviour>>,
+    /// What each relayed request asks for, see `outstanding`. The relay's request ids are its
+    /// own, so they are not kept with the main identity's.
+    asked: HashMap<OutboundRequestId, Asked>,
 }
 
 impl JoinRelay {
@@ -74,6 +78,7 @@ impl JoinRelay {
             (queued, std::mem::take(&mut state.done))
         };
         if done && self.swarm.take().is_some() {
+            self.asked.clear();
             log::info!("Dropped the throwaway identity of the join");
         }
         for (peer, request) in queued {
@@ -89,10 +94,12 @@ impl JoinRelay {
                 }
             };
             swarm.add_peer_address(peer, addr.clone());
-            swarm
+            let asked = Asked::of(&request.body);
+            let request_id = swarm
                 .behaviour_mut()
                 .request_response
                 .send_request(&peer, request);
+            self.asked.insert(request_id, asked);
         }
     }
 
@@ -124,7 +131,8 @@ impl JoinRelay {
         Ok(self.swarm.as_mut().unwrap())
     }
 
-    /// The next response to a relayed request; pending while there is no throwaway identity.
+    /// The next response that answers its relayed request; pending while there is no
+    /// throwaway identity.
     pub(crate) async fn next_response(&mut self) -> (PeerId, Response) {
         loop {
             let Some(swarm) = self.swarm.as_mut() else {
@@ -134,12 +142,28 @@ impl JoinRelay {
                 SwarmEvent::Behaviour(RelayBehaviourEvent::RequestResponse(
                     request_response::Event::Message {
                         peer,
-                        message: request_response::Message::Response { response, .. },
+                        message:
+                            request_response::Message::Response {
+                                response,
+                                request_id,
+                            },
                     },
-                )) => return (peer, response),
+                )) => match self.asked.remove(&request_id) {
+                    Some(asked) if asked.answered_by(&response.body) => return (peer, response),
+                    asked => log::warn!(
+                        "Ignoring a response from {peer} that does not answer its join request ({asked:?})"
+                    ),
+                },
                 SwarmEvent::Behaviour(RelayBehaviourEvent::RequestResponse(
-                    request_response::Event::OutboundFailure { peer, error, .. },
-                )) => log::error!("Join request to {peer} failed: {error}"),
+                    request_response::Event::OutboundFailure {
+                        peer,
+                        error,
+                        request_id,
+                    },
+                )) => {
+                    self.asked.remove(&request_id);
+                    log::error!("Join request to {peer} failed: {error}")
+                }
                 _ => {}
             }
         }

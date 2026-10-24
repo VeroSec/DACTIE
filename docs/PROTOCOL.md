@@ -154,7 +154,7 @@ Archives must register before any member joins, because every member splits its 
 2. Each archive starts with its own name, `-i <name>` (any unique text such as `archive1`; see [dactie-archive](#dactie-archive)). If its key file holds no group key, it sends an unsigned `VerifyIdentity { identity: name, with_signature: false }` to the AA.
 3. The AA derives the MemberID from the name and rejects empty or already registered names. It replies `IdentityVerified { id, group_key }`.
 4. The archive generates its ElGamal key pair and an MLS KeyPackage, and sends `JoinKeyPackage { keypackage, elgamal_pk }`.
-5. The AA records the archive's PeerID and ElGamal key, keeps the KeyPackage, and replies `MemKey { None }`. Archives therefore receive no member key. The position of an archive in this list is the index of the share it will hold.
+5. The AA checks the KeyPackage (see *Responses and KeyPackages* in section 5), records the archive's PeerID and ElGamal key, keeps the KeyPackage, and replies `MemKey { None }`. Archives therefore receive no member key. The position of an archive in this list is the index of the share it will hold.
 6. The operator runs `end_init_archive` on the AA:
    - At least two archives must be registered.
    - `t` is set to `--threshold` or, by default, a strict majority (`⌊n/2⌋ + 1`), with `1 ≤ t ≤ n`. The value is stored and cannot change afterwards, because every member key is shared for it.
@@ -210,8 +210,8 @@ sequenceDiagram
    - every encrypted share against its archive's key and the commitments.
 
    It then issues the credential `(σ1, σ2, e1)` on `sk` without learning `sk`, and records `MemberID → name` in `gml`.
-6. **Shares to archives.** The AA sends archive `i` a group-signed `AddIDShare { id, enc_share_i, commitments }`. The message carries no PeerID. The archive verifies the AA's signature and the share against its own key, then stores it in `id_shares`.
-7. **Member key.** The AA sends `MemKey { σ1, σ2, e1 }`. It does not add the joining PeerID to the common group. The peer combines the credential with `sk` and can now sign, drops the throwaway identity, and registers its own PeerID as a sharing peer with slot 1 of the current epoch.
+6. **Shares to archives.** The AA sends archive `i` a group-signed `AddIDShare { id, enc_share_i, commitments }`. The message carries no PeerID. The archive accepts shares only from the AA's PeerID, since the group signature shows only that some member signed. It verifies the signature and the share against its own key, then stores it in `id_shares`.
+7. **Member key.** The AA sends `MemKey { σ1, σ2, e1 }`. It does not add the joining PeerID to the common group. The peer accepts it only from the AA, as the answer to its `JoinKeyMaterial`, with a valid group signature, and only if the credential is valid for its `sk` and MemberID (`thressig::verify_memkey`); otherwise it keeps its key. It combines the credential with `sk` and can now sign, drops the throwaway identity, and registers its own PeerID as a sharing peer with slot 1 of the current epoch.
 
 **What the AA learns.** The AA learns the member's name and MemberID, and the throwaway PeerID they came from, which is never used again. After the join, the AA keeps `gml` (MemberID → name) and the list of admitted sharing PeerIDs separately; no sharing PeerID is linked to a name. It never sees `sk` or any share in the clear. The AA still sees the IP address of the join; joining from another network location, or through Tor, hides that too. It could also link a join and a sharing peer that registers right after it by timing.
 
@@ -223,7 +223,7 @@ A member can run further sharing peers under the same member key. Each new peer 
 
 1. `get_opener_keys <AA PeerID>`: the new peer fetches the archives' keys, `t`, the epoch length and `k` (`RequestOpenerKeys` → group-signed `OpenerKeys`). If the peer was started with `--archive`, it confirms the keys as in step 3 above.
 2. `peer_from_sig <AA PeerID> <key_material.json of an existing peer>`: the new peer loads the member key, claims the lowest free slot of the current epoch in the `slots.json` next to that file, shares the same `sk` again with fresh blinding and a fresh polynomial, and sends a **group-signed** `AddPeerToSig { keypackage, enc_shares, commitments, tag, proof }`. Because the request is group-signed, the AA learns only that the requester is some admitted member, not which one. `proof` shows that the first commitment and the slot tag hide the `sk` of a valid member credential, bound to the KeyPackage. It reveals no more about the member than a group signature.
-3. The AA checks `proof` and the share layout, the KeyPackage credential against the requesting PeerID, the share count, and every encrypted share. Last, it accepts the tag if it is for the current epoch and a slot in `1..=k` and was not used before, and records it. It then sends archive `i` a group-signed `AddPeerShare { peer_id, enc_share_i, commitments }`, adds the peer to the common group, and replies `PeerAdded`; otherwise it replies `PeerRefused { reason }`.
+3. The AA checks `proof` and the share layout, the KeyPackage's signatures and its credential and signature key against the requesting PeerID, the share count, and every encrypted share. Last, it accepts the tag if it is for the current epoch and a slot in `1..=k` and was not used before, and records it. It then sends archive `i` a group-signed `AddPeerShare { peer_id, enc_share_i, commitments }`, adds the peer to the common group, and replies `PeerAdded`; otherwise it replies `PeerRefused { reason }`.
 4. Each archive verifies the share and stores it in `peer_shares` under the new PeerID.
 
 Archives store `id_shares` per MemberID without any PeerID, and `peer_shares` per additional PeerID without any MemberID. Only an opening links the two.
@@ -257,6 +257,8 @@ Messages are anonymous: neither the gossip message nor the group signature ident
 ## 5. MLS groups
 
 - `req_kps <PeerIDs>`: collect KeyPackages from the peers to be added. Requests and answers are group-signed.
+
+**Responses and KeyPackages.** A node uses a response only as the answer to the request it sent, so a peer asked for a KeyPackage cannot reply with a member key. Every KeyPackage it receives, at the AA as well, must carry valid signatures, and both its credential and its signature key must be the PeerID that sent it; otherwise it is not used.
 - `create_group <PeerIDs>`: the creator becomes the group's **owner** (leaf 0). It adds the peers with a commit, publishes the commit on the group's channel, and sends the new members a group-signed `JoinGroup` welcome.
 - `add_group_member`, `remove_group_member`, `update_key_material`: any member publishes these as **proposals**.
 - **Only the owner commits.** When the owner receives a proposal, it commits all pending proposals and publishes the commit after a short delay. Receivers reject commits from any other member. In an unordered peer-to-peer network, concurrent commits from different members would otherwise fork the group. Proposals to remove the owner are ignored. If a non-owner proposed an Add, it sends the welcome once it has processed the owner's commit.

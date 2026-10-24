@@ -1163,10 +1163,28 @@ impl MyOpenMls {
         Ok((res, ratchet, self_removed))
     }
 
-    //Stores a KeyPackage for further use
-    pub fn insert_foreign_kp(&self, key: PeerId, value: KeyPackage) {
+    /// Checks a KeyPackage that `peer_id` sent: both its signatures, and that it belongs to
+    /// `peer_id` (key_package_belongs_to). Returns it as validated by OpenMLS.
+    pub fn validate_key_package(
+        &self,
+        key_package: KeyPackage,
+        peer_id: PeerId,
+    ) -> Result<KeyPackage, MyOpenMLSError> {
+        let key_package = KeyPackageIn::from(key_package)
+            .validate(self.provider.crypto(), ProtocolVersion::Mls10)
+            .map_err(|e| InvalidKeyPackage(e.to_string()))?;
+        if !key_package_belongs_to(&key_package, peer_id) {
+            return Err(InvalidKeyPackage(format!("it does not belong to {peer_id}")));
+        }
+        Ok(key_package)
+    }
+
+    //Stores the KeyPackage `key` sent, once validated, for further use
+    pub fn insert_foreign_kp(&self, key: PeerId, value: KeyPackage) -> Result<(), MyOpenMLSError> {
+        let value = self.validate_key_package(value, key)?;
         let mut map = self.key_package_store.lock().unwrap();
         map.insert(key, value);
+        Ok(())
     }
 
     //Returns a list of all Groups
@@ -1557,6 +1575,18 @@ fn generate_openmls_credentials(
     ))
 }
 
+/// True if a KeyPackage names `peer_id` twice over: as its credential, by which members are
+/// known (common_group_peers), and through its signature key, the Ed25519 key of the PeerID.
+/// A KeyPackage that fails either would add another PeerID than the one that sent it.
+pub fn key_package_belongs_to(key_package: &KeyPackage, peer_id: PeerId) -> bool {
+    let leaf_node = key_package.leaf_node();
+    let credential_matches = leaf_node.credential().serialized_content() == peer_id.to_bytes();
+    let key_matches =
+        libp2p::identity::ed25519::PublicKey::try_from_bytes(leaf_node.signature_key().as_slice())
+            .is_ok_and(|key| libp2p::identity::PublicKey::from(key).to_peer_id() == peer_id);
+    credential_matches && key_matches
+}
+
 struct GroupStorage {
     group: MlsGroup,
     aes_cipher: Aes256Gcm,
@@ -1699,6 +1729,8 @@ pub enum MyOpenMLSError {
     KeyMaterialFileError,
     #[error("Invalid key material: {0}")]
     InvalidKeyMaterial(String),
+    #[error("Invalid KeyPackage: {0}")]
+    InvalidKeyPackage(String),
 }
 
 #[cfg(test)]
@@ -1773,6 +1805,33 @@ mod remote_input_tests {
             Err(JoinGroupError { .. })
         ));
         assert!(node.add_group_from_welcome(vec![1, 2, 3], Vec::new()).is_err());
+    }
+
+    /// A KeyPackage is used only for the PeerID that both its credential and its signature
+    /// key name.
+    #[test]
+    fn key_package_must_belong_to_its_sender() {
+        let node = node("keypackage");
+        let key_package = node.generate_key_package().unwrap().key_package().clone();
+        assert!(node.validate_key_package(key_package.clone(), node.get_peerid()).is_ok());
+        assert!(matches!(
+            node.insert_foreign_kp(PeerId::random(), key_package),
+            Err(InvalidKeyPackage(_))
+        ));
+
+        // Signed with this node's key, but naming another PeerID as its credential.
+        let victim = PeerId::random();
+        let skp = node.key_store.lock().unwrap().get_skp();
+        let (credential, signer) =
+            generate_openmls_credentials(&node.provider, skp, victim).unwrap();
+        let forged = KeyPackage::builder()
+            .build(node.ciphersuite, &node.provider, &signer, credential)
+            .unwrap()
+            .key_package()
+            .clone();
+        assert!(!key_package_belongs_to(&forged, victim));
+        assert!(!key_package_belongs_to(&forged, node.get_peerid()));
+        assert!(node.validate_key_package(forged, victim).is_err());
     }
 
     /// A member key that arrives before this node started a join is refused.

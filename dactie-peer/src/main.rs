@@ -25,6 +25,7 @@ mod abstswarm;
 mod join_relay;
 mod mybehaviour;
 mod myclient;
+mod outstanding;
 mod stem_relay;
 
 #[derive(Parser, Debug)]

@@ -337,6 +337,21 @@ pub fn join_mem2(sk: &FieldElement, partial_memkey: &Memkey) -> Memkey {
     result
 }
 
+/// True if `memkey` holds the manager's credential on its sk for member `id`: sigma1 =
+/// g^{H0(id)}, e(sigma2, g~) = e(sigma1, X~ Y1~^sk) and e1 = e(sigma1, Y1~). A member checks
+/// the key it receives before it replaces its own, since signatures made with any other key
+/// are invalid.
+pub fn verify_memkey(memkey: &Memkey, grpkey: &Grpkey, id: usize) -> bool {
+    let (Some(sigma1), Some(sigma2), Some(e1)) = (&memkey.sigma1, &memkey.sigma2, &memkey.e1)
+    else {
+        return false;
+    };
+    let x_y_sk = &grpkey.x_pub_tilde + &(&grpkey.y1_pub_tilde * &memkey.sk);
+    *sigma1 == &grpkey.g * h0(&id)
+        && GT::ate_pairing(sigma2, &grpkey.g_tilde) == GT::ate_pairing(sigma1, &x_y_sk)
+        && *e1 == GT::ate_pairing(sigma1, &grpkey.y1_pub_tilde)
+}
+
 /**
  * Executes part 1 of the manager-side join of the PS16 scheme.
  * A random number is provided to the member

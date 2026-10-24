@@ -764,6 +764,15 @@ impl MyBehaviour {
                                 .map_err(|_| SendResponseError)?;
                         }
 
+                        // Shares come from the AA only. The group signature shows only that some
+                        // member sent the request, and a member could otherwise attach any
+                        // PeerID to its own key, which an opening would then name.
+                        RequestMessage::AddIDShare { .. } | RequestMessage::AddPeerShare { .. }
+                            if my_open_mls.get_authorityid() != peer =>
+                        {
+                            log::warn!("Ignoring a share from {peer}, which is not the authority");
+                        }
+
                         RequestMessage::AddIDShare {
                             id,
                             enc_share,
@@ -876,6 +885,14 @@ impl MyBehaviour {
 
                 request_response::Message::Response { response, .. } => {
                     match response.body {
+                        // The archive asks only the AA, and a second answer must not replace the
+                        // ElGamal key that the stored shares are encrypted to.
+                        ResponseMessage::IdentityVerified { .. }
+                            if my_open_mls.get_authorityid() != peer
+                                || my_open_mls.get_elgamal_pubkey().is_ok() =>
+                        {
+                            log::warn!("Ignoring an identity verification from {peer}: not the authority, or already registered");
+                        }
                         ResponseMessage::IdentityVerified { group_key, .. } => {
                             log::info!(
                                 "Identity was verified, Got GroupKey, Sending out KeyPackage"
