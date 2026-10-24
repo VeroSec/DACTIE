@@ -32,7 +32,8 @@ for i in "${slots[@]}"; do
     [ -d "$dir" ] || { echo "  skip slot $i (no such directory)"; continue; }
 
     moved=()
-    for item in key_material.json group_saves; do
+    # The authority refuses to start with only one of key_material.json and storage.json.
+    for item in key_material.json storage.json slots.json group_saves; do
         [ -e "$dir/$item" ] || continue
         mkdir -p "$ARCHIVE/key_material_$i"
         mv "$dir/$item" "$ARCHIVE/key_material_$i/" && moved+=("$item")

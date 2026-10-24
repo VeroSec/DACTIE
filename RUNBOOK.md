@@ -45,14 +45,15 @@ What the options in `docker-compose.yml` mean is in
    resurrect an explicitly stopped container.
 4. **Detach from `attach` with Ctrl-P Ctrl-Q.** Ctrl-C kills the process. The `dsend` helper
    below avoids attaching altogether.
-5. **Files written by containers belong to root.** Delete key material through a container
+5. **Files written by containers belong to root.** The nodes' state files are also readable
+   by their owner only (mode 0600), so read, copy and delete key material through a container
    (Phase 2), and replace root-owned files such as `boot_id.env` with `rm -f` + write, which
    only needs write access to the folder (Phase 4).
 6. **A damaged state file is fatal and not self-healing.** Nodes replace `storage.json`,
    `key_material.json`, `slots.json` and `group_saves/state` atomically, so a crash leaves
    the old or the new version, and they refuse to start from a file they cannot read instead
    of starting over. Check `storage.json` with
-   `python3 -c "import json;json.load(open('key_material/key_material_0/storage.json'))"`.
+   `docker run --rm -v "$PWD/key_material:/km:ro" busybox cat /km/key_material_0/storage.json | python3 -c "import json,sys;json.load(sys.stdin)"`.
    Recovery is Phase 2 and a fresh run.
 7. **`end_init_archive` is irreversible.** No archive can join afterwards; adding one means a
    full rerun.
@@ -152,7 +153,8 @@ Optional, before wiping: keep a copy of the old state.
 
 ```bash
 mkdir -p /opt/vero/backups
-tar czf /opt/vero/backups/key_material-$(date +%Y%m%d).tgz key_material
+docker run --rm -v "$PWD/key_material:/km:ro" -v /opt/vero/backups:/backup busybox \
+  tar czf /backup/key_material-$(date +%Y%m%d).tgz -C /km .
 docker run --rm -v dactie_db_data:/data:ro -v /opt/vero/backups:/backup busybox \
   tar czf /backup/dactie_db_data-$(date +%Y%m%d).tgz -C /data .     # minerva2; dactie_db2_data on minerva3
 ```
@@ -455,7 +457,7 @@ sleep 6
 dsend dactie-peer1b "get_opener_keys $AA"
 dsend dactie-peer1b "peer_from_sig $AA /member/key_material.json"
 logs dactie-peer1b | grep -E "Registering with slot|refused"
-cat key_material/key_material_3/slots.json
+docker run --rm -v "$PWD/key_material:/km:ro" busybox cat /km/key_material_3/slots.json
 docker rm -f dactie-peer1b
 ```
 
