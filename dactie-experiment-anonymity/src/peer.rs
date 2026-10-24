@@ -481,6 +481,7 @@ impl Peer {
                             let connected = self.swarm.connected_peers().count();
                             let mesh = self.swarm.behaviour().gossipsub.mesh_peers(&topic.hash()).count();
                             println!("peer_state {connected} {mesh}");
+                            // The topology-aware adversary (`timing`) knows every mesh.
                             let me = *self.swarm.local_peer_id();
                             let meshed = self.swarm.behaviour().gossipsub.mesh_peers(&topic.hash()).copied().collect();
                             self.directory.record_mesh(me, meshed);

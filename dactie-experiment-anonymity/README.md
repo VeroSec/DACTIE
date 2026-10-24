@@ -22,6 +22,28 @@ Nagle's algorithm off, since loopback acknowledgements do not see the simulated 
 the source's mesh peers received 70% of their first copies directly without the simulation and 100%
 with it.
 
+## Timing estimators
+`adversary_*.csv` scores every estimator per run and coalition size (column `estimator`). `random`,
+`observed_set`, `first_spy` (stem-aware) and `plurality` use only what the colluders saw. Three more
+model a worst-case insider coalition that also knows every peer's GossipSub mesh at the measurement and
+the delay of every link (`src/timing.rs`; the spy-based adversary of Fanti and Viswanath 2017, after
+Pinto, Thiran and Vetterli 2012):
+
+- `timing_delay`: for each candidate source s, colluder j should receive the message at t0 + d(s, j),
+  the fastest mesh path with the true link delays plus a processing constant per hop. The publish time
+  t0 is fitted as the mean residual; the candidate with the smallest sum of squared residuals is named,
+  ties uniformly.
+- `timing_hops`: the same with hop counts times a hop time (topology known, delays unknown).
+- `timing_delay_stem`: the stem-aware first-spy rule if a colluder received the message on the stem,
+  `timing_delay` otherwise. With the stem on, the first two find the diffuser rather than the source.
+
+Only each colluder's earliest GossipSub receipt enters the fit. The processing constant and the hop
+time are the medians of t_j - t_i - w(i, j) and t_j - t_i over the run's relay steps (peer i relayed
+peer j's first copy); the log line `Timing model:` reports them and how well the model explains the
+trace from the true source. With a single colluder every candidate fits perfectly, so at c = 1 the
+timing estimators sit at the random baseline. Simulated link delays have no jitter, so the timing
+estimators work with exact delays: an upper bound on what timing reveals.
+
 ## Configuration Parameters
 ```
 Usage: dactie-experiments [OPTIONS]
