@@ -227,7 +227,7 @@ mod tests {
     #[test]
     fn detours_are_never_faster() {
         let range = LatencyRange { min_ms: 10, max_ms: 100 };
-        let ports: Vec<u16> = (0..40).map(|i| 30000 + i * 977).collect();
+        let ports: Vec<u16> = (0..40).map(|i| 20000 + i * 977).collect();
         for &a in &ports {
             for &b in &ports {
                 for &c in &ports {
