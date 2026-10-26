@@ -194,6 +194,33 @@ messages per second and predecessor dropped half of the 40 msg/s (now 100/s).
 
 Data: `results/latency/rerun-2026-10-22.csv`.
 
+## Re-measurement 2026-10-26: the released code (the paper's table)
+
+The raw logs behind the first table above were not kept, so the paper's table comes from this
+run: the released code on the same testbed, RUNBOOK Phases 2–8 from wiped state, the
+publisher without the stem, 1,000 deliveries per row at `peer_1` after dropping the first 2 s,
+first with Nagle off (the default), then with Nagle on (`TCP_NODELAY=false`, as libp2p
+defaults and as in the first table). Mean / p95 in ms:
+
+| Payload | MISP, off | STIX, off | MISP, on | STIX, on |
+|---|---|---|---|---|
+| 1 KiB | 19.1 / 27 | 19.2 / 27 | 20.9 / 34 | 22.0 / 36 |
+| 4 KiB | 19.5 / 27 | 19.5 / 28 | 19.4 / 27 | 19.2 / 27 |
+| 16 KiB | 20.4 / 28 | 20.3 / 28 | 20.1 / 28 | 19.6 / 28 |
+| 64 KiB | 21.9 / 31 | 21.6 / 30 | 22.0 / 31 | 21.9 / 30 |
+| 256 KiB | 25.5 / 33 | 25.3 / 33 | 25.6 / 35 | 25.5 / 34 |
+| Complete event / feed (5 msg/s) | 104.4 / 118 | 117.5 / 134 | 102.0 / 115 | 116.7 / 132 |
+
+With Nagle off it matches the run of 2026-10-22 within 1 ms (complete event and feed 104.4 and
+117.5 against 104.5 and 116.9 ms). The 1–256 KiB rows stay 1–3 ms below the first table; the
+complete event and feed are 13–15 ms slower than there, with Nagle on as well as off, so that
+difference does not come from Nagle. `peer_2` (19.1–25.6 ms) and `peer_3` (18.3–25.5 ms) agree
+with `peer_1` for 1–256 KiB.
+
+Data: `results/latency/rerun-2026-10-26.csv` (all runs and receivers),
+`results/latency/raw-2026-10-26.csv` (every receipt), `scripts/latency_sweep.sh`,
+`scripts/latency_summary.py`.
+
 ## Reproducing
 
 ```bash
@@ -203,5 +230,8 @@ BENCH_PAYLOAD_FILE=/usr/src/dactie/misp/<event>.json BENCH_RATE=40 \
   docker compose --profile node119 up -d --force-recreate peer_4
 ./scripts/soak_sampler.sh <profile> <service> out.csv   # one row per minute
 ```
+
+The whole latency table, from a laptop with ssh access to the testbed:
+`scripts/latency_sweep.sh OUT_DIR`, about 45 minutes.
 
 Archive queries: `BENCH_ARCHIVE_QUERY=true BENCH_ARCHIVE_PEER=<archive-peer-id> BENCH_ARCHIVE_RATE=2`.

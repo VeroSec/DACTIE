@@ -13,7 +13,8 @@ harness output of one cell.
 | Coalition attack, Figure 2 (108 configurations) | `coalition/coalition_parsed.csv`, raw runs in `coalition/D*_N*/` |
 | Stem phase, Figure 2 hollow markers (q = 0.2) | `coalition/stem/stem_q0.2.csv`, raw runs in `coalition/stem/q0.2/` |
 | Eclipse attacks (847 runs) | `eclipse_parsed.csv` |
-| Latency table | `latency/` (see below) |
+| Latency table | `latency/rerun-2026-10-26.csv` (runs `off-*`, receiver `peer_1`), every receipt in `latency/raw-2026-10-26.csv` |
+| Soak test (33.4 hours) | `latency/soak/` |
 | Microbenchmark | `benchmark/README.md` |
 
 ## Single-attacker anonymity: `anonymity_parsed.csv`, `sizes/`
@@ -91,31 +92,50 @@ with `dactie-experiment-eclipse/parse_eclipse_output.py`.
 
 ## Latency: `latency/`
 
-Four hosts on a switched LAN, 40 messages per second over the full signed and
-MLS-encrypted path, latency from publication to delivery at a peer on another
-host (mean / p95 in ms, 800 to 1,000 deliveries each). The paper's table:
+Four hosts on a switched LAN (the testbed of `RUNBOOK.md`), 40 messages per
+second over the full signed and MLS-encrypted path (5 for the complete MISP
+event and ATT&CK ICS feed), latency from publication to delivery. The paper's
+table is the run of 2026-10-26 with the released code, Nagle off and the
+publisher without the stem, at `peer_1` on another host (mean / p95 in ms,
+1,000 deliveries each):
 
 | Payload | MISP | STIX |
 | --- | --- | --- |
-| 1 KiB | 21.9 / 33 | 22.0 / 35 |
-| 4 KiB | 21.2 / 29 | 21.0 / 28 |
-| 16 KiB | 22.1 / 30 | 21.6 / 30 |
-| 64 KiB | 23.6 / 33 | 23.3 / 32 |
-| 256 KiB | 26.3 / 36 | 26.5 / 36 |
-| Complete event / feed (2.4 MB / 3.0 MB, 5 msg/s) | 89.8 / 99 | 102.2 / 113 |
+| 1 KiB | 19.1 / 27 | 19.2 / 27 |
+| 4 KiB | 19.5 / 27 | 19.5 / 28 |
+| 16 KiB | 20.4 / 28 | 20.3 / 28 |
+| 64 KiB | 21.9 / 31 | 21.6 / 30 |
+| 256 KiB | 25.5 / 33 | 25.3 / 33 |
+| Complete event / feed (2.4 MB / 3.0 MB) | 104.4 / 118 | 117.5 / 134 |
 
-Querying an archive for missed group updates took 105 ms on average. The raw
-logs of this measurement are not part of the repository;
-`latency/rerun-2026-10-22.csv` repeats it on the same testbed (below).
+`latency/rerun-2026-10-26.csv` has one row per run and receiver: runs `off-*`
+with Nagle off, `on-*` with Nagle on (`TCP_NODELAY=false`), receivers `peer_1`
+and `peer_2` on other hosts and `peer_3` on the publisher's host.
+`latency/raw-2026-10-26.csv` lists every `BENCH_RX` line the receivers logged
+during each run, in log order: the neighbor that delivered it (`via`, by node
+name: the publisher `peer_4`, another peer or an archive), the publisher's
+sequence number and the latency in ms. It starts with the tail of the previous
+run. Regenerate the summary with
+
+```bash
+python3 scripts/latency_summary.py results/latency/raw-2026-10-26.csv results/latency/rerun-2026-10-26.csv
+```
+
+`scripts/latency_sweep.sh` runs the whole sweep against the testbed. An earlier
+measurement on the same testbed (2026-08) reported 21.0 to 26.5 ms for 1 to
+256 KiB and 89.8 / 102.2 ms for the complete event and feed; its raw logs were
+not kept. Querying an archive for missed group updates took 105 ms on average
+in that measurement (`evaluation_performance.md`).
 
 `latency/soak/peer_{1,2,3}.csv` is a 33.4-hour soak test with 16 KiB MISP events
 at 40 messages per second, one row per receiver and 60-second window (sampled
 about every 62 s): number of deliveries in the window (`n`), mean, median, p95
 and maximum latency in ms, resident memory in MB and established connections.
 
-## Latency re-measurement: `latency/rerun-2026-10-22.csv`
+## Earlier re-measurement: `latency/rerun-2026-10-22.csv`
 
-Four hosts (the testbed of `RUNBOOK.md`), the publisher `peer_4` at 40 msg/s (5 msg/s for
+The same testbed with a build from before the release, which also measured the stem and
+Nagle on vs off. The publisher `peer_4` at 40 msg/s (5 msg/s for
 the complete MISP event and ATT&CK ICS feed), receivers `peer_1` and `peer_2` on other hosts
 and `peer_3` on the publisher's host. Per run and receiver: mean and p95 latency over 1,000
 deliveries, after dropping the previous run's tail and the first 2 s.
