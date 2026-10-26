@@ -1,0 +1,6 @@
+total_peers,correct_receiver,other_peer,no_p_peers,delivery_ratio,latency_p50_us,latency_p95_us,latency_max_us
+50,6,43,21,1,65134,104014,107039
+50,6,43,21,1,72177,110645,112296
+50,6,43,23,1,76634,124990,128599
+50,6,43,18,1,55733,82642,92235
+50,6,43,19,1,70952,117607,129856

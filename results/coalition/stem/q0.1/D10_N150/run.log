@@ -1,0 +1,972 @@
+Starting Experiment
+Starting Run 1 from 5, with peer_n=150, time=90secs, pub_interval=Rate(40.0)
+peer_state 91 17
+peer_state 91 20
+peer_state 92 20
+peer_state 96 20
+peer_state 81 11
+peer_state 95 14
+peer_state 50 12
+peer_state 50 9
+peer_state 50 13
+peer_state 93 12
+peer_state 94 14
+peer_state 50 8
+peer_state 59 16
+peer_state 94 15
+peer_state 93 18
+peer_state 79 12
+peer_state 94 19
+peer_state 50 12
+peer_state 94 13
+peer_state 95 13
+peer_state 94 11
+peer_state 50 9
+peer_state 95 20
+peer_state 98 18
+peer_state 97 14
+peer_state 95 20
+peer_state 92 16
+peer_state 92 16
+peer_state 96 16
+peer_state 90 17
+peer_state 95 18
+peer_state 93 16
+peer_state 95 14
+peer_state 96 16
+peer_state 50 8
+peer_state 97 20
+peer_state 94 19
+peer_state 94 19
+peer_state 98 18
+peer_state 90 16
+peer_state 95 13
+peer_state 95 9
+peer_state 50 8
+Stopping
+peer_state 94 20
+peer_state 50 11
+peer_state 94 16
+peer_state 50 20
+peer_state 50 19
+peer_state 96 11
+peer_state 50 11
+peer_state 94 12
+peer_state 94 20
+peer_state 94 15
+peer_state 52 16
+peer_state 93 14
+peer_state 94 11
+peer_state 95 15
+peer_state 56 16
+peer_state 97 14
+peer_state 96 14
+peer_state 93 15
+peer_state 56 12
+peer_state 93 19
+peer_state 97 12
+peer_state 95 14
+peer_state 50 13
+peer_state 93 13
+peer_state 52 20
+peer_state 51 11
+peer_state 50 8
+peer_state 52 18
+peer_state 50 9
+peer_state 50 8
+peer_state 89 15
+peer_state 50 20
+peer_state 95 19
+peer_state 50 9
+peer_state 51 10
+peer_state 50 8
+peer_state 50 9
+peer_state 50 9
+peer_state 50 8
+Publisher state: 50 connections, 8 mesh peers, publish stem
+peer_state 96 11
+peer_state 51 8
+peer_state 96 12
+peer_state 96 20
+peer_state 97 13
+peer_state 52 19
+peer_state 91 17
+peer_state 95 18
+peer_state 58 12
+peer_state 93 15
+peer_state 50 10
+peer_state 84 11
+peer_state 94 14
+peer_state 93 10
+peer_state 52 20
+peer_state 96 15
+peer_state 94 20
+peer_state 96 14
+peer_state 51 19
+peer_state 95 18
+peer_state 94 12
+peer_state 96 8
+peer_state 97 14
+peer_state 52 8
+peer_state 51 19
+peer_state 96 14
+peer_state 95 13
+peer_state 50 12
+peer_state 50 12
+peer_state 50 12
+peer_state 97 19
+peer_state 97 14
+peer_state 74 14
+peer_state 50 8
+peer_state 51 19
+peer_state 50 10
+peer_state 97 18
+peer_state 69 16
+peer_state 96 19
+peer_state 96 11
+peer_state 94 12
+peer_state 75 12
+peer_state 92 14
+peer_state 50 10
+peer_state 50 12
+peer_state 92 11
+peer_state 93 13
+peer_state 93 13
+peer_state 96 19
+peer_state 94 20
+peer_state 50 20
+peer_state 96 16
+peer_state 93 16
+peer_state 94 20
+peer_state 88 19
+peer_state 74 12
+peer_state 93 19
+peer_state 54 11
+peer_state 50 15
+peer_state 50 13
+peer_state 82 13
+peer_state 90 13
+peer_state 97 19
+peer_state 54 16
+peer_state 95 20
+peer_state 96 20
+peer_state 95 16
+peer_state 96 15
+peers stopped
+Received 149 messages from 149 peers.
+Direct from Publisher: 4
+Relayed: 145
+Percentage of direct peers: 2.6845639 %
+Number of Propagating Peers: 53
+Delivery: 100.0% of 149 peers
+Latency: p50 1791167 us, p95 1825569 us, max 1841660 us
+  attack c=1 (f=0.0067) random: 0.0074
+  attack c=1 (f=0.0067) observed_set: 0.0274
+  attack c=1 (f=0.0067) first_spy: 0.0300
+  attack c=1 (f=0.0067) plurality: 0.0298
+  attack c=2 (f=0.0133) random: 0.0068
+  attack c=2 (f=0.0133) observed_set: 0.0300
+  attack c=2 (f=0.0133) first_spy: 0.0244
+  attack c=2 (f=0.0133) plurality: 0.0280
+  attack c=5 (f=0.0333) random: 0.0076
+  attack c=5 (f=0.0333) observed_set: 0.0302
+  attack c=5 (f=0.0333) first_spy: 0.0304
+  attack c=5 (f=0.0333) plurality: 0.0286
+  attack c=8 (f=0.0533) random: 0.0058
+  attack c=8 (f=0.0533) observed_set: 0.0320
+  attack c=8 (f=0.0533) first_spy: 0.0524
+  attack c=8 (f=0.0533) plurality: 0.0274
+  attack c=10 (f=0.0667) random: 0.0056
+  attack c=10 (f=0.0667) observed_set: 0.0316
+  attack c=10 (f=0.0667) first_spy: 0.0690
+  attack c=10 (f=0.0667) plurality: 0.0320
+  attack c=15 (f=0.1000) random: 0.0068
+  attack c=15 (f=0.1000) observed_set: 0.0294
+  attack c=15 (f=0.1000) first_spy: 0.1018
+  attack c=15 (f=0.1000) plurality: 0.0284
+  attack c=30 (f=0.2000) random: 0.0072
+  attack c=30 (f=0.2000) observed_set: 0.0336
+  attack c=30 (f=0.2000) first_spy: 0.2020
+  attack c=30 (f=0.2000) plurality: 0.0214
+  attack c=75 (f=0.5000) random: 0.0130
+  attack c=75 (f=0.5000) observed_set: 0.0234
+  attack c=75 (f=0.5000) first_spy: 0.5126
+  attack c=75 (f=0.5000) plurality: 0.0002
+Starting Run 2 from 5, with peer_n=150, time=90secs, pub_interval=Rate(40.0)
+peer_state 98 14
+peer_state 50 8
+peer_state 93 17
+peer_state 50 8
+peer_state 96 20
+peer_state 54 20
+peer_state 93 13
+peer_state 99 20
+peer_state 51 10
+peer_state 95 12
+peer_state 51 10
+peer_state 95 15
+peer_state 96 18
+peer_state 95 18
+peer_state 92 11
+peer_state 96 16
+peer_state 50 20
+peer_state 92 12
+peer_state 95 15
+peer_state 71 13
+peer_state 97 14
+peer_state 96 20
+peer_state 66 12
+peer_state 51 20
+peer_state 97 9
+peer_state 50 19
+peer_state 96 19
+peer_state 95 19
+peer_state 97 18
+peer_state 98 12
+peer_state 52 19
+peer_state 51 13
+peer_state 94 13
+peer_state 96 15
+peer_state 94 20
+peer_state 52 14
+peer_state 96 12
+peer_state 74 17
+peer_state 52 11
+peer_state 96 19
+peer_state 99 20
+peer_state 50 8
+peer_state 53 9
+peer_state 95 19
+peer_state 75 14
+peer_state 98 19
+peer_state 51 10
+peer_state 50 10
+peer_state 95 13
+peer_state 91 15
+peer_state 96 10
+peer_state 53 11
+peer_state 92 13
+peer_state 92 12
+peer_state 94 20
+peer_state 94 14
+peer_state 51 20
+peer_state 94 20
+peer_state 50 8
+peer_state 50 20
+peer_state 50 9
+peer_state 96 15
+peer_state 93 19
+peer_state 92 16
+peer_state 55 15
+peer_state 50 19
+peer_state 96 20
+peer_state 51 11
+peer_state 94 13
+peer_state 50 10
+peer_state 50 10
+peer_state 92 17
+peer_state 94 15
+peer_state 51 12
+peer_state 95 16
+peer_state 94 20
+peer_state 95 20
+peer_state 50 19
+peer_state 94 16
+peer_state 50 19
+peer_state 99 20
+peer_state 50 9
+peer_state 51 8
+peer_state 63 10
+peer_state 93 19
+peer_state 73 12
+peer_state 94 17
+peer_state 94 13
+peer_state 81 11
+peer_state 95 18
+peer_state 97 12
+peer_state 96 20
+peer_state 99 15
+peer_state 96 14
+peer_state 97 12
+peer_state 50 11
+peer_state 94 20
+peer_state 96 14
+peer_state 50 12
+peer_state 93 16
+peer_state 98 10
+peer_state 96 14
+peer_state 96 20
+peer_state 94 19
+peer_state 96 11
+peer_state 95 13
+peer_state 54 11
+peer_state 92 14
+peer_state 97 13
+peer_state 96 20
+peer_state 51 13
+peer_state 95 19
+peer_state 61 16
+peer_state 51 13
+peer_state 96 11
+peer_state 50 13
+peer_state 50 8
+peer_state 94 16
+peer_state 56 10
+peer_state 93 11
+Stopping
+peer_state 92 20
+Publisher state: 50 connections, 8 mesh peers, publish stem
+peer_state 95 14
+peer_state 51 10
+peer_state 50 10
+peer_state 93 20
+peer_state 96 13
+peer_state 84 15
+peer_state 94 12
+peer_state 92 19
+peer_state 50 19
+peer_state 90 16
+peer_state 92 10
+peer_state 94 15
+peer_state 95 11
+peer_state 94 20
+peer_state 50 8
+peer_state 51 20
+peer_state 95 15
+peer_state 93 13
+peer_state 94 16
+peer_state 50 8
+peer_state 50 13
+peer_state 93 15
+peer_state 96 14
+peer_state 51 10
+peer_state 50 10
+peer_state 95 20
+peer_state 92 9
+peer_state 98 20
+peer_state 95 20
+peers stopped
+Received 149 messages from 149 peers.
+Direct from Publisher: 2
+Relayed: 147
+Percentage of direct peers: 1.3422819 %
+Number of Propagating Peers: 62
+Delivery: 100.0% of 149 peers
+Latency: p50 2131415 us, p95 2169426 us, max 2181403 us
+  attack c=1 (f=0.0067) random: 0.0056
+  attack c=1 (f=0.0067) observed_set: 0.0128
+  attack c=1 (f=0.0067) first_spy: 0.0154
+  attack c=1 (f=0.0067) plurality: 0.0118
+  attack c=2 (f=0.0133) random: 0.0074
+  attack c=2 (f=0.0133) observed_set: 0.0128
+  attack c=2 (f=0.0133) first_spy: 0.0284
+  attack c=2 (f=0.0133) plurality: 0.0112
+  attack c=5 (f=0.0333) random: 0.0082
+  attack c=5 (f=0.0333) observed_set: 0.0132
+  attack c=5 (f=0.0333) first_spy: 0.0650
+  attack c=5 (f=0.0333) plurality: 0.0116
+  attack c=8 (f=0.0533) random: 0.0062
+  attack c=8 (f=0.0533) observed_set: 0.0152
+  attack c=8 (f=0.0533) first_spy: 0.1008
+  attack c=8 (f=0.0533) plurality: 0.0058
+  attack c=10 (f=0.0667) random: 0.0080
+  attack c=10 (f=0.0667) observed_set: 0.0136
+  attack c=10 (f=0.0667) first_spy: 0.1194
+  attack c=10 (f=0.0667) plurality: 0.0072
+  attack c=15 (f=0.1000) random: 0.0064
+  attack c=15 (f=0.1000) observed_set: 0.0128
+  attack c=15 (f=0.1000) first_spy: 0.1624
+  attack c=15 (f=0.1000) plurality: 0.0030
+  attack c=30 (f=0.2000) random: 0.0068
+  attack c=30 (f=0.2000) observed_set: 0.0142
+  attack c=30 (f=0.2000) first_spy: 0.2866
+  attack c=30 (f=0.2000) plurality: 0.0010
+  attack c=75 (f=0.5000) random: 0.0134
+  attack c=75 (f=0.5000) observed_set: 0.0166
+  attack c=75 (f=0.5000) first_spy: 0.5332
+  attack c=75 (f=0.5000) plurality: 0.0000
+Starting Run 3 from 5, with peer_n=150, time=90secs, pub_interval=Rate(40.0)
+peer_state 52 10
+peer_state 95 20
+peer_state 95 20
+peer_state 94 13
+peer_state 66 17
+peer_state 95 19
+peer_state 92 12
+peer_state 94 14
+peer_state 50 8
+Stopping
+Publisher state: 50 connections, 8 mesh peers, publish stem
+peer_state 97 16
+peer_state 97 15
+peer_state 95 10
+peer_state 53 20
+peer_state 96 10
+peer_state 50 9
+peer_state 50 10
+peer_state 96 20
+peer_state 98 17
+peer_state 59 20
+peer_state 50 14
+peer_state 96 16
+peer_state 94 15
+peer_state 94 15
+peer_state 94 15
+peer_state 93 15
+peer_state 72 14
+peer_state 85 13
+peer_state 50 11
+peer_state 95 13
+peer_state 50 20
+peer_state 95 14
+peer_state 95 17
+peer_state 96 12
+peer_state 93 11
+peer_state 51 20
+peer_state 91 14
+peer_state 93 20
+peer_state 51 11
+peer_state 95 12
+peer_state 93 13
+peer_state 93 12
+peer_state 92 10
+peer_state 53 16
+peer_state 50 11
+peer_state 95 19
+peer_state 85 12
+peer_state 50 11
+peer_state 50 18
+peer_state 91 12
+peer_state 98 19
+peer_state 51 9
+peer_state 96 14
+peer_state 94 15
+peer_state 94 14
+peer_state 50 20
+peer_state 50 8
+peer_state 50 17
+peer_state 51 8
+peer_state 99 14
+peer_state 97 16
+peer_state 76 11
+peer_state 97 16
+peer_state 51 11
+peer_state 95 16
+peer_state 93 19
+peer_state 51 20
+peer_state 97 14
+peer_state 50 13
+peer_state 93 18
+peer_state 50 8
+peer_state 95 20
+peer_state 55 8
+peer_state 93 14
+peer_state 94 20
+peer_state 92 15
+peer_state 50 20
+peer_state 94 18
+peer_state 95 9
+peer_state 97 18
+peer_state 87 10
+peer_state 97 16
+peer_state 97 19
+peer_state 50 9
+peer_state 99 13
+peer_state 93 15
+peer_state 50 12
+peer_state 56 13
+peer_state 50 11
+peer_state 95 14
+peer_state 51 10
+peer_state 94 14
+peer_state 97 10
+peer_state 94 17
+peer_state 95 14
+peer_state 94 13
+peer_state 97 15
+peer_state 50 8
+peer_state 94 20
+peer_state 93 16
+peer_state 51 10
+peer_state 95 17
+peer_state 50 20
+peer_state 91 10
+peer_state 93 12
+peer_state 76 20
+peer_state 51 15
+peer_state 96 20
+peer_state 62 17
+peer_state 99 12
+peer_state 50 20
+peer_state 91 15
+peer_state 97 20
+peer_state 50 10
+peer_state 93 15
+peer_state 95 20
+peer_state 50 9
+peer_state 97 20
+peer_state 93 16
+peer_state 94 20
+peer_state 94 20
+peer_state 97 14
+peer_state 95 15
+peer_state 95 18
+peer_state 99 20
+peer_state 50 9
+peer_state 92 11
+peer_state 96 20
+peer_state 94 14
+peer_state 50 8
+peer_state 94 15
+peer_state 50 12
+peer_state 62 10
+peer_state 93 16
+peer_state 94 11
+peer_state 50 9
+peer_state 50 8
+peer_state 50 8
+peer_state 50 19
+peer_state 51 9
+peer_state 97 12
+peer_state 95 15
+peer_state 96 20
+peer_state 50 19
+peer_state 96 20
+peer_state 96 19
+peer_state 81 18
+peer_state 52 12
+peer_state 50 20
+peer_state 97 14
+peer_state 94 10
+peers stopped
+Received 149 messages from 149 peers.
+Direct from Publisher: 2
+Relayed: 147
+Percentage of direct peers: 1.3422819 %
+Number of Propagating Peers: 46
+Delivery: 100.0% of 149 peers
+Latency: p50 313313 us, p95 342801 us, max 355333 us
+  attack c=1 (f=0.0067) random: 0.0052
+  attack c=1 (f=0.0067) observed_set: 0.0114
+  attack c=1 (f=0.0067) first_spy: 0.0144
+  attack c=1 (f=0.0067) plurality: 0.0102
+  attack c=2 (f=0.0133) random: 0.0092
+  attack c=2 (f=0.0133) observed_set: 0.0124
+  attack c=2 (f=0.0133) first_spy: 0.0148
+  attack c=2 (f=0.0133) plurality: 0.0092
+  attack c=5 (f=0.0333) random: 0.0090
+  attack c=5 (f=0.0333) observed_set: 0.0136
+  attack c=5 (f=0.0333) first_spy: 0.0368
+  attack c=5 (f=0.0333) plurality: 0.0122
+  attack c=8 (f=0.0533) random: 0.0054
+  attack c=8 (f=0.0533) observed_set: 0.0126
+  attack c=8 (f=0.0533) first_spy: 0.0500
+  attack c=8 (f=0.0533) plurality: 0.0104
+  attack c=10 (f=0.0667) random: 0.0066
+  attack c=10 (f=0.0667) observed_set: 0.0162
+  attack c=10 (f=0.0667) first_spy: 0.0698
+  attack c=10 (f=0.0667) plurality: 0.0068
+  attack c=15 (f=0.1000) random: 0.0080
+  attack c=15 (f=0.1000) observed_set: 0.0136
+  attack c=15 (f=0.1000) first_spy: 0.1046
+  attack c=15 (f=0.1000) plurality: 0.0050
+  attack c=30 (f=0.2000) random: 0.0102
+  attack c=30 (f=0.2000) observed_set: 0.0166
+  attack c=30 (f=0.2000) first_spy: 0.2002
+  attack c=30 (f=0.2000) plurality: 0.0010
+  attack c=75 (f=0.5000) random: 0.0130
+  attack c=75 (f=0.5000) observed_set: 0.0188
+  attack c=75 (f=0.5000) first_spy: 0.5010
+  attack c=75 (f=0.5000) plurality: 0.0000
+Starting Run 4 from 5, with peer_n=150, time=90secs, pub_interval=Rate(40.0)
+peer_state 79 10
+peer_state 95 17
+peer_state 98 11
+peer_state 97 20
+peer_state 67 13
+peer_state 98 15
+peer_state 96 20
+peer_state 94 10
+peer_state 99 12
+peer_state 92 14
+peer_state 95 14
+peer_state 50 9
+peer_state 68 13
+peer_state 52 11
+peer_state 53 16
+peer_state 50 9
+peer_state 98 20
+peer_state 51 13
+peer_state 93 19
+peer_state 95 15
+peer_state 92 15
+peer_state 98 15
+peer_state 94 18
+peer_state 93 15
+peer_state 95 8
+peer_state 53 9
+peer_state 91 16
+peer_state 96 18
+peer_state 99 17
+peer_state 98 18
+peer_state 95 14
+peer_state 94 12
+peer_state 94 13
+peer_state 95 14
+peer_state 96 15
+peer_state 50 20
+peer_state 50 13
+peer_state 95 13
+peer_state 54 13
+peer_state 50 20
+peer_state 54 20
+peer_state 99 14
+peer_state 95 13
+peer_state 96 12
+peer_state 93 11
+peer_state 79 20
+peer_state 50 12
+peer_state 50 20
+peer_state 50 9
+peer_state 55 16
+peer_state 51 14
+peer_state 50 15
+peer_state 96 16
+peer_state 59 13
+peer_state 93 18
+peer_state 95 15
+peer_state 50 11
+peer_state 96 15
+peer_state 50 20
+peer_state 96 16
+peer_state 99 20
+peer_state 95 19
+peer_state 99 20
+peer_state 96 12
+peer_state 97 14
+peer_state 52 20
+peer_state 91 15
+peer_state 50 9
+peer_state 93 12
+peer_state 97 11
+peer_state 98 13
+peer_state 96 20
+peer_state 93 14
+peer_state 93 10
+peer_state 97 16
+peer_state 50 10
+peer_state 93 19
+peer_state 51 20
+peer_state 95 20
+peer_state 50 10
+peer_state 91 20
+peer_state 98 20
+peer_state 50 9
+peer_state 95 10
+peer_state 50 14
+peer_state 50 10
+peer_state 95 10
+peer_state 50 11
+peer_state 97 12
+peer_state 94 20
+peer_state 50 8
+peer_state 97 18
+peer_state 95 11
+peer_state 94 16
+peer_state 62 14
+peer_state 50 20
+peer_state 50 8
+peer_state 96 15
+peer_state 94 14
+peer_state 55 20
+peer_state 96 15
+peer_state 60 13
+peer_state 95 20
+peer_state 93 14
+peer_state 98 20
+peer_state 96 20
+peer_state 50 20
+peer_state 96 15
+peer_state 96 14
+peer_state 61 11
+peer_state 99 12
+peer_state 97 16
+peer_state 92 16
+peer_state 97 12
+peer_state 95 17
+peer_state 90 16
+peer_state 50 11
+peer_state 58 20
+peer_state 96 16
+peer_state 95 15
+peer_state 50 8
+peer_state 96 14
+peer_state 94 20
+peer_state 96 17
+peer_state 96 13
+peer_state 78 17
+peer_state 50 16
+peer_state 97 18
+peer_state 94 14
+peer_state 93 12
+peer_state 96 20
+peer_state 50 8
+peer_state 77 11
+peer_state 93 15
+peer_state 50 11
+peer_state 97 14
+peer_state 95 8
+peer_state 51 8
+peer_state 94 17
+peer_state 50 8
+Stopping
+peer_state 97 13
+peer_state 51 19
+peer_state 50 9
+peer_state 50 10
+peer_state 97 17
+peer_state 95 13
+peer_state 95 20
+peer_state 99 20
+peer_state 51 13
+peer_state 51 9
+Publisher state: 50 connections, 8 mesh peers, publish stem
+peers stopped
+Received 149 messages from 149 peers.
+Direct from Publisher: 1
+Relayed: 148
+Percentage of direct peers: 0.67114097 %
+Number of Propagating Peers: 57
+Delivery: 100.0% of 149 peers
+Latency: p50 710390 us, p95 749331 us, max 758279 us
+  attack c=1 (f=0.0067) random: 0.0078
+  attack c=1 (f=0.0067) observed_set: 0.0024
+  attack c=1 (f=0.0067) first_spy: 0.0060
+  attack c=1 (f=0.0067) plurality: 0.0032
+  attack c=2 (f=0.0133) random: 0.0056
+  attack c=2 (f=0.0133) observed_set: 0.0046
+  attack c=2 (f=0.0133) first_spy: 0.0120
+  attack c=2 (f=0.0133) plurality: 0.0046
+  attack c=5 (f=0.0333) random: 0.0066
+  attack c=5 (f=0.0333) observed_set: 0.0052
+  attack c=5 (f=0.0333) first_spy: 0.0322
+  attack c=5 (f=0.0333) plurality: 0.0058
+  attack c=8 (f=0.0533) random: 0.0068
+  attack c=8 (f=0.0533) observed_set: 0.0056
+  attack c=8 (f=0.0533) first_spy: 0.0570
+  attack c=8 (f=0.0533) plurality: 0.0026
+  attack c=10 (f=0.0667) random: 0.0094
+  attack c=10 (f=0.0667) observed_set: 0.0078
+  attack c=10 (f=0.0667) first_spy: 0.0746
+  attack c=10 (f=0.0667) plurality: 0.0018
+  attack c=15 (f=0.1000) random: 0.0066
+  attack c=15 (f=0.1000) observed_set: 0.0072
+  attack c=15 (f=0.1000) first_spy: 0.1018
+  attack c=15 (f=0.1000) plurality: 0.0000
+  attack c=30 (f=0.2000) random: 0.0086
+  attack c=30 (f=0.2000) observed_set: 0.0088
+  attack c=30 (f=0.2000) first_spy: 0.1986
+  attack c=30 (f=0.2000) plurality: 0.0000
+  attack c=75 (f=0.5000) random: 0.0136
+  attack c=75 (f=0.5000) observed_set: 0.0122
+  attack c=75 (f=0.5000) first_spy: 0.4882
+  attack c=75 (f=0.5000) plurality: 0.0000
+Starting Run 5 from 5, with peer_n=150, time=90secs, pub_interval=Rate(40.0)
+peer_state 96 20
+peer_state 50 11
+peer_state 98 20
+peer_state 96 14
+peer_state 50 8
+peer_state 52 20
+peer_state 86 9
+peer_state 50 10
+peer_state 94 15
+peer_state 93 12
+peer_state 50 20
+peer_state 99 19
+peer_state 98 18
+peer_state 89 15
+peer_state 97 12
+peer_state 51 20
+peer_state 96 14
+peer_state 99 10
+peer_state 98 20
+peer_state 98 20
+peer_state 95 17
+peer_state 50 8
+peer_state 94 17
+peer_state 94 12
+peer_state 94 13
+peer_state 97 20
+peer_state 90 12
+peer_state 53 20
+peer_state 92 16
+peer_state 97 17
+peer_state 98 20
+peer_state 92 14
+peer_state 94 16
+peer_state 96 12
+peer_state 93 13
+peer_state 74 15
+peer_state 51 20
+peer_state 96 15
+peer_state 50 8
+peer_state 96 15
+peer_state 50 8
+peer_state 53 13
+peer_state 98 20
+peer_state 94 15
+peer_state 98 12
+peer_state 59 9
+peer_state 95 15
+peer_state 97 15
+peer_state 95 12
+peer_state 95 13
+peer_state 54 12
+peer_state 96 13
+peer_state 97 14
+peer_state 57 9
+peer_state 50 9
+peer_state 50 8
+peer_state 50 12
+peer_state 50 9
+peer_state 99 13
+peer_state 96 11
+peer_state 96 18
+peer_state 94 13
+peer_state 98 16
+peer_state 99 14
+peer_state 98 16
+peer_state 99 18
+peer_state 52 20
+peer_state 50 13
+peer_state 50 10
+peer_state 51 9
+peer_state 96 18
+peer_state 98 16
+peer_state 51 10
+peer_state 84 14
+peer_state 50 14
+peer_state 96 20
+peer_state 50 10
+peer_state 97 8
+peer_state 50 8
+Stopping
+Publisher state: 50 connections, 8 mesh peers, publish stem
+peer_state 96 20
+peer_state 99 20
+peer_state 90 20
+peer_state 50 10
+peer_state 50 9
+peer_state 96 20
+peer_state 50 20
+peer_state 53 20
+peer_state 97 20
+peer_state 50 13
+peer_state 53 15
+peer_state 95 16
+peer_state 96 16
+peer_state 95 17
+peer_state 98 19
+peer_state 51 14
+peer_state 94 18
+peer_state 96 17
+peer_state 73 13
+peer_state 97 17
+peer_state 50 20
+peer_state 50 20
+peer_state 98 16
+peer_state 94 13
+peer_state 99 20
+peer_state 94 20
+peer_state 96 11
+peer_state 99 13
+peer_state 98 19
+peer_state 99 13
+peer_state 50 10
+peer_state 92 18
+peer_state 97 17
+peer_state 84 17
+peer_state 96 13
+peer_state 74 12
+peer_state 97 14
+peer_state 98 20
+peer_state 98 13
+peer_state 50 13
+peer_state 97 17
+peer_state 96 19
+peer_state 95 19
+peer_state 52 12
+peer_state 94 15
+peer_state 96 9
+peer_state 96 20
+peer_state 95 17
+peer_state 50 9
+peer_state 94 12
+peer_state 50 10
+peer_state 50 8
+peer_state 54 14
+peer_state 97 14
+peer_state 94 14
+peer_state 98 9
+peer_state 96 16
+peer_state 97 15
+peer_state 98 16
+peer_state 98 16
+peer_state 96 17
+peer_state 64 13
+peer_state 51 14
+peer_state 50 12
+peer_state 98 12
+peer_state 93 20
+peer_state 96 20
+peer_state 51 20
+peer_state 99 20
+peer_state 95 13
+peer_state 96 10
+peers stopped
+Received 149 messages from 149 peers.
+Direct from Publisher: 1
+Relayed: 148
+Percentage of direct peers: 0.67114097 %
+Number of Propagating Peers: 60
+Delivery: 100.0% of 149 peers
+Latency: p50 577420 us, p95 622095 us, max 640278 us
+  attack c=1 (f=0.0067) random: 0.0074
+  attack c=1 (f=0.0067) observed_set: 0.0038
+  attack c=1 (f=0.0067) first_spy: 0.0064
+  attack c=1 (f=0.0067) plurality: 0.0028
+  attack c=2 (f=0.0133) random: 0.0094
+  attack c=2 (f=0.0133) observed_set: 0.0050
+  attack c=2 (f=0.0133) first_spy: 0.0130
+  attack c=2 (f=0.0133) plurality: 0.0040
+  attack c=5 (f=0.0333) random: 0.0074
+  attack c=5 (f=0.0333) observed_set: 0.0072
+  attack c=5 (f=0.0333) first_spy: 0.0322
+  attack c=5 (f=0.0333) plurality: 0.0020
+  attack c=8 (f=0.0533) random: 0.0078
+  attack c=8 (f=0.0533) observed_set: 0.0084
+  attack c=8 (f=0.0533) first_spy: 0.0634
+  attack c=8 (f=0.0533) plurality: 0.0024
+  attack c=10 (f=0.0667) random: 0.0082
+  attack c=10 (f=0.0667) observed_set: 0.0076
+  attack c=10 (f=0.0667) first_spy: 0.0632
+  attack c=10 (f=0.0667) plurality: 0.0012
+  attack c=15 (f=0.1000) random: 0.0076
+  attack c=15 (f=0.1000) observed_set: 0.0078
+  attack c=15 (f=0.1000) first_spy: 0.0930
+  attack c=15 (f=0.1000) plurality: 0.0004
+  attack c=30 (f=0.2000) random: 0.0086
+  attack c=30 (f=0.2000) observed_set: 0.0086
+  attack c=30 (f=0.2000) first_spy: 0.1980
+  attack c=30 (f=0.2000) plurality: 0.0000
+  attack c=75 (f=0.5000) random: 0.0134
+  attack c=75 (f=0.5000) observed_set: 0.0138
+  attack c=75 (f=0.5000) first_spy: 0.5018
+  attack c=75 (f=0.5000) plurality: 0.0000
+All Repetitions done!
+Average messages direct from Publisher: 2
+Average messages Relayed: 147
+Average Percentage of direct peers: 1.3422819 %
+Average Number of Propagating Peers: 55
+Average latency: p50 1104741 us, p95 1141844 us, worst 2181403 us

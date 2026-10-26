@@ -3,10 +3,10 @@
 
     python3 scripts/coalition_figure_data.py OUT.csv RESULT_DIR [RESULT_DIR ...]
 
-Each RESULT_DIR holds `adversary_*_D*_Fix(*).csv` files written by
-dactie-experiment-anonymity. The paper uses two independent v3 runs with
-identical parameters (the evaluation server and a laptop), so every
-(N, D, c) cell averages ten runs. Rows with incomplete delivery or N > 200 are
+Each RESULT_DIR holds `adversary_*.csv` files written by
+dactie-experiment-anonymity, e.g. one folder per (D, N) as in
+results/coalition/D*_N*; every (N, D, c) cell averages the runs of all
+folders (five in the paper). Rows with incomplete delivery or N > 200 are
 dropped. `bound_high` is Eq. (psml-coalition) evaluated at D = mesh_n_high.
 """
 import collections

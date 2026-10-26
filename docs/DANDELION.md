@@ -16,7 +16,7 @@ A sharing peer publishes a broadcast by handing it to its GossipSub mesh peers d
 mesh slots receives the message from the source first and names it with the first-spy
 estimator. With simulated link latency (D = 12, |N_c| = 200), first-spy
 succeeds against a single attacker in 5.2% of cases (uniform guess: 0.5%), against 5 colluders
-in 22% and against 20 colluders in 63%. The bound P_SML(c) holds, but it is high, because it is
+in 23% and against 20 colluders in 61%. The bound P_SML(c) holds, but it is high, because it is
 driven by the source's direct adjacency to D peers.
 
 ## Idea
@@ -25,8 +25,8 @@ Before a message is spread, it travels along a short random path, the stem, one 
 Only the peer at the end of the stem, the diffuser, publishes it into GossipSub (the fluff).
 Colluders in the mesh then see the diffuser, not the source. To name the source, the coalition
 must hold the first stem hop, so first-spy success is expected to drop to roughly the colluding
-fraction c/N: from 5.2% to about 0.5% for one attacker and from 63% to about 10% for 20 of 200
-peers (estimate from a one-hop stem; measured at q = 0.2: 0.5% and 9.8%). This is Dandelion++ (Fanti et al. 2018,
+fraction c/N: from 5.2% to about 0.5% for one attacker and from 61% to about 10% for 20 of 200
+peers (estimate from a one-hop stem; measured at q = 0.2: 0.5% and 10.1%). This is Dandelion++ (Fanti et al. 2018,
 cited in the paper as future work), adapted to a permissioned GossipSub network.
 
 ## Protocol
@@ -97,8 +97,8 @@ source publishing repeatedly within one epoch, to check the intersection defence
 
 - The first stem hop learns the source's PeerID if it colludes. Reaching that hop through an
   onion service (the Tor mode) removes this, and is the natural next step.
-- Each stem hop adds latency: at q = 0.2 the harness measured a median of 0.67 s (p90 1.4 s)
-  against 77 ms without the stem, more than one link delay per hop, probably because every hop
+- Each stem hop adds latency: at q = 0.2 the harness measured a median of 0.63 s (p90 1.5 s)
+  against 78 ms without the stem, more than one link delay per hop, probably because every hop
   opens a substream and negotiates the protocol first.
 - Peers that learn the stem graph over many epochs can narrow the source down; the epoch
   length trades this against route stability.
