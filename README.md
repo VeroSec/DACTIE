@@ -1,6 +1,8 @@
-# DACTIE: Decentral Anoymous CTI Exchange
-This repository contains the artifacts for the implementation and evaluation of DACTIE.
-This ReadMe gives you an overview of the Repos Content and a short usage example. More detailed explanations can be found in the subdirectories.
+# DACTIE: Decentral Anonymous CTI Exchange
+This repository contains the artifacts for the implementation and evaluation of the paper "Share the Indicators, Not the Victim: Revocably Anonymous CTI Sharing with DACTIE".
+DACTIE is a permissioned, decentralized cyber threat intelligence sharing system, which addresses a fundamental tension in collaborative cybersecurity: organizations need to share information about detected threats, but identifying the reporting organization may expose it to reputational damage, legal concerns, or competitive disadvantages. The central idea is to allow an organization to share CTI anonymously while retaining the ability to identify a misbehaving sender if a threshold of independent archives agrees to open the sender's group signature. DACTIE carefully composes technologies, such as Messaging Layer Security and the short threshold dynamic group signatures by Camenisch et al., with cryptographic security and anonymity guarantees. Additionally, network-level anonymity on top of cryptographic anonymity is hardened to protect the originator of a message.
+
+This ReadMe gives an overview of the repository content and a short usage example. More detailed explanations can be found in the subdirectories.
 
 ## Folder Structure
 - dactie-authority: Implementation of the Authority Peer Type
