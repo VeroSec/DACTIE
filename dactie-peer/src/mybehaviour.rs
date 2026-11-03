@@ -17,7 +17,7 @@ use libp2p::request_response::{OutboundRequestId, ProtocolSupport};
 use libp2p::swarm::{NetworkBehaviour, SwarmEvent};
 use libp2p::{gossipsub, identify, kad, request_response, Multiaddr, PeerId, StreamProtocol};
 use openmls::key_packages::KeyPackage;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::iter;
 use std::path::{Path, PathBuf};
@@ -35,7 +35,7 @@ use crate::abstswarm::AbstSwarmError::{
 };
 use crate::abstswarm::{AbstSwarmError, Notification};
 use dactie_utils::mls_wrapper::MyOpenMLSError::{
-    GroupNotAvailable, KeyMaterialFileError, SerializationError,
+    CommonLayerError, GroupNotAvailable, KeyMaterialFileError, SerializationError,
 };
 use dactie_utils::mls_wrapper::{MyOpenMLSError, MyOpenMls};
 use dactie_utils::shared_structs::*;
@@ -677,16 +677,9 @@ impl MyBehaviour {
         group_number: usize,
         data: Vec<u8>,
     ) -> Result<(MessageBody, Vec<u8>), AbstSwarmError> {
-        let group_id = my_open_mls.get_group_id(group_number)?;
-        let (group_id, ciphertext, nonce) = my_open_mls.encrypt_with_group_key(group_id, data)?;
-        Ok((
-            MessageBody::GroupEnc {
-                group_id: group_id.clone(),
-                enc_data: ciphertext,
-                nonce,
-            },
-            group_id,
-        ))
+        // Nested inside the common group's encryption, see MyOpenMls::seal_group.
+        let group_id = my_open_mls.get_group_id(group_number)?.to_vec();
+        Ok((my_open_mls.seal_group(group_number, data)?, group_id))
     }
 
     // Get key Pakcage from other Peers
@@ -1084,6 +1077,11 @@ impl MyBehaviour {
         commit: Vec<u8>,
         welcome_option: Option<Vec<u8>>,
     ) -> Result<bool, AbstSwarmError> {
+        // A commit of the common group may remove peers, e.g. expired ones; this node then
+        // removes them from the private groups it owns (see remove_from_owned_groups).
+        let common_before = (my_open_mls.get_common_group_id().ok().map(|g| g.to_vec())
+            == Some(group_id.clone()))
+        .then(|| my_open_mls.common_group_peers());
         let (peer_ids, ratchet_tree, self_removed) =
             match my_open_mls.handle_commit(group_id.clone(), commit) {
                 Ok(val) => val,
@@ -1097,6 +1095,19 @@ impl MyBehaviour {
             log::info!("Proposed Members have been added to group {group_id:?}, sending out welcome messages");
             if let Some(welcome) = welcome_option {
                 self.send_out_welcomes(my_open_mls, peer_ids, welcome, ratchet_tree)?
+            }
+        }
+        if let (Some(before), false) = (common_before, self_removed) {
+            let after = my_open_mls.common_group_peers();
+            let removed: HashSet<PeerId> = before.difference(&after).copied().collect();
+            // A failure must not stop this commit from being stored below.
+            match my_open_mls.remove_from_owned_groups(&removed) {
+                Ok(removals) => {
+                    for (group_number, peer) in removals {
+                        log::info!("Removed {peer} from private group {group_number}: it left the common group");
+                    }
+                }
+                Err(e) => log::error!("Could not remove {removed:?} from the private groups: {e}"),
             }
         }
         if self_removed {
@@ -1213,8 +1224,8 @@ impl MyBehaviour {
                 enc_data: data,
                 nonce,
             } => {
-                //Validate Group Signature
-                let decrypt_res = my_open_mls.decrypt_with_group_key(group_id, data, nonce);
+                // The common group's layer first, then the private group's (see seal_group).
+                let decrypt_res = my_open_mls.open_group(group_id, data, nonce);
                 match decrypt_res {
                     Ok((group_number_option, data)) => {
                         let group_number = group_number_option.ok_or(GroupNotAvailable("".to_string()))?;
@@ -1223,6 +1234,7 @@ impl MyBehaviour {
                     }
                     Err(e) => match e {
                         GroupNotAvailable(_) => {}, //Do nothing, because not my group
+                        CommonLayerError => log::info!("Dropping a private-group message from {peer_id}: {}", CommonLayerError),
                         MyOpenMLSError::SignatureInvalid{signature} => log::error!("Received message with invalid Signature: {}", hex::encode(signature.as_ref().to_bytes())),
                         SerializationError(e) => log::error!("Received message but could not decode: {e}"),
                         _ => log::error!("Received a gossipsub message, which caused an unhandeled error: {e}"),

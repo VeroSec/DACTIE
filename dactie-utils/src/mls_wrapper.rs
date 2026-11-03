@@ -481,6 +481,8 @@ impl MyOpenMls {
     }
 
     pub fn create_mls_group(&self, peer_ids: &Vec<PeerId>) -> Result<usize, MyOpenMLSError> {
+        // Before the key packages are used up and an empty group is left behind.
+        self.check_admitted(None, peer_ids.iter().copied())?;
         //Get Keypackages
         let pairs = self.get_keypackages_for_peer_ids(peer_ids)?;
 
@@ -619,11 +621,67 @@ impl MyOpenMls {
             .ok_or(CommonGroupUndefinedError)
     }
 
+    /// Private groups are nested inside the common group: only its members can be added to
+    /// them. `group_id` is the group they join, None for a group about to be created. The
+    /// check needs this node's view of the common group, so it applies once the node has one;
+    /// the AA creates the common group itself with create_mls_group.
+    fn check_admitted(
+        &self,
+        group_id: Option<&GroupId>,
+        peers: impl IntoIterator<Item = PeerId>,
+    ) -> Result<(), MyOpenMLSError> {
+        let Ok(common) = self.get_common_group_id() else {
+            return Ok(());
+        };
+        if group_id == Some(&common) {
+            return Ok(());
+        }
+        let admitted = self.common_group_peers();
+        match peers.into_iter().find(|peer| !admitted.contains(peer)) {
+            Some(peer_id) => Err(NotAdmittedError { peer_id }),
+            None => Ok(()),
+        }
+    }
+
+    /// Removes the given peers from every private group this node owns, with one commit per
+    /// removed member, and returns (group number, peer) for each removal. Peers call it with
+    /// the peers the AA just removed from the common group, so that a private group never
+    /// keeps a member that the common group no longer has.
+    pub fn remove_from_owned_groups(
+        &self,
+        removed: &HashSet<PeerId>,
+    ) -> Result<Vec<(usize, PeerId)>, MyOpenMLSError> {
+        let targets: Vec<(usize, PeerId)> = {
+            let group_ids = self.group_ids.lock().unwrap();
+            let map = self.group_store.lock().unwrap();
+            group_ids
+                .iter()
+                .enumerate()
+                .filter_map(|(number, id)| map.get(id).map(|store| (number, store)))
+                .filter(|(_, store)| store.owned)
+                .flat_map(|(number, store)| {
+                    store
+                        .group
+                        .members()
+                        .filter_map(|m| PeerId::from_bytes(m.credential.serialized_content()).ok())
+                        .filter(|peer| removed.contains(peer))
+                        .map(move |peer| (number, peer))
+                        .collect::<Vec<_>>()
+                })
+                .collect()
+        };
+        for (number, peer) in &targets {
+            self.remove_group_member(*number, *peer)?;
+        }
+        Ok(targets)
+    }
+
     pub fn add_group_members(
         &self,
         group_id: GroupId,
         pairs: &[(PeerId, KeyPackage)],
     ) -> Result<AddGroupMembersResult, MyOpenMLSError> {
+        self.check_admitted(Some(&group_id), pairs.iter().map(|(p, _)| *p))?;
         let mut map = self.group_store.lock().unwrap();
         let group_store = map
             .get_mut(&group_id)
@@ -714,6 +772,7 @@ impl MyOpenMls {
         group_number: usize,
         peer_id: PeerId,
     ) -> Result<(Vec<u8>, Vec<u8>, u64), MyOpenMLSError> {
+        self.check_admitted(Some(&self.get_group_id(group_number)?), [peer_id])?;
         let key_package = self
             .get_keypackage(peer_id)
             .ok_or(MissingKeyPackagesError {
@@ -952,6 +1011,9 @@ impl MyOpenMls {
         proposal_vec: Vec<u8>,
     ) -> Result<(), MyOpenMLSError> {
         let group_id = GroupId::from_slice(&group_id_vec);
+        // Taken before the group store is locked, since both read it.
+        let common = self.get_common_group_id().ok();
+        let admitted = self.common_group_peers();
         let mut map = self.group_store.lock().unwrap();
         let GroupStorage { group, owned, .. } = map
             .get_mut(&group_id)
@@ -973,6 +1035,16 @@ impl MyOpenMls {
                 if let Proposal::Remove(prop) = (*staged_proposal.clone()).proposal() {
                     //Only add proposal, if not group Owner
                     if prop.removed().usize() == 0 {
+                        return Ok(());
+                    }
+                }
+                // Private groups only take members of the common group (see check_admitted).
+                if let Proposal::Add(add) = (*staged_proposal.clone()).proposal() {
+                    let content = add.key_package().leaf_node().credential().serialized_content();
+                    let peer = PeerId::from_bytes(content).ok();
+                    let nested = common.as_ref().is_some_and(|c| *c != group_id);
+                    if nested && !peer.is_some_and(|p| admitted.contains(&p)) {
+                        log::warn!("Ignoring a proposal to add {peer:?}, which is not in the common group");
                         return Ok(());
                     }
                 }
@@ -1457,6 +1529,64 @@ impl MyOpenMls {
         decode_broadcast(channel, &self.decrypt_broadcast(ciphertext, nonce)?)
     }
 
+    /// Encrypts a message for a private group, nested inside the common group: the private
+    /// group's key encrypts the data, and the common group's current key encrypts the result.
+    /// A peer that the AA removed from the common group lacks the common group's new key, so
+    /// it can neither send nor read private-group messages, even while it is still a member of
+    /// the private group.
+    pub fn seal_group(
+        &self,
+        group_number: usize,
+        data: Vec<u8>,
+    ) -> Result<shared_structs::MessageBody, MyOpenMLSError> {
+        let (group_id, inner, inner_nonce) =
+            self.encrypt_with_group_key(self.get_group_id(group_number)?, data)?;
+        let layer = bincode::serialize(&(inner, inner_nonce))
+            .map_err(|e| SerializationError(e.to_string()))?;
+        let (_, enc_data, nonce) = self.encrypt_with_group_key(self.get_common_group_id()?, layer)?;
+        Ok(shared_structs::MessageBody::GroupEnc {
+            group_id,
+            enc_data,
+            nonce,
+        })
+    }
+
+    /// Removes the common group's layer of a private-group message and returns the private
+    /// group's ciphertext and nonce. Archives store these, since they cannot decrypt further.
+    pub fn unwrap_group(
+        &self,
+        enc_data: Vec<u8>,
+        nonce: Vec<u8>,
+    ) -> Result<(Vec<u8>, Vec<u8>), MyOpenMLSError> {
+        let (_, layer) = self
+            .decrypt_with_group_key(self.get_common_group_id()?.to_vec(), enc_data, nonce)
+            .map_err(|e| match e {
+                DecryptionError => CommonLayerError,
+                e => e,
+            })?;
+        bincode::deserialize(&layer).map_err(|e| SerializationError(e.to_string()))
+    }
+
+    /// Decrypts a private-group message: first the common group's layer, then the private
+    /// group's. Returns the group number; GroupNotAvailable if this peer is not a member.
+    pub fn open_group(
+        &self,
+        group_id: Vec<u8>,
+        enc_data: Vec<u8>,
+        nonce: Vec<u8>,
+    ) -> Result<(Option<usize>, Vec<u8>), MyOpenMLSError> {
+        if !self
+            .group_store
+            .lock()
+            .unwrap()
+            .contains_key(&GroupId::from_slice(&group_id))
+        {
+            return Err(GroupNotAvailable(hex::encode(&group_id)));
+        }
+        let (inner, inner_nonce) = self.unwrap_group(enc_data, nonce)?;
+        self.decrypt_with_group_key(group_id, inner, inner_nonce)
+    }
+
     //Returns Channel, if not already subscribed
     pub fn subscribe(&self, topic: Vec<u8>) -> Result<Option<String>, MyOpenMLSError> {
         let mut map = self.subscribed_topics.lock().unwrap();
@@ -1717,6 +1847,10 @@ pub enum MyOpenMLSError {
     CommonGroupUndefinedError,
     #[error("Could not decrypt the group message (malformed, or encrypted under another epoch's key)")]
     DecryptionError,
+    #[error("The private-group message does not decrypt under the common group's current key: its sender is not admitted, or it was sent in another epoch")]
+    CommonLayerError,
+    #[error("{peer_id} is not in the common group, so it cannot be added to a private group")]
+    NotAdmittedError { peer_id: PeerId },
     #[error("The path to the keystore is not valid or the file is corrupted")]
     KeyMaterialFileError,
     #[error("Invalid key material: {0}")]
@@ -1898,5 +2032,138 @@ mod group_saves_tests {
         fs::write(saves.join(GROUP_STATE), b"truncated").unwrap();
         assert!(node(&dir, &key_store).is_err());
         fs::remove_dir_all(dir).ok();
+    }
+}
+
+#[cfg(test)]
+mod nested_group_tests {
+    use super::*;
+    use crate::shared_structs::MessageBody;
+
+    struct Node {
+        mls: MyOpenMls,
+        instructions: mpsc::UnboundedReceiver<Instruction>,
+        _commits: mpsc::UnboundedReceiver<GroupId>,
+    }
+
+    fn node(name: &str) -> Node {
+        let dir = std::env::temp_dir().join(format!("dactie-nested-{}-{name}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        let (commit_tx, commit_rx) = mpsc::unbounded_channel();
+        let (instruction_tx, instruction_rx) = mpsc::unbounded_channel();
+        let key_store = StoredKeyMaterial::new(None, None, None, None);
+        let mls = MyOpenMls::new(key_store, commit_tx, instruction_tx, dir, PeerId::random()).unwrap();
+        Node {
+            mls,
+            instructions: instruction_rx,
+            _commits: commit_rx,
+        }
+    }
+
+    fn id(n: &Node) -> PeerId {
+        n.mls.get_peerid()
+    }
+
+    fn key_package(n: &Node) -> KeyPackage {
+        n.mls.generate_key_package().unwrap().key_package().clone()
+    }
+
+    fn number(n: &Node, group: &GroupId) -> usize {
+        n.mls.get_groups().iter().position(|g| g == group).unwrap()
+    }
+
+    fn send(n: &Node, group: &GroupId, text: &[u8]) -> (Vec<u8>, Vec<u8>, Vec<u8>) {
+        match n.mls.seal_group(number(n, group), text.to_vec()).unwrap() {
+            MessageBody::GroupEnc { group_id, enc_data, nonce } => (group_id, enc_data, nonce),
+            _ => unreachable!(),
+        }
+    }
+
+    /// The AA with a common group of x and y, and a private group that x owns, with y.
+    fn setup() -> (Node, Node, Node, GroupId, GroupId) {
+        let aa = node("aa");
+        let mut x = node("x");
+        let y = node("y");
+        let number = aa.mls.create_empty_mls_group().unwrap();
+        aa.mls.move_to_common(number);
+        let common = aa.mls.get_common_group_id().unwrap();
+        let members = [(id(&x), key_package(&x)), (id(&y), key_package(&y))];
+        let (_, _, welcome, _) = aa.mls.add_group_members(common.clone(), &members).unwrap();
+        let tree = aa.mls.get_ratchet_tree(common.as_slice()).unwrap();
+        for n in [&x, &y] {
+            let group = n.mls.add_group_from_welcome(welcome.clone().unwrap(), tree.clone()).unwrap();
+            n.mls.move_to_common_id(group).unwrap();
+        }
+
+        x.mls.insert_foreign_kp(id(&y), key_package(&y));
+        let number = x.mls.create_mls_group(&vec![id(&y)]).unwrap();
+        let private = x.mls.get_group_id(number).unwrap();
+        let Ok(Instruction::Commit { welcome: Some(welcome), .. }) = x.instructions.try_recv() else {
+            panic!("create_mls_group sends a commit with a welcome");
+        };
+        let tree = x.mls.get_ratchet_tree(private.as_slice()).unwrap();
+        y.mls.add_group_from_welcome(welcome, tree).unwrap();
+        (aa, x, y, common, private)
+    }
+
+    /// Once the AA removed y from the common group, y can neither send to nor read the private
+    /// group, although it is still a member of it.
+    #[test]
+    fn private_group_messages_need_the_common_group_key() {
+        let (aa, x, y, common, private) = setup();
+        let (g, d, n) = send(&y, &private, b"ioc");
+        assert_eq!(x.mls.open_group(g, d, n).unwrap(), (Some(number(&x, &private)), b"ioc".to_vec()));
+
+        let (commit, _) = aa.mls.remove_group_members(common.clone(), &[id(&y)]).unwrap();
+        x.mls.handle_commit(common.to_vec(), commit).unwrap();
+
+        let (g, d, n) = send(&y, &private, b"after removal");
+        assert!(matches!(x.mls.open_group(g, d, n), Err(CommonLayerError)));
+        let (g, d, n) = send(&x, &private, b"members only");
+        assert!(matches!(y.mls.open_group(g, d, n), Err(CommonLayerError)));
+    }
+
+    /// Members of the common group outside the private group, such as archives, remove the
+    /// outer layer but cannot read the message.
+    #[test]
+    fn common_members_unwrap_but_cannot_read() {
+        let (aa, x, _y, _common, private) = setup();
+        let (g, d, n) = send(&x, &private, b"ioc");
+        let (inner, _) = aa.mls.unwrap_group(d.clone(), n.clone()).unwrap();
+        assert_ne!(inner, b"ioc".to_vec());
+        assert!(matches!(aa.mls.open_group(g, d, n), Err(GroupNotAvailable(_))));
+    }
+
+    /// A peer outside the common group cannot be added to a private group.
+    #[test]
+    fn only_admitted_peers_join_private_groups() {
+        let (_aa, x, _y, _common, _private) = setup();
+        let z = node("z");
+        x.mls.insert_foreign_kp(id(&z), key_package(&z));
+        let groups = x.mls.get_groups().len();
+        assert!(matches!(
+            x.mls.create_mls_group(&vec![id(&z)]),
+            Err(NotAdmittedError { peer_id }) if peer_id == id(&z)
+        ));
+        assert_eq!(x.mls.get_groups().len(), groups, "no empty group is left behind");
+    }
+
+    /// The owner removes a peer that left the common group from its private groups.
+    #[test]
+    fn owner_removes_peers_that_left_the_common_group() {
+        let (aa, mut x, y, common, private) = setup();
+        let (commit, _) = aa.mls.remove_group_members(common.clone(), &[id(&y)]).unwrap();
+        x.mls.handle_commit(common.to_vec(), commit).unwrap();
+
+        let removed = x.mls.remove_from_owned_groups(&HashSet::from([id(&y)])).unwrap();
+        assert_eq!(removed, vec![(number(&x, &private), id(&y))]);
+        let members = x.mls.group_store.lock().unwrap()[&private].group.members().count();
+        assert_eq!(members, 1);
+        let Ok(Instruction::Commit { group_id, commit, .. }) = x.instructions.try_recv() else {
+            panic!("the removal is published as a commit");
+        };
+        assert_eq!(group_id, private);
+        let (_, _, self_removed) = y.mls.handle_commit(private.to_vec(), commit).unwrap();
+        assert!(self_removed);
     }
 }

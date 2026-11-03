@@ -621,11 +621,22 @@ impl MyBehaviour {
                     }
                     MessageBody::GroupEnc {
                         group_id,
-                        enc_data: data,
+                        enc_data,
                         nonce,
                     } => {
-                        Self::insert_group_enc(pool, &id.0, &group_id, &data, &nonce).await?;
-                        println!("Got a Group_Enc");
+                        // Archives are members of the common group but not of private groups:
+                        // they remove the common group's layer and store the private group's
+                        // ciphertext (see MyOpenMls::seal_group).
+                        match my_open_mls.unwrap_group(enc_data, nonce) {
+                            Ok((data, nonce)) => {
+                                Self::insert_group_enc(pool, &id.0, &group_id, &data, &nonce).await?;
+                                println!("Got a Group_Enc");
+                            }
+                            Err(e @ MyOpenMLSError::CommonLayerError) => {
+                                log::warn!("Not storing group message from {peer_id}: {e}")
+                            }
+                            Err(e) => return Err(MLSError(e)),
+                        }
                     }
                     MessageBody::Proposal {
                         group_id,

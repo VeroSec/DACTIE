@@ -235,7 +235,7 @@ Archives store `id_shares` per MemberID without any PeerID, and `peer_shares` pe
 A sharing peer's registration lasts until the end of its tag's epoch.
 
 - **Renewal.** Before the epoch ends, the sharing peer runs `renew <AA PeerID> <key_material.json of the member>`: it claims a slot of the next epoch in that `slots.json` and sends the unsigned `RenewPeer { tag, proof }`, with the proof bound to its own PeerID. The AA accepts it only from registered sharing peers and only for a tag of the current or the next epoch it has not seen, and replies `PeerRenewed { until_epoch }`.
-- **Expiry.** Every 5 s, the AA removes sharing peers whose registration ended with an earlier epoch from the common group with a commit. The admission check then excludes them from GossipSub on every node. A removed peer can register again with `peer_from_sig` and a slot of the current epoch.
+- **Expiry.** Every 5 s, the AA removes sharing peers whose registration ended with an earlier epoch from the common group with a commit. The admission check then excludes them from GossipSub on every node, and the owners of private groups remove them from those groups (section 5). A removed peer can register again with `peer_from_sig` and a slot of the current epoch.
 - **Openings.** The archives keep the `peer_shares` of removed peers, and the AA keeps their PeerIDs in `allowed_peers`, so their old messages can still be opened to them.
 - **Cap across epochs.** A new sharing peer needs a slot of the current epoch, and a renewal uses one of the next epoch's `k` slots. A member therefore never has more than `k` sharing peers registered for any epoch, also at the epoch boundary.
 
@@ -245,12 +245,12 @@ A sharing peer's registration lasts until the end of its tag's epoch.
 | --- | --- | --- | --- |
 | `sub <topic>` | none (subscribes to the topic's channel) | — | — |
 | `broad <topic> <msg>` | `BroadcastEnc { channel, data, nonce }`, where `data` encrypts `BroadcastPlain { topic, data }` | AES-256-GCM with a random 96-bit nonce, under a key exported from the common MLS group's current epoch | all members (the common group) |
-| `enc_broad <group> <msg>` | `GroupEnc { group_id, enc_data, nonce }` | AES-256-GCM under a key exported from the private group's current epoch | members of that private group |
+| `enc_broad <group> <msg>` | `GroupEnc { group_id, enc_data, nonce }` | nested: AES-256-GCM under a key exported from the private group's current epoch, and the result again under the common group's key | members of that private group that are still in the common group |
 | `attr_broad <topic> <msg>`, `attr_enc_broad <group> <msg>` | as above, with `attributed_to: MemberID` | as above | as above; receivers also see the sender's MemberID (see Attribution) |
 
 Only the channel of a broadcast travels unencrypted; its topic is inside the ciphertext, so nobody without the common-group key learns what a message is about, and an archive queried by channel learns only the channel. The group ID of a private-group message travels unencrypted. The exported keys change with every MLS epoch. The sender signs the whole encoded body (channel or group ID, ciphertext, nonce) with its group signature and publishes it on the channel of the topic or group.
 
-A receiver first rejects a `BroadcastEnc` whose signed channel differs from the GossipSub topic it arrived on, so a broadcast cannot be replayed on another channel, and then validates the signature (see [Gossip messages and validation](#gossip-messages-and-validation)). It decrypts every `BroadcastEnc`, drops it if the topic inside does not belong to the channel, and delivers it only if it subscribed to that topic. It decrypts a `GroupEnc` only if it is a member of the group. It ignores all other messages, but still forwards them.
+A receiver first rejects a `BroadcastEnc` whose signed channel differs from the GossipSub topic it arrived on, so a broadcast cannot be replayed on another channel, and then validates the signature (see [Gossip messages and validation](#gossip-messages-and-validation)). It decrypts every `BroadcastEnc`, drops it if the topic inside does not belong to the channel, and delivers it only if it subscribed to that topic. It decrypts a `GroupEnc` only if it is a member of the group: first the common group's layer, then the private group's. A `GroupEnc` whose outer layer does not decrypt under the common group's current key is dropped, so a peer that the AA removed can neither send nor read in a private group it still belongs to. It ignores all other messages, but still forwards them.
 
 Messages are anonymous: neither the gossip message nor the group signature identifies the sender.
 
@@ -264,6 +264,7 @@ Messages are anonymous: neither the gossip message nor the group signature ident
 - `create_group <PeerIDs>`: the creator becomes the group's **owner** (leaf 0). It adds the peers with a commit, publishes the commit on the group's channel, and sends the new members a group-signed `JoinGroup` welcome.
 - `add_group_member`, `remove_group_member`, `update_key_material`: any member publishes these as **proposals**.
 - **Only the owner commits.** When the owner receives a proposal, it commits all pending proposals and publishes the commit after a short delay. Receivers reject commits from any other member. In an unordered peer-to-peer network, concurrent commits from different members would otherwise fork the group. Proposals to remove the owner are ignored. If a non-owner proposed an Add, it sends the welcome once it has processed the owner's commit.
+- **Nested in the common group.** Only members of the common group can join a private group: `create_group` and `add_group_member` refuse other PeerIDs, and members ignore Add proposals for them, each checked against the node's own view of the common group. When a commit of the common group removes peers, e.g. at expiry, the owner of a private group removes them from it with a commit; an owner that was offline does so when it catches up. Messages are encrypted for both groups (section 4).
 - The **common group** is owned by the AA. The AA adds every member and every additional peer by direct commit. Peers cannot address the common group from the console.
 
 ## 6. Archive storage
@@ -273,7 +274,7 @@ Each archive writes to its own PostgreSQL database (`init.sql`):
 | Table | Content | Form |
 | --- | --- | --- |
 | `broadcast(id, channel, topic, data)` | common-group messages, indexed by channel | **decrypted** (archives are members of the common group) |
-| `group_enc(id, group_id, data, nonce)` | private-group messages | ciphertext (archives are not members of private groups) |
+| `group_enc(id, group_id, data, nonce)` | private-group messages, without the common group's layer | ciphertext of the private group (archives are not members of private groups) |
 | `proposal`, `commit` | MLS proposals, commits and welcomes, with group ID and epoch | as received |
 | `id_shares(id, enc_share, commits)` | one encrypted share per MemberID | ElGamal ciphertext |
 | `peer_shares(peer_id, enc_share, commits)` | one encrypted share per additional PeerID | ElGamal ciphertext |
