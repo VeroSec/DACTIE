@@ -457,6 +457,7 @@ pub(crate) async fn experiment_multi(
         control_tx,
         response_tx,
         mut response_rx,
+        ..
     } = start_network(
         peer_n,
         time_before_stop,
