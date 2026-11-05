@@ -1,10 +1,12 @@
 use crate::adversary::Observation;
-use crate::peer::{ControlSignal, Directory, MeshConfig, Peer, PubInterval};
+use crate::peer::{ControlSignal, Directory, MeshConfig, Peer, PeerOut, PubInterval};
+use crate::timing::Topology;
 use futures::future::join_all;
 use libp2p::PeerId;
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use tokio::sync::{broadcast, mpsc};
+use tokio::task::JoinHandle;
 use tokio::time::{sleep, Duration, Instant};
 
 /// Everything one run yields. The first three fields are the original
@@ -17,6 +19,8 @@ pub(crate) struct RunOutcome {
     pub(crate) observations: Vec<Observation>,
     pub(crate) source: PeerId,
     pub(crate) all_peers: Vec<PeerId>,
+    /// The mesh and link delays at the measurement, for the timing attack.
+    pub(crate) topology: Topology,
 }
 
 impl RunOutcome {
@@ -70,20 +74,33 @@ impl RunOutcome {
     }
 }
 
-//Creates n peers and lets them exchange messages on one topic. Each peer publishes in a random interval between 3 and 10 seconds messages.
-// After time before stop a single peer sends a measurement message. The other peers report the PeerID of the peer that propagated the message.
-//Returns (no peers where publishing peer == propagating peers, other peers, number of non duplicate propagating peers )
-pub(crate) async fn experiment_prop_peer_id(
+/// The peers of a run, connected and publishing background traffic, before
+/// the first measurement message.
+pub(crate) struct Network {
+    pub(crate) tasks: Vec<JoinHandle<()>>,
+    pub(crate) all_peers: Vec<PeerId>,
+    /// The peer started last, the source of the single-message run.
+    pub(crate) last: PeerId,
+    pub(crate) control_tx: broadcast::Sender<ControlSignal>,
+    pub(crate) response_tx: mpsc::UnboundedSender<PeerOut>,
+    pub(crate) response_rx: mpsc::UnboundedReceiver<PeerOut>,
+    /// Every peer's mesh at the measurement, for the timing estimators.
+    pub(crate) directory: Directory,
+}
+
+/// Start `peer_n` peers in waves, tell them to run, and return once the last
+/// one has had `time_before_stop` to join the mesh.
+pub(crate) async fn start_network(
     peer_n: usize,
     time_before_stop: Duration,
     pub_interval: PubInterval,
     mesh: MeshConfig,
-) -> Result<RunOutcome, Box<dyn Error>> {
+) -> Result<Network, Box<dyn Error>> {
     let pub_interval = pub_interval.for_network(peer_n);
     let mut peers = Vec::new();
     let mut all_peers = Vec::new();
     let (control_tx, control_rx) = broadcast::channel::<ControlSignal>(peer_n);
-    let (response_tx, mut response_rx) = mpsc::unbounded_channel();
+    let (response_tx, response_rx) = mpsc::unbounded_channel();
 
     let directory = Directory::default();
 
@@ -121,7 +138,7 @@ pub(crate) async fn experiment_prop_peer_id(
         }
     }
 
-    let mut stop_peer = Peer::new(control_tx.subscribe(), response_tx.clone(), mesh, directory)?;
+    let mut stop_peer = Peer::new(control_tx.subscribe(), response_tx.clone(), mesh, directory.clone())?;
 
     let stop_peer_addr = stop_peer.get_peer_id();
     all_peers.push(stop_peer_addr);
@@ -137,6 +154,36 @@ pub(crate) async fn experiment_prop_peer_id(
     control_tx.send(ControlSignal::Run).unwrap();
 
     interval.tick().await;
+
+    Ok(Network {
+        tasks: peers,
+        all_peers,
+        last: stop_peer_addr,
+        control_tx,
+        response_tx,
+        response_rx,
+        directory,
+    })
+}
+
+//Creates n peers and lets them exchange messages on one topic. Each peer publishes in a random interval between 3 and 10 seconds messages.
+// After time before stop a single peer sends a measurement message. The other peers report the PeerID of the peer that propagated the message.
+//Returns (no peers where publishing peer == propagating peers, other peers, number of non duplicate propagating peers )
+pub(crate) async fn experiment_prop_peer_id(
+    peer_n: usize,
+    time_before_stop: Duration,
+    pub_interval: PubInterval,
+    mesh: MeshConfig,
+) -> Result<RunOutcome, Box<dyn Error>> {
+    let Network {
+        tasks: peers,
+        all_peers,
+        last: stop_peer_addr,
+        control_tx,
+        response_tx,
+        mut response_rx,
+        directory,
+    } = start_network(peer_n, time_before_stop, pub_interval, mesh).await?;
 
     let published_at = Instant::now();
     control_tx.send(ControlSignal::Pub(stop_peer_addr)).unwrap();
@@ -195,6 +242,7 @@ pub(crate) async fn experiment_prop_peer_id(
         observations,
         source: stop_peer_addr,
         all_peers,
+        topology: directory.topology(mesh.latency),
     })
 }
 
@@ -219,6 +267,7 @@ mod tests {
                 .collect(),
             source: p,
             all_peers: vec![p],
+            topology: Topology::default(),
         }
     }
 

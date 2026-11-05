@@ -1,6 +1,7 @@
 use crate::conn_cap::ConnCap;
 use crate::link_latency::{Delayed, LatencyRange};
 use crate::stem::{message_id, Route, StemAck, StemConfig, StemMessage, StemState};
+use crate::timing::Topology;
 use futures::StreamExt;
 use libp2p::gossipsub::IdentTopic;
 use libp2p::request_response::{self, OutboundRequestId, ProtocolSupport};
@@ -44,16 +45,32 @@ const CONN_GRACE: Duration = Duration::from_secs(20);
 /// XOR-close peers that Kademlia lookups give it, and without their bootstrap
 /// traffic, which dominated the CPU of large runs.
 #[derive(Clone, Default)]
-pub(crate) struct Directory(Arc<RwLock<Vec<(PeerId, Multiaddr)>>>);
+pub(crate) struct Directory {
+    addrs: Arc<RwLock<Vec<(PeerId, Multiaddr)>>>,
+    /// Each peer's GossipSub mesh at the measurement, for the topology-aware
+    /// adversary (`timing`).
+    meshes: Arc<RwLock<HashMap<PeerId, Vec<PeerId>>>>,
+}
 
 impl Directory {
     fn register(&self, peer: PeerId, addr: Multiaddr) {
-        self.0.write().expect("directory lock").push((peer, addr));
+        self.addrs.write().expect("directory lock").push((peer, addr));
+    }
+
+    fn record_mesh(&self, peer: PeerId, mesh: Vec<PeerId>) {
+        self.meshes.write().expect("directory lock").insert(peer, mesh);
+    }
+
+    /// The propagation graph the peers reported at the measurement.
+    pub(crate) fn topology(&self, latency: LatencyRange) -> Topology {
+        let addrs = self.addrs.read().expect("directory lock");
+        let meshes = self.meshes.read().expect("directory lock");
+        Topology::from_meshes(&addrs, &meshes, latency)
     }
 
     /// Up to `k` random entries for which `skip` is false.
     fn sample(&self, k: usize, skip: impl Fn(&PeerId) -> bool) -> Vec<(PeerId, Multiaddr)> {
-        let entries = self.0.read().expect("directory lock");
+        let entries = self.addrs.read().expect("directory lock");
         entries
             .choose_multiple(&mut rand::thread_rng(), entries.len())
             .filter(|(peer, _)| !skip(peer))
@@ -101,6 +118,11 @@ pub(crate) struct MeshConfig {
     pub(crate) latency: LatencyRange,
     /// Stem phase (Dandelion++), see `stem`; off by default.
     pub(crate) stem: StemConfig,
+    /// Report receipts of background messages too, as `Payload::Background`.
+    /// The statistical-disclosure attack of `multi_message` needs them to
+    /// learn how often each peer relays other sources' messages; single-message
+    /// runs leave this off, since it sends every receipt of the run.
+    pub(crate) background_tally: bool,
 }
 
 impl MeshConfig {
@@ -142,6 +164,7 @@ impl MeshConfig {
             spawn_per_sec: 0,
             latency: LatencyRange::OFF,
             stem: StemConfig::OFF,
+            background_tally: false,
         }
     }
 
@@ -157,6 +180,11 @@ impl MeshConfig {
 
     pub(crate) fn with_stem(mut self, stem: StemConfig) -> Self {
         self.stem = stem;
+        self
+    }
+
+    pub(crate) fn with_background_tally(mut self, on: bool) -> Self {
+        self.background_tally = on;
         self
     }
 
@@ -190,6 +218,19 @@ pub(crate) struct PeerOut {
     pub(crate) at: Instant,
     /// Received on the stem rather than through GossipSub.
     pub(crate) stem: bool,
+    /// Which message was received.
+    pub(crate) payload: Payload,
+}
+
+/// What a reported message was.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Payload {
+    /// The measurement message of a single-message run.
+    Measurement,
+    /// Measurement message number n of a multi-message run.
+    Numbered(u32),
+    /// Background traffic, reported only with `MeshConfig::background_tally`.
+    Background,
 }
 
 #[derive(Clone, Debug)]
@@ -197,6 +238,8 @@ pub(crate) enum ControlSignal {
     Run,
     Stop,
     Pub(PeerId),
+    /// The peer publishes measurement message number n (multi-message runs).
+    PubSeq(PeerId, u32),
 }
 
 #[derive(Clone, Debug)]
@@ -464,6 +507,10 @@ impl Peer {
                             let connected = self.swarm.connected_peers().count();
                             let mesh = self.swarm.behaviour().gossipsub.mesh_peers(&topic.hash()).count();
                             println!("peer_state {connected} {mesh}");
+                            // The topology-aware adversary (`timing`) knows every mesh.
+                            let me = *self.swarm.local_peer_id();
+                            let meshed = self.swarm.behaviour().gossipsub.mesh_peers(&topic.hash()).copied().collect();
+                            self.directory.record_mesh(me, meshed);
                             if val == self.get_peer_id() {
                                 println!("Stopping");
                                 let message = "Stop".repeat(30);
@@ -471,6 +518,11 @@ impl Peer {
                                 println!(
                                     "Publisher state: {connected} connections, {mesh} mesh peers, publish {result}"
                                 );
+                            }
+                        }
+                        ControlSignal::PubSeq(val, n) => {
+                            if val == self.get_peer_id() {
+                                self.publish_own(numbered_measurement(n));
                             }
                         }
                     }
@@ -602,9 +654,7 @@ impl Peer {
             }
             return;
         }
-        if is_measurement(&data) {
-            self.report(from, true);
-        }
+        self.report(from, true, &data);
         self.stem_step(Some(from), id, data);
     }
 
@@ -617,13 +667,18 @@ impl Peer {
         }
     }
 
-    fn report(&self, prop_id: PeerId, stem: bool) {
+    fn report(&self, prop_id: PeerId, stem: bool, data: &[u8]) {
+        let payload = payload(data);
+        if payload == Payload::Background && !self.mesh.background_tally {
+            return;
+        }
         self.response_channel
             .send(PeerOut {
                 observer: *self.swarm.local_peer_id(),
                 prop_id,
                 at: Instant::now(),
                 stem,
+                payload,
             })
             .unwrap();
     }
@@ -651,9 +706,7 @@ impl Peer {
                 ..
             })) => {
                 self.stem.seen_in_gossip(message_id(&message.data));
-                if is_measurement(&message.data) {
-                    self.report(peer_id, false);
-                }
+                self.report(peer_id, false, &message.data);
             }
             SwarmEvent::Behaviour(MyBehaviourEvent::Stem(request_response::Event::Message {
                 peer,
@@ -695,6 +748,29 @@ impl Peer {
 /// The measurement message, as opposed to background traffic.
 fn is_measurement(data: &[u8]) -> bool {
     data.starts_with(b"Stop")
+}
+
+/// Measurement message number n of a multi-message run, as long as the
+/// single-run one. The number keeps the messages apart: GossipSub and the stem
+/// address messages by content and drop one whose content they have seen.
+fn numbered_measurement(n: u32) -> Vec<u8> {
+    let mut data = format!("Stop#{n}#").into_bytes();
+    data.resize(120, b'.');
+    data
+}
+
+fn payload(data: &[u8]) -> Payload {
+    if let Some(rest) = data.strip_prefix(b"Stop#") {
+        let digits = rest.iter().take_while(|b| b.is_ascii_digit()).count();
+        if let Some(n) = std::str::from_utf8(&rest[..digits]).ok().and_then(|d| d.parse().ok()) {
+            return Payload::Numbered(n);
+        }
+    }
+    if is_measurement(data) {
+        Payload::Measurement
+    } else {
+        Payload::Background
+    }
 }
 
 fn generate_random_string(len: usize) -> String {
@@ -740,6 +816,19 @@ mod tests {
                 "D={n} rejected: {mesh:?}"
             );
         }
+    }
+
+    /// Numbered measurement messages are told apart by their number, the
+    /// single-run message and background traffic are not mistaken for one.
+    #[test]
+    fn payloads_are_classified() {
+        for n in [0, 7, 49, u32::MAX] {
+            assert_eq!(numbered_measurement(n).len(), 120);
+            assert_eq!(payload(&numbered_measurement(n)), Payload::Numbered(n));
+        }
+        assert_ne!(numbered_measurement(1), numbered_measurement(10));
+        assert_eq!(payload("Stop".repeat(30).as_bytes()), Payload::Measurement);
+        assert_eq!(payload(generate_random_string(120).as_bytes()), Payload::Background);
     }
 
     /// A pinned band, which is what a bound-validation run uses, must build too.

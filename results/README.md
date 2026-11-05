@@ -12,6 +12,8 @@ harness output of one cell.
 | Experimental bounds (85 runs, 50 to 850 peers) | `anonymity_parsed.csv`, raw runs in `sizes/` |
 | Coalition attack, Figure 2 (108 configurations) | `coalition/coalition_parsed.csv`, raw runs in `coalition/D*_N*/` |
 | Stem phase, Figure 2 hollow markers (q = 0.2) | `coalition/stem/stem_q0.2.csv`, raw runs in `coalition/stem/q0.2/` |
+| Timing estimators (extended version) | `coalition/timing/q0/`, `coalition/timing/q0.2/` |
+| Repeated messages and PeerID rotation (extended version) | `repeated/` |
 | Eclipse attacks (847 runs) | `eclipse_parsed.csv` |
 | Latency table | `latency/rerun-2026-10-26.csv` (runs `off-*`, receiver `peer_1`), every receipt in `latency/raw-2026-10-26.csv` |
 | Soak test (33.4 hours) | `latency/soak/` |
@@ -81,6 +83,45 @@ python3 scripts/coalition_figure_data.py results/coalition/stem/stem_q0.2.csv \
 | 0.5 | 1.15 | 3.2% / 11.3% | 0.26 s |
 
 The paper reports `q = 0.2`.
+
+## Timing estimators: `coalition/timing/`
+
+The coalition grid (`D ∈ {6, 8, 10, 12}`, `|N_c|` 50 to 200, five runs, 5,000
+coalitions) without the stem (`q0/`) and with `q = 0.2` (`q0.2/`), scored with
+the timing estimators of `dactie-experiment-anonymity/README.md` next to
+first-spy (harness `exp/timing-estimator` `2a85af2`, 2026-11-03). Every message
+reached all peers. The `run.log` files stayed on the evaluation server.
+
+- Without the stem, `timing_delay` (mesh and exact link delays known) names the
+  source in 16–53% of cases with two colluders and 86–99% with five, e.g. 98.4%
+  at `|N_c| = 200`, `D = 12`, where first-spy reaches 23.3%.
+- With the stem, `timing_delay` finds the diffuser and stays below first-spy in
+  every configuration with `c ≥ 2`; `timing_delay_stem` is within −2.3 and +1.0
+  percentage points of first-spy.
+
+## Repeated messages: `repeated/`
+
+Multi-message runs (harness `exp/multi-message` `a209ce7`, 2026-11-03):
+`D = 12`, `|N_c| ∈ {50, 100, 200}`, M = 10 linked messages, the member's
+messages spread over `k ∈ {1, 3, 5}` PeerIDs, coalitions of 1, 5, 10 and 20,
+five runs with 5,000 coalitions each, every message delivered to all peers.
+Regimes: `no_stem`; `stem_fixed` (q = 0.2, 600 s stem epoch, messages 5 s apart,
+so all ten share one route); `stem_rotating` (q = 0.2, 5 s stem epoch, messages
+35 s apart, so every message gets new successors). Columns: see
+`dactie-experiment-anonymity/README.md`.
+
+- With fixed routes, ten messages reveal no more than one (e.g. 10.0% for
+  `c = 5` at `|N_c| = 50`).
+- With new routes per message, pooling stays below `1 − (1 − c/|N_c|)^10` in
+  every configuration, at 0.58 to 0.96 of it for `c ≥ 5`.
+- Linkable messages over k PeerIDs within one stem epoch act like k epochs:
+  10.0%, 26.4% and 35.7% for `k = 1, 3, 5` (`c = 5`, `|N_c| = 50`).
+
+Both sections are reproduced by
+
+```bash
+python3 scripts/repeated_timing_summary.py results
+```
 
 ## Eclipse attacks: `eclipse_parsed.csv`
 

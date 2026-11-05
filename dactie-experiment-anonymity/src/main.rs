@@ -3,11 +3,14 @@ mod conn_cap;
 mod link_latency;
 mod stem;
 mod experiment;
+mod multi_message;
 mod peer;
+mod timing;
 
 use crate::adversary::{clamp_coalition_size, coalition_size_for, run_attack, Estimator};
 use crate::experiment::experiment_prop_peer_id;
 use crate::peer::{MeshConfig, PubInterval};
+use crate::timing::{TimingEstimator, TimingModel};
 use clap::Parser;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
@@ -130,6 +133,9 @@ struct Args {
     #[clap(long, default_value_t = 39.0)]
     stem_embargo_secs: f64,
 
+    #[command(flatten)]
+    multi: multi_message::MultiArgs,
+
     /// Colluding fractions f to evaluate the source-anonymity attack at. Each is
     /// converted to a coalition size of ceil(f * N), capped at the N-1 peers that
     /// are not the source.
@@ -199,6 +205,45 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let args = Args::parse();
     raise_fd_limit((args.n_peers_max * args.conn_high) as u64 * 5 / 4 + 1024);
 
+    let mesh = MeshConfig::new(
+        args.mesh_n,
+        args.mesh_n_low,
+        args.mesh_n_high,
+        args.gossip_factor,
+        args.gossip_lazy,
+    )
+    .with_conn_limits(args.conn_low, args.conn_high)
+    .with_plaintext(args.plaintext)
+    .with_heartbeat(args.heartbeat_secs)
+    .with_spawn_rate(args.spawn_per_sec)
+    .with_link_latency(args.link_latency_ms)
+    .with_stem(stem::StemConfig {
+        q: args.stem_fluff_probability,
+        epoch: tokio::time::Duration::from_secs(args.stem_epoch_secs),
+        embargo_mean: tokio::time::Duration::from_secs_f64(args.stem_embargo_secs.max(0.001)),
+    });
+
+    if let Some(messages) = args.multi.messages_per_source {
+        return multi_message::start_multi_series(multi_message::MultiSeriesArgs {
+            min_n: args.n_peers_min,
+            max_n: args.n_peers_max,
+            n_step_size: args.n_peers_step_size,
+            repetitions: args.repetitions,
+            time: args.time,
+            interval: args.interval,
+            mesh,
+            out_path: args.out_path,
+            adversary_fractions: args.adversary_fractions,
+            coalition_sizes: args.coalition_sizes,
+            adversary_trials: args.adversary_trials,
+            adversary_seed: args.adversary_seed,
+            min_delivery: args.min_delivery,
+            messages,
+            multi: args.multi,
+        })
+        .await;
+    }
+
     let mut x = args.out_path.clone();
     let mut avg = args.out_path.clone();
     // D belongs in the name. The adversary file already carries it, but these
@@ -261,23 +306,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         file,
         avg_file: file_avg,
         adv_file,
-        mesh: MeshConfig::new(
-            args.mesh_n,
-            args.mesh_n_low,
-            args.mesh_n_high,
-            args.gossip_factor,
-            args.gossip_lazy,
-        )
-        .with_conn_limits(args.conn_low, args.conn_high)
-        .with_plaintext(args.plaintext)
-        .with_heartbeat(args.heartbeat_secs)
-        .with_spawn_rate(args.spawn_per_sec)
-        .with_link_latency(args.link_latency_ms)
-        .with_stem(stem::StemConfig {
-            q: args.stem_fluff_probability,
-            epoch: tokio::time::Duration::from_secs(args.stem_epoch_secs),
-            embargo_mean: tokio::time::Duration::from_secs_f64(args.stem_embargo_secs.max(0.001)),
-        }),
+        mesh,
         adversary_fractions: args.adversary_fractions,
         coalition_sizes: args.coalition_sizes,
         adversary_trials: args.adversary_trials,
@@ -429,6 +458,19 @@ async fn start_experiment_series(args: StartExperimentSeriesArgs) -> Result<(), 
                 )
                 .collect();
 
+            // Shortest paths from every peer, once per run for all coalitions.
+            let timing_model =
+                TimingModel::calibrated(&outcome.topology, &outcome.all_peers, &outcome.observations);
+            let fit = timing_model.fit_from(outcome.source);
+            println!(
+                "Timing model: processing {:.0} us/hop, hop {:.0} us ({} relay steps); from the source: RMS residual {:.0} us, {} receipts unreachable",
+                timing_model.processing_us,
+                timing_model.hop_us,
+                timing_model.relay_steps,
+                fit.map_or(f64::NAN, |f| f.0),
+                fit.map_or(0, |f| f.1),
+            );
+
             for c in sizes {
                 // The stream must depend on the coalition size too, or every
                 // size restarts the same one and the curves are not independent.
@@ -444,9 +486,20 @@ async fn start_experiment_series(args: StartExperimentSeriesArgs) -> Result<(), 
                     args.adversary_trials,
                     &mut rng,
                 );
+                let timing_rates = timing::run_attack(
+                    &timing_model,
+                    &outcome.observations,
+                    outcome.source,
+                    c,
+                    args.adversary_trials,
+                    &mut rng,
+                );
                 let f_effective = c as f64 / n_peers as f64;
-                for estimator in Estimator::ALL {
-                    let rate = rates[&estimator];
+                let rows = Estimator::ALL
+                    .iter()
+                    .map(|e| (e.to_string(), rates[e]))
+                    .chain(TimingEstimator::ALL.iter().map(|e| (e.to_string(), timing_rates[e])));
+                for (estimator, rate) in rows {
                     println!("  attack c={c} (f={f_effective:.4}) {estimator}: {rate:.4}");
                     writeln!(
                         &args.adv_file,
