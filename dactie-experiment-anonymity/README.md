@@ -22,6 +22,57 @@ Nagle's algorithm off, since loopback acknowledgements do not see the simulated 
 the source's mesh peers received 70% of their first copies directly without the simulation and 100%
 with it.
 
+## Repeated messages and PeerID rotation
+`--messages-per-source M` switches to multi-message runs (`src/multi_message.rs`): the source member
+publishes M measurement messages per run, and a coalition that can link them to one unknown sender
+(same style, same topic) pools its evidence over them. The member spreads its messages round robin
+over k PeerIDs (`--peer-ids-per-source`, e.g. `1,3,5`; DACTIE allows at most 5 per registration
+epoch). One run serves every k: K PeerIDs, K the largest k, each publish M messages
+`--message-spacing-secs` apart, taking turns within a round, and for a given k the member owns the
+first k of them and its message j is round j / k of PeerID j % k. The first PeerID is the peer started
+last, the source of a single-message run; the others are random peers.
+
+After each m = 1..M messages the coalition names the sender with
+- `first_spy`: first-spy on message m alone, i.e. no pooling;
+- `first_spy_vote`: the first-spy guess named most often over messages 1..m (ties uniform);
+- `disclosure`: statistical disclosure over messages 1..m. Each message counts the relays its
+  observations name, by the stem observations if a colluder sat on the stem, else by the gossip ones
+  (as first-spy does), with one unit of weight per message shared among them. The guess is the peer
+  whose summed shares most exceed its share of the coalition's background receipts of the same kind;
+  peers report their background receipts in this mode for that baseline, so a peer that relays much
+  of everyone's traffic to the coalition is not named for it. Colluders are never named;
+- `random`: a uniform guess among the peers outside the coalition.
+
+Coalitions are drawn from the peers that are not the member's PeerIDs. `success_member` counts a
+guess that is any of the member's PeerIDs, `success_peer_id` only the PeerID that sent message m.
+
+The stem regime follows from the flags and is written to every row:
+
+| `regime` | Condition | Meaning |
+| --- | --- | --- |
+| `no_stem` | `--stem-fluff-probability 0` | |
+| `stem_fixed` | `--time` + M × spacing ≤ `--stem-epoch-secs` | every peer keeps its successors, role and routes for all M messages |
+| `stem_rotating` | spacing ≥ `--stem-epoch-secs` + 30 s | every peer draws new successors and a new role between two messages of a PeerID (30 s is the most epoch jitter) |
+| `stem_mixed` | anything else | a warning is printed |
+
+The output is `multi_message_<n_min>_<n_max>_<time>_D<D>_<interval>_q<q>_e<epoch>_s<spacing>_M<M>.csv`
+in `--out-path`, with one row per run, k, coalition size, m and estimator:
+```
+total_peers,mesh_n,mesh_n_low,mesh_n_high,stem_q,stem_epoch_secs,spacing_secs,regime,run,k,coalition_size,m,estimator,success_peer_id,success_member,delivery_min,trials
+```
+`delivery_min` is the smallest share of the other peers that received a measurement message of the
+run; filter on it as on `delivery_ratio`. Coalition sizes come from `--coalition-sizes` and
+`--adversary-fractions`, with `--adversary-trials` sampled coalitions each, as in single-message runs.
+The three regimes at 100 peers:
+```
+B=target/release/dactie-experiments
+common="-n 100 -N 100 -r 2 -D 12 --mesh-n-high 24 --messages-per-source 10 --peer-ids-per-source 1,3,5 --coalition-sizes 1,10 --adversary-fractions 0.05"
+$B $common --message-spacing-secs 5 -o out/no_stem/
+$B $common --stem-fluff-probability 0.2 --message-spacing-secs 5 -o out/stem_fixed/
+$B $common --stem-fluff-probability 0.2 --stem-epoch-secs 1 --message-spacing-secs 31 -o out/stem_rotating/
+```
+A run takes the start-up and `--time`, M × spacing of publishing, and 40 s of drain and pause.
+
 ## Configuration Parameters
 ```
 Usage: dactie-experiments [OPTIONS]

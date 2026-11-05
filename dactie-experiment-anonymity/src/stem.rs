@@ -77,6 +77,9 @@ pub(crate) struct StemState {
     originated: HashMap<u64, u8>,
 }
 
+/// Most random time added to an epoch, so peers do not all switch at once.
+pub(crate) const EPOCH_JITTER: Duration = Duration::from_secs(30);
+
 /// How often the source re-routes its own message after a loop or a failed
 /// hop before it leaves the message to the embargo.
 const OWN_RETRIES: u8 = 3;
@@ -107,7 +110,7 @@ impl StemState {
             self.top_up(connected, rng);
             return;
         }
-        let jitter = Duration::from_millis(rng.gen_range(0..=30_000));
+        let jitter = Duration::from_millis(rng.gen_range(0..=EPOCH_JITTER.as_millis() as u64));
         self.epoch_until = Some(now + self.config.epoch + jitter);
         self.diffuser = rng.gen_bool(self.config.q.clamp(0.0, 1.0));
         self.successors = connected.choose_multiple(rng, 2).copied().collect();
