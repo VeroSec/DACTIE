@@ -13,10 +13,6 @@ pub trait Signable {
 pub trait Verifiable {
     type Body;
     fn into_parts(self) -> (Self::Body, Option<Signature>);
-    /// The MemberID the sender attributed the message to, see thressig::sign_attributed.
-    fn attributed_to(&self) -> Option<usize> {
-        None
-    }
 }
 
 //A direct request to another peer without using gossipsub
@@ -194,14 +190,12 @@ impl Signable for ResponseMessage {
     }
 }
 
-// A Gossipsub message with group signature
+// A Gossipsub message with group signature. The signature is always anonymous (randomized),
+// so relays validate every message alike; an attribution travels inside the ciphertext.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct Message {
     pub body: MessageBody,
     pub signature: Signature,
-    // Set when the sender attributes the message to itself: the signature then covers
-    // (body, MemberID) and names that member, so the MemberID can be neither forged nor removed.
-    pub attributed_to: Option<usize>,
 }
 
 impl Verifiable for Message {
@@ -209,9 +203,16 @@ impl Verifiable for Message {
     fn into_parts(self) -> (Self::Body, Option<Signature>) {
         (self.body, Some(self.signature))
     }
-    fn attributed_to(&self) -> Option<usize> {
-        self.attributed_to
-    }
+}
+
+/// A sender's attribution of a message to its MemberID, e.g. to build reputation. It travels
+/// inside the ciphertext, so only those who can decrypt the message learn the MemberID. The
+/// signature is made with thressig::sign_attributed, whose sigma1 names the member, over the
+/// message's context (channel or group ID), topic, data and MemberID (see mls_wrapper).
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub struct Attribution {
+    pub member_id: usize,
+    pub signature: Signature,
 }
 
 /// The plaintext inside a [`MessageBody::BroadcastEnc`].
@@ -219,6 +220,15 @@ impl Verifiable for Message {
 pub struct BroadcastPlain {
     pub topic: String,
     pub data: Vec<u8>,
+    pub attribution: Option<Attribution>,
+}
+
+/// The plaintext of a private-group message, inside both encryption layers of a
+/// [`MessageBody::GroupEnc`].
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub struct GroupPlain {
+    pub data: Vec<u8>,
+    pub attribution: Option<Attribution>,
 }
 
 // DIfferent Gossipsub message types
@@ -264,11 +274,7 @@ impl Signable for MessageBody {
     type Output = Message;
 
     fn new(body: Self, signature: Signature) -> Self::Output {
-        Message {
-            body,
-            signature,
-            attributed_to: None,
-        }
+        Message { body, signature }
     }
 }
 

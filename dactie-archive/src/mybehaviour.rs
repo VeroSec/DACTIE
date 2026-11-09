@@ -608,12 +608,14 @@ impl MyBehaviour {
                     MessageBody::BroadcastEnc { channel, data, nonce } => {
                         // Archives are members of the common group, so they can
                         // read the topic; peers query them by channel only.
+                        // An attribution inside is verified but not stored: archives keep
+                        // CTI without the MemberID.
                         match my_open_mls.open_broadcast(&channel, data, nonce) {
-                            Ok((topic, plaintext)) => {
+                            Ok((topic, plaintext, _attributed_to)) => {
                                 Self::insert_broadcast(pool, &id.0, &channel, &topic, &plaintext).await?;
                                 println!("Got a Broadcast");
                             }
-                            Err(e @ MyOpenMLSError::ChannelMismatch { .. }) => {
+                            Err(e @ (MyOpenMLSError::ChannelMismatch { .. } | MyOpenMLSError::AttributionInvalid { .. })) => {
                                 log::warn!("Not storing broadcast from {peer_id}: {e}")
                             }
                             Err(e) => return Err(MLSError(e)),

@@ -1289,17 +1289,9 @@ impl MyOpenMls {
             .unwrap()
             .get_grpkey()
             .ok_or(GPKUndefinedError)?;
-        let attributed_to = message.attributed_to();
         let (body, signature) = message.into_parts();
         let signature = signature.ok_or(SignatureMissing)?;
-        let valid = match attributed_to {
-            None => thressig::verify(&signature, &grpkey, &body).is_ok(),
-            Some(id) => {
-                thressig::verify(&signature, &grpkey, &(&body, id)).is_ok()
-                    && thressig::signed_by(&signature, &grpkey, id)
-            }
-        };
-        if !valid {
+        if thressig::verify(&signature, &grpkey, &body).is_err() {
             return Err(SignatureInvalid {
                 signature: Box::new(signature),
             });
@@ -1307,22 +1299,24 @@ impl MyOpenMls {
         Ok((body, signature))
     }
 
-    /// Verifies a gossip message and returns the MemberID it is attributed to, if any.
+    /// Verifies the anonymous group signature of a gossip message. Relays call this before
+    /// forwarding; an attribution, if any, is checked after decryption (open_broadcast, open_group).
     pub fn verify_message(
         &self,
         message: shared_structs::Message,
-    ) -> Result<(shared_structs::MessageBody, Signature, Option<usize>), MyOpenMLSError> {
-        let attributed_to = message.attributed_to;
-        let (body, signature) = self.verify(message)?;
-        Ok((body, signature, attributed_to))
+    ) -> Result<(shared_structs::MessageBody, Signature), MyOpenMLSError> {
+        self.verify(message)
     }
 
-    /// Signs a gossip message so that receivers see this member's MemberID.
-    pub fn sign_attributed(
+    /// Attributes a message to this member: an attributed signature over the message's context
+    /// (channel or group ID), topic and data, for the plaintext of the message.
+    fn attribute(
         &self,
-        body: shared_structs::MessageBody,
-    ) -> Result<shared_structs::Message, MyOpenMLSError> {
-        let (grpkey, memkey, id) = {
+        context: &[u8],
+        topic: &str,
+        data: &[u8],
+    ) -> Result<shared_structs::Attribution, MyOpenMLSError> {
+        let (grpkey, memkey, member_id) = {
             let key_store = self.key_store.lock().unwrap();
             (
                 key_store.get_grpkey().ok_or(GPKUndefinedError)?,
@@ -1330,12 +1324,36 @@ impl MyOpenMls {
                 key_store.get_id().ok_or(IDUndefinedError)?,
             )
         };
-        let signature = thressig::sign_attributed(&memkey, &grpkey, &(&body, id))?;
-        Ok(shared_structs::Message {
-            body,
-            signature,
-            attributed_to: Some(id),
-        })
+        let signature = thressig::sign_attributed(
+            &memkey,
+            &grpkey,
+            &attributed_content(context, topic, data, member_id),
+        )?;
+        Ok(shared_structs::Attribution { member_id, signature })
+    }
+
+    /// Checks an attribution found inside a decrypted message and returns its MemberID.
+    /// An attribution that does not verify, or was made for another channel or group, is
+    /// rejected, so a MemberID can be neither forged nor moved to another message.
+    fn check_attribution(
+        &self,
+        context: &[u8],
+        topic: &str,
+        data: &[u8],
+        attribution: Option<shared_structs::Attribution>,
+    ) -> Result<Option<usize>, MyOpenMLSError> {
+        let Some(shared_structs::Attribution { member_id, signature }) = attribution else {
+            return Ok(None);
+        };
+        let grpkey = self.key_store.lock().unwrap().get_grpkey().ok_or(GPKUndefinedError)?;
+        let content = attributed_content(context, topic, data, member_id);
+        if thressig::verify(&signature, &grpkey, &content).is_ok()
+            && thressig::signed_by(&signature, &grpkey, member_id)
+        {
+            Ok(Some(member_id))
+        } else {
+            Err(AttributionInvalid { member_id })
+        }
     }
 
     pub fn verify_enc_share(
@@ -1501,15 +1519,21 @@ impl MyOpenMls {
 
     /// Encrypts a broadcast for the common group, with the topic inside the
     /// ciphertext and only its channel in clear.
+    /// With `attributed`, the plaintext also carries this member's attribution (see attribute).
     pub fn seal_broadcast(
         &self,
         topic: &str,
         data: Vec<u8>,
+        attributed: bool,
     ) -> Result<shared_structs::MessageBody, MyOpenMLSError> {
         let channel = channel_of(topic.as_bytes());
+        let attribution = match attributed {
+            true => Some(self.attribute(channel.as_bytes(), topic, &data)?),
+            false => None,
+        };
         let (_, ciphertext, nonce) = self.encrypt_with_group_key(
             self.get_common_group_id()?,
-            encode_broadcast(topic, data)?,
+            encode_broadcast(topic, data, attribution)?,
         )?;
         Ok(shared_structs::MessageBody::BroadcastEnc {
             channel,
@@ -1518,15 +1542,19 @@ impl MyOpenMls {
         })
     }
 
-    /// Decrypts a broadcast that arrived on `channel` and returns its topic and
-    /// data. Fails if the topic inside does not belong to that channel.
+    /// Decrypts a broadcast that arrived on `channel` and returns its topic, data and, for an
+    /// attributed message, the verified MemberID. Fails if the topic inside does not belong to
+    /// that channel, or if the attribution does not verify.
     pub fn open_broadcast(
         &self,
         channel: &str,
         ciphertext: Vec<u8>,
         nonce: Vec<u8>,
-    ) -> Result<(String, Vec<u8>), MyOpenMLSError> {
-        decode_broadcast(channel, &self.decrypt_broadcast(ciphertext, nonce)?)
+    ) -> Result<(String, Vec<u8>, Option<usize>), MyOpenMLSError> {
+        let (topic, data, attribution) =
+            decode_broadcast(channel, &self.decrypt_broadcast(ciphertext, nonce)?)?;
+        let member = self.check_attribution(channel.as_bytes(), &topic, &data, attribution)?;
+        Ok((topic, data, member))
     }
 
     /// Encrypts a message for a private group, nested inside the common group: the private
@@ -1534,13 +1562,22 @@ impl MyOpenMls {
     /// A peer that the AA removed from the common group lacks the common group's new key, so
     /// it can neither send nor read private-group messages, even while it is still a member of
     /// the private group.
+    /// With `attributed`, the innermost plaintext also carries this member's attribution, so
+    /// only members of the private group learn the MemberID.
     pub fn seal_group(
         &self,
         group_number: usize,
         data: Vec<u8>,
+        attributed: bool,
     ) -> Result<shared_structs::MessageBody, MyOpenMLSError> {
-        let (group_id, inner, inner_nonce) =
-            self.encrypt_with_group_key(self.get_group_id(group_number)?, data)?;
+        let group_id = self.get_group_id(group_number)?;
+        let attribution = match attributed {
+            true => Some(self.attribute(group_id.as_slice(), "", &data)?),
+            false => None,
+        };
+        let plain = bincode::serialize(&shared_structs::GroupPlain { data, attribution })
+            .map_err(|e| SerializationError(e.to_string()))?;
+        let (group_id, inner, inner_nonce) = self.encrypt_with_group_key(group_id, plain)?;
         let layer = bincode::serialize(&(inner, inner_nonce))
             .map_err(|e| SerializationError(e.to_string()))?;
         let (_, enc_data, nonce) = self.encrypt_with_group_key(self.get_common_group_id()?, layer)?;
@@ -1568,13 +1605,14 @@ impl MyOpenMls {
     }
 
     /// Decrypts a private-group message: first the common group's layer, then the private
-    /// group's. Returns the group number; GroupNotAvailable if this peer is not a member.
+    /// group's. Returns the group number, the data and, for an attributed message, the verified
+    /// MemberID; GroupNotAvailable if this peer is not a member.
     pub fn open_group(
         &self,
         group_id: Vec<u8>,
         enc_data: Vec<u8>,
         nonce: Vec<u8>,
-    ) -> Result<(Option<usize>, Vec<u8>), MyOpenMLSError> {
+    ) -> Result<(Option<usize>, Vec<u8>, Option<usize>), MyOpenMLSError> {
         if !self
             .group_store
             .lock()
@@ -1584,7 +1622,11 @@ impl MyOpenMls {
             return Err(GroupNotAvailable(hex::encode(&group_id)));
         }
         let (inner, inner_nonce) = self.unwrap_group(enc_data, nonce)?;
-        self.decrypt_with_group_key(group_id, inner, inner_nonce)
+        let (group_number, plain) = self.decrypt_with_group_key(group_id.clone(), inner, inner_nonce)?;
+        let shared_structs::GroupPlain { data, attribution } =
+            bincode::deserialize(&plain).map_err(|e| SerializationError(e.to_string()))?;
+        let member = self.check_attribution(&group_id, "", &data, attribution)?;
+        Ok((group_number, data, member))
     }
 
     //Returns Channel, if not already subscribed
@@ -1744,18 +1786,38 @@ pub fn channel_of(topic: &[u8]) -> String {
     format!("channel_{}", hasher.finish() % NUM_CHANNELS)
 }
 
-/// The plaintext of a broadcast: topic and data together.
-pub fn encode_broadcast(topic: &str, data: Vec<u8>) -> Result<Vec<u8>, MyOpenMLSError> {
+/// What an attribution signs: the message's context (channel or group ID), topic (empty for
+/// private groups), data and the MemberID, with a label that keeps it apart from all other
+/// group signatures.
+fn attributed_content<'a>(
+    context: &'a [u8],
+    topic: &'a str,
+    data: &'a [u8],
+    member_id: usize,
+) -> (&'static str, &'a [u8], &'a str, &'a [u8], usize) {
+    ("dactie/attribution/1", context, topic, data, member_id)
+}
+
+/// The plaintext of a broadcast: topic, data and an optional attribution together.
+pub fn encode_broadcast(
+    topic: &str,
+    data: Vec<u8>,
+    attribution: Option<shared_structs::Attribution>,
+) -> Result<Vec<u8>, MyOpenMLSError> {
     bincode::serialize(&shared_structs::BroadcastPlain {
         topic: topic.to_owned(),
         data,
+        attribution,
     })
     .map_err(|e| MyOpenMLSError::SerializationError(e.to_string()))
 }
 
 /// Unpacks a decrypted broadcast that arrived on `channel`. A topic that does
 /// not belong to that channel is rejected: its sender bypassed `channel_of`.
-pub fn decode_broadcast(channel: &str, plain: &[u8]) -> Result<(String, Vec<u8>), MyOpenMLSError> {
+pub fn decode_broadcast(
+    channel: &str,
+    plain: &[u8],
+) -> Result<(String, Vec<u8>, Option<shared_structs::Attribution>), MyOpenMLSError> {
     let inner: shared_structs::BroadcastPlain = bincode::deserialize(plain)
         .map_err(|e| MyOpenMLSError::SerializationError(e.to_string()))?;
     if channel_of(inner.topic.as_bytes()) != channel {
@@ -1764,7 +1826,7 @@ pub fn decode_broadcast(channel: &str, plain: &[u8]) -> Result<(String, Vec<u8>)
             channel: channel.to_owned(),
         });
     }
-    Ok((inner.topic, inner.data))
+    Ok((inner.topic, inner.data, inner.attribution))
 }
 
 #[derive(Debug, Error)]
@@ -1859,6 +1921,8 @@ pub enum MyOpenMLSError {
     KeyMaterialWriteError(String),
     #[error("Invalid KeyPackage: {0}")]
     InvalidKeyPackage(String),
+    #[error("The message's attribution to member {member_id} does not verify")]
+    AttributionInvalid { member_id: usize },
 }
 
 #[cfg(test)]
@@ -1869,8 +1933,9 @@ mod broadcast_tests {
     #[test]
     fn broadcast_plaintext_round_trips() {
         let channel = channel_of(b"Perforce Helix Core");
-        let plain = encode_broadcast("Perforce Helix Core", b"IOC".to_vec()).unwrap();
-        let (topic, data) = decode_broadcast(&channel, &plain).unwrap();
+        let plain = encode_broadcast("Perforce Helix Core", b"IOC".to_vec(), None).unwrap();
+        let (topic, data, attribution) = decode_broadcast(&channel, &plain).unwrap();
+        assert_eq!(attribution, None);
         assert_eq!(topic, "Perforce Helix Core");
         assert_eq!(data, b"IOC");
     }
@@ -1878,7 +1943,7 @@ mod broadcast_tests {
     /// A topic that does not belong to the channel it arrived on is rejected.
     #[test]
     fn topic_outside_its_channel_is_rejected() {
-        let plain = encode_broadcast("3", b"x".to_vec()).unwrap();
+        let plain = encode_broadcast("3", b"x".to_vec(), None).unwrap();
         assert_eq!(channel_of(b"3"), "channel_3");
         assert!(matches!(
             decode_broadcast("channel_4", &plain),
@@ -2047,11 +2112,49 @@ mod nested_group_tests {
     }
 
     fn node(name: &str) -> Node {
+        node_with(name, StoredKeyMaterial::new(None, None, None, None))
+    }
+
+    /// A group key and the member keys of members 1 and 2, issued by the AA as in a join
+    /// with two archives and threshold 2.
+    fn member_keys() -> (thressig::structs::Grpkey, thressig::structs::Memkey, thressig::structs::Memkey) {
+        let (grpkey, mgrkey) = thressig::setup();
+        let pks: Vec<_> = (0..2).map(|_| thressig::elgamal_keygen(&grpkey.g_tilde).1).collect();
+        let mut gml = HashMap::new();
+        let mut issue = |id: usize| {
+            let n = thressig::join_mgr1();
+            let (g_sk, h_sk, pi1, pi2, pi3, sk, enc_shares, commits) =
+                thressig::join_mem1(id, n.clone(), &grpkey, 2, &pks);
+            let partial = thressig::join_mgr2(
+                id,
+                thressig::JoinMgr2Args {
+                    gml: &mut gml,
+                    name: format!("member {id}"),
+                    mgrkey: &mgrkey,
+                    grpkey: &grpkey,
+                    n: &n,
+                    g_sk: &g_sk,
+                    h_sk: &h_sk,
+                    opener_pubkeys: &pks,
+                    commits: &commits,
+                    pi1,
+                    pi2,
+                    pi3,
+                    enc_shares: &enc_shares,
+                },
+            )
+            .unwrap();
+            thressig::join_mem2(&sk, &partial)
+        };
+        let (x, y) = (issue(1), issue(2));
+        (grpkey, x, y)
+    }
+
+    fn node_with(name: &str, key_store: StoredKeyMaterial) -> Node {
         let dir = std::env::temp_dir().join(format!("dactie-nested-{}-{name}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         let (commit_tx, commit_rx) = mpsc::unbounded_channel();
         let (instruction_tx, instruction_rx) = mpsc::unbounded_channel();
-        let key_store = StoredKeyMaterial::new(None, None, None, None);
         let mls = MyOpenMls::new(key_store, commit_tx, instruction_tx, dir, PeerId::random()).unwrap();
         Node {
             mls,
@@ -2073,17 +2176,23 @@ mod nested_group_tests {
     }
 
     fn send(n: &Node, group: &GroupId, text: &[u8]) -> (Vec<u8>, Vec<u8>, Vec<u8>) {
-        match n.mls.seal_group(number(n, group), text.to_vec()).unwrap() {
+        seal(n, group, text, false)
+    }
+
+    fn seal(n: &Node, group: &GroupId, text: &[u8], attributed: bool) -> (Vec<u8>, Vec<u8>, Vec<u8>) {
+        match n.mls.seal_group(number(n, group), text.to_vec(), attributed).unwrap() {
             MessageBody::GroupEnc { group_id, enc_data, nonce } => (group_id, enc_data, nonce),
             _ => unreachable!(),
         }
     }
 
-    /// The AA with a common group of x and y, and a private group that x owns, with y.
+    /// The AA with a common group of x (member 1) and y (member 2), and a private group that x
+    /// owns, with y. x and y hold member keys, so they can sign attributions.
     fn setup() -> (Node, Node, Node, GroupId, GroupId) {
-        let aa = node("aa");
-        let mut x = node("x");
-        let y = node("y");
+        let (grpkey, x_key, y_key) = member_keys();
+        let aa = node_with("aa", StoredKeyMaterial::new(Some(grpkey.clone()), None, None, None));
+        let mut x = node_with("x", StoredKeyMaterial::new(Some(grpkey.clone()), Some(x_key), None, Some(1)));
+        let y = node_with("y", StoredKeyMaterial::new(Some(grpkey), Some(y_key), None, Some(2)));
         let number = aa.mls.create_empty_mls_group().unwrap();
         aa.mls.move_to_common(number);
         let common = aa.mls.get_common_group_id().unwrap();
@@ -2112,7 +2221,7 @@ mod nested_group_tests {
     fn private_group_messages_need_the_common_group_key() {
         let (aa, x, y, common, private) = setup();
         let (g, d, n) = send(&y, &private, b"ioc");
-        assert_eq!(x.mls.open_group(g, d, n).unwrap(), (Some(number(&x, &private)), b"ioc".to_vec()));
+        assert_eq!(x.mls.open_group(g, d, n).unwrap(), (Some(number(&x, &private)), b"ioc".to_vec(), None));
 
         let (commit, _) = aa.mls.remove_group_members(common.clone(), &[id(&y)]).unwrap();
         x.mls.handle_commit(common.to_vec(), commit).unwrap();
@@ -2165,5 +2274,54 @@ mod nested_group_tests {
         assert_eq!(group_id, private);
         let (_, _, self_removed) = y.mls.handle_commit(private.to_vec(), commit).unwrap();
         assert!(self_removed);
+    }
+
+    /// An attributed broadcast names its member only inside the ciphertext: the gossip message
+    /// carries an anonymous signature, and a reader of the common group gets the MemberID.
+    #[test]
+    fn attributed_broadcast_names_member_inside_ciphertext() {
+        let (aa, x, y, _common, _private) = setup();
+        let body = x.mls.seal_broadcast("firewall", b"ioc".to_vec(), true).unwrap();
+        let message = x.mls.sign(body).unwrap();
+        let grpkey = aa.mls.key_store.lock().unwrap().get_grpkey().unwrap();
+        assert!(!thressig::signed_by(&message.signature, &grpkey, 1), "outer signature is anonymous");
+        let (body, _) = y.mls.verify_message(message).unwrap();
+        let MessageBody::BroadcastEnc { channel, data, nonce } = body else { unreachable!() };
+        let opened = y.mls.open_broadcast(&channel, data, nonce).unwrap();
+        assert_eq!(opened, ("firewall".to_string(), b"ioc".to_vec(), Some(1)));
+
+        let MessageBody::BroadcastEnc { channel, data, nonce } =
+            x.mls.seal_broadcast("firewall", b"ioc".to_vec(), false).unwrap()
+        else {
+            unreachable!()
+        };
+        assert_eq!(y.mls.open_broadcast(&channel, data, nonce).unwrap().2, None);
+    }
+
+    /// An attribution cannot be moved to other data or claimed for another member.
+    #[test]
+    fn forged_attribution_is_rejected() {
+        let (_aa, x, y, common, _private) = setup();
+        let channel = channel_of(b"firewall");
+        let real = x.mls.attribute(channel.as_bytes(), "firewall", b"ioc").unwrap();
+        let open = |attribution: shared_structs::Attribution, data: &[u8]| {
+            let plain = encode_broadcast("firewall", data.to_vec(), Some(attribution)).unwrap();
+            let (_, ciphertext, nonce) = x.mls.encrypt_with_group_key(common.clone(), plain).unwrap();
+            y.mls.open_broadcast(&channel, ciphertext, nonce)
+        };
+        assert_eq!(open(real.clone(), b"ioc").unwrap().2, Some(1));
+        assert!(matches!(open(real.clone(), b"other ioc"), Err(AttributionInvalid { member_id: 1 })));
+        let claimed = shared_structs::Attribution { member_id: 2, ..real };
+        assert!(matches!(open(claimed, b"ioc"), Err(AttributionInvalid { member_id: 2 })));
+    }
+
+    /// In a private group, the MemberID is inside both layers: group members read it, while
+    /// common-group members outside the group, such as archives, cannot.
+    #[test]
+    fn attributed_group_message_names_member_to_group_only() {
+        let (aa, x, y, _common, private) = setup();
+        let (g, d, n) = seal(&x, &private, b"ioc", true);
+        assert_eq!(y.mls.open_group(g.clone(), d.clone(), n.clone()).unwrap(), (Some(number(&y, &private)), b"ioc".to_vec(), Some(1)));
+        assert!(matches!(aa.mls.open_group(g, d, n), Err(GroupNotAvailable(_))));
     }
 }

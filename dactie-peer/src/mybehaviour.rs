@@ -346,8 +346,9 @@ impl MyBehaviour {
         self.send_signed(body, my_open_mls, false)
     }
 
-    /// Encrypts and publishes a message; `attributed` signs it so that receivers see this
-    /// member's MemberID.
+    /// Encrypts and publishes a message. `attributed` puts this member's attribution inside the
+    /// ciphertext, so that the receivers who can decrypt it see the MemberID; the gossip
+    /// message itself always carries an anonymous signature.
     fn send_signed(
         &mut self,
         body: MessageBody,
@@ -361,11 +362,11 @@ impl MyBehaviour {
             && stem_relay::state().is_on();
         let (body, channel) = match body.clone() {
             MessageBody::Broadcast { ref topic, data } => (
-                self.send_to_topic(topic, data, my_open_mls)?,
+                self.send_to_topic(topic, data, my_open_mls, attributed)?,
                 my_open_mls.get_channel(topic.as_bytes().to_vec()),
             ),
             MessageBody::Group { group_number, data } => {
-                let (body, group_id) = self.send_to_group(my_open_mls, group_number, data)?;
+                let (body, group_id) = self.send_to_group(my_open_mls, group_number, data, attributed)?;
                 (body, my_open_mls.get_channel(group_id))
             }
             MessageBody::Commit { group_id, .. } => (body, my_open_mls.get_channel(group_id)),
@@ -377,11 +378,7 @@ impl MyBehaviour {
             }
         };
 
-        let message = if attributed {
-            my_open_mls.sign_attributed(body)?
-        } else {
-            my_open_mls.sign(body)?
-        };
+        let message = my_open_mls.sign(body)?;
 
         let to_send =
             bincode::serialize(&message).map_err(|e| SerializationError(e.to_string()))?;
@@ -537,10 +534,10 @@ impl MyBehaviour {
         let Ok(gossip) = bincode::deserialize::<Message>(&payload) else {
             return Ok(());
         };
-        let Ok((body, signature, attributed_to)) = my_open_mls.verify_message(gossip) else {
+        let Ok((body, signature)) = my_open_mls.verify_message(gossip) else {
             return Ok(());
         };
-        self.deliver(notification_tx, my_open_mls, body, signature, attributed_to, from)
+        self.deliver(notification_tx, my_open_mls, body, signature, from)
     }
 
     /// A stem message arrived from `from`.
@@ -664,11 +661,12 @@ impl MyBehaviour {
         topic: &str,
         message: Vec<u8>,
         my_open_mls: &MyOpenMls,
+        attributed: bool,
     ) -> Result<MessageBody, AbstSwarmError> {
         log::debug!("Broadcasting: {:?}", message.clone());
 
-        // The topic goes inside the ciphertext; only its channel stays in clear.
-        Ok(my_open_mls.seal_broadcast(topic, message)?)
+        // Topic and attribution go inside the ciphertext; only the channel stays in clear.
+        Ok(my_open_mls.seal_broadcast(topic, message, attributed)?)
     }
 
     fn send_to_group(
@@ -676,10 +674,11 @@ impl MyBehaviour {
         my_open_mls: &MyOpenMls,
         group_number: usize,
         data: Vec<u8>,
+        attributed: bool,
     ) -> Result<(MessageBody, Vec<u8>), AbstSwarmError> {
         // Nested inside the common group's encryption, see MyOpenMls::seal_group.
         let group_id = my_open_mls.get_group_id(group_number)?.to_vec();
-        Ok((my_open_mls.seal_group(group_number, data)?, group_id))
+        Ok((my_open_mls.seal_group(group_number, data, attributed)?, group_id))
     }
 
     // Get key Pakcage from other Peers
@@ -1162,7 +1161,7 @@ impl MyBehaviour {
                         return Ok(());
                     }
                 }
-                let (message_body, signature, attributed_to) = match my_open_mls.verify_message(message) {
+                let (message_body, signature) = match my_open_mls.verify_message(message) {
                     Ok(message) => {
                         self.gossipsub
                             .report_message_validation_result(
@@ -1197,7 +1196,7 @@ impl MyBehaviour {
                     }
                 };
 
-                self.deliver(notification_tx, my_open_mls, message_body, signature, attributed_to, peer_id)?;
+                self.deliver(notification_tx, my_open_mls, message_body, signature, peer_id)?;
             }
             _ => log::debug!("Received Pubsub event:  {event:?}"),
         }
@@ -1214,7 +1213,6 @@ impl MyBehaviour {
         my_open_mls: &MyOpenMls,
         message_body: MessageBody,
         signature: thressig::structs::Signature,
-        attributed_to: Option<usize>,
         peer_id: PeerId,
     ) -> Result<(), AbstSwarmError> {
         match message_body {
@@ -1227,7 +1225,7 @@ impl MyBehaviour {
                 // The common group's layer first, then the private group's (see seal_group).
                 let decrypt_res = my_open_mls.open_group(group_id, data, nonce);
                 match decrypt_res {
-                    Ok((group_number_option, data)) => {
+                    Ok((group_number_option, data, attributed_to)) => {
                         let group_number = group_number_option.ok_or(GroupNotAvailable("".to_string()))?;
                         let message_body = MessageBody::Group {group_number, data};
                         Self::notify(notification_tx, Notification::Data{propagation_source:peer_id, message_body, signature:signature.to_bytes(), attributed_to})
@@ -1235,6 +1233,7 @@ impl MyBehaviour {
                     Err(e) => match e {
                         GroupNotAvailable(_) => {}, //Do nothing, because not my group
                         CommonLayerError => log::info!("Dropping a private-group message from {peer_id}: {}", CommonLayerError),
+                        e @ MyOpenMLSError::AttributionInvalid { .. } => log::warn!("Dropping a private-group message from {peer_id}: {e}"),
                         MyOpenMLSError::SignatureInvalid{signature} => log::error!("Received message with invalid Signature: {}", hex::encode(signature.as_ref().to_bytes())),
                         SerializationError(e) => log::error!("Received message but could not decode: {e}"),
                         _ => log::error!("Received a gossipsub message, which caused an unhandeled error: {e}"),
@@ -1246,9 +1245,9 @@ impl MyBehaviour {
                 // Handle public message. The topic is inside the
                 // ciphertext: decrypt every broadcast on a subscribed
                 // channel and filter by topic here.
-                let (topic, data) = match my_open_mls.open_broadcast(&channel, data, nonce) {
+                let (topic, data, attributed_to) = match my_open_mls.open_broadcast(&channel, data, nonce) {
                     Ok(opened) => opened,
-                    Err(e @ MyOpenMLSError::ChannelMismatch { .. }) => {
+                    Err(e @ (MyOpenMLSError::ChannelMismatch { .. } | MyOpenMLSError::AttributionInvalid { .. })) => {
                         log::warn!("Dropping broadcast from {peer_id}: {e}");
                         return Ok(());
                     }

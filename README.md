@@ -73,7 +73,7 @@ A sharing peer stays registered until the end of the epoch of its slot. To keep 
 ### Exchange a public message:
 1. `broad <topic> <msg>`
 
-Messages are anonymous. To have one attributed to your member, e.g. to build reputation, send it with `attr_broad <topic> <msg>` (or `attr_enc_broad <group_number> <msg>` in a private group). Its signature proves the MemberID, and receivers print `Attributed to member: <MemberID>` instead of `Sender: anonymous`.
+Messages are anonymous. To have one attributed to your member, e.g. to build reputation, send it with `attr_broad <topic> <msg>` (or `attr_enc_broad <group_number> <msg>` in a private group). The MemberID and a signature proving it travel inside the encryption, so only those who can read the message see it; they print `Attributed to member: <MemberID>` instead of `Sender: anonymous`.
 
 ### Create a group and exchange a private message(all from one Peer):
 1. `req_kps <peer_id_bootstrap_peer>`
