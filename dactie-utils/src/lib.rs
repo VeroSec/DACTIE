@@ -1,5 +1,6 @@
 pub mod admission;
 pub mod conn_cap;
+pub mod dedup;
 pub mod key_store;
 pub mod mls_wrapper;
 pub mod net;
