@@ -2,6 +2,7 @@ use crate::mybehaviour::MyBehaviourError::PubSubBehaviourError;
 use async_trait::async_trait;
 use dactie_utils::net::{is_unroutable_addr, MESH_N, MESH_N_HIGH, MESH_N_LOW};
 use dactie_utils::admission;
+use dactie_utils::{dedup, stem};
 use dactie_utils::shared_structs::*;
 use libp2p::futures::TryStreamExt;
 use libp2p::gossipsub::{IdentTopic, MessageAcceptance};
@@ -558,6 +559,15 @@ impl MyBehaviour {
                 message_id: id,
                 message,
             } => {
+                // A copy GossipSub's duplicate cache has already forgotten is not
+                // stored or forwarded again (see dactie_utils::dedup).
+                if !dedup::first_time(stem::message_id(&message.data)) {
+                    log::debug!("Ignoring a late duplicate {id} from {peer_id}");
+                    self.gossipsub
+                        .report_message_validation_result(&id, &peer_id, MessageAcceptance::Ignore)
+                        .map_err(|_| MessageValidationError)?;
+                    return Ok(());
+                }
                 let arrived_on = message.topic.clone();
                 let message: Message = bincode::deserialize(&message.data)
                     .map_err(|e| SerializationError(e.to_string()))?;

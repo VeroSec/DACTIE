@@ -1,5 +1,6 @@
 use crate::mybehaviour::MyBehaviourError::PubSubBehaviourError;
 use async_trait::async_trait;
+use dactie_utils::dedup;
 use dactie_utils::net::{is_unroutable_addr, MESH_N, MESH_N_HIGH, MESH_N_LOW};
 use crate::join_relay;
 use crate::outstanding::{self, Asked};
@@ -391,6 +392,8 @@ impl MyBehaviour {
     /// Publishes a signed gossip message on a channel.
     fn publish_to(&mut self, channel: &str, payload: Vec<u8>) -> Result<(), AbstSwarmError> {
         log::info!("Publishing gossipsub payload: {} bytes", payload.len());
+        // This peer's own message coming back late is not taken for a new one.
+        dedup::first_time(stem::message_id(&payload));
         if let Err(error) = self
             .gossipsub
             .publish(IdentTopic::new(channel.to_owned()), payload)
@@ -1138,10 +1141,19 @@ impl MyBehaviour {
             } => {
                 // Log raw gossipsub payload size (on-application payload pre-libp2p overhead)
                 log::info!("Received gossipsub payload: {} bytes from {peer_id}", message.data.len());
+                let stem_id = stem::message_id(&message.data);
+                // A copy GossipSub's duplicate cache has already forgotten, e.g.
+                // one an archive forwards late: not delivered or forwarded again.
+                if !dedup::first_time(stem_id) {
+                    log::debug!("Ignoring a late duplicate {id} from {peer_id}");
+                    self.gossipsub
+                        .report_message_validation_result(&id, &peer_id, MessageAcceptance::Ignore)
+                        .map_err(|_| MessageValidationError)?;
+                    return Ok(());
+                }
                 // A message that went out through the stem is now in GossipSub:
                 // the embargo is no longer needed, and this peer's own message
                 // coming back is forwarded but not shown again.
-                let stem_id = stem::message_id(&message.data);
                 let own = {
                     let mut state = stem_relay::state();
                     state.in_gossip(stem_id);
