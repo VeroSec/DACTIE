@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="595" viewBox="0 0 900 595"
+     font-family="Liberation Sans, Arial, Helvetica, sans-serif" font-size="15">
+  <defs>
+    <marker id="ao" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="4" markerHeight="4" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#d79b00"/></marker>
+    <marker id="ab" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="4.5" markerHeight="4.5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#3b6db3"/></marker>
+    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="4" markerHeight="4" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#b85450"/></marker>
+    <marker id="ag" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="4.5" markerHeight="4.5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#555"/></marker>
+  </defs>
+  <rect width="900" height="595" fill="#fff"/>
+  <line x1="120" y1="250" x2="250" y2="165" stroke="#bbb" stroke-width="1.5"/>
+  <line x1="120" y1="250" x2="255" y2="350" stroke="#bbb" stroke-width="1.5"/>
+  <line x1="120" y1="250" x2="115" y2="95" stroke="#bbb" stroke-width="1.5"/>
+  <line x1="250" y1="165" x2="115" y2="95" stroke="#bbb" stroke-width="1.5"/>
+  <line x1="250" y1="165" x2="400" y2="110" stroke="#bbb" stroke-width="1.5"/>
+  <line x1="250" y1="165" x2="410" y2="270" stroke="#bbb" stroke-width="1.5"/>
+  <line x1="255" y1="350" x2="410" y2="270" stroke="#bbb" stroke-width="1.5"/>
+  <line x1="255" y1="350" x2="390" y2="410" stroke="#bbb" stroke-width="1.5"/>
+  <line x1="255" y1="350" x2="120" y2="400" stroke="#bbb" stroke-width="1.5"/>
+  <line x1="120" y1="400" x2="390" y2="410" stroke="#bbb" stroke-width="1.5"/>
+  <line x1="400" y1="110" x2="540" y2="60" stroke="#bbb" stroke-width="1.5"/>
+  <line x1="400" y1="110" x2="560" y2="205" stroke="#bbb" stroke-width="1.5"/>
+  <line x1="400" y1="110" x2="410" y2="270" stroke="#bbb" stroke-width="1.5"/>
+  <line x1="115" y1="95" x2="400" y2="110" stroke="#bbb" stroke-width="1.5"/>
+  <line x1="540" y1="60" x2="700" y2="95" stroke="#bbb" stroke-width="1.5"/>
+  <line x1="540" y1="60" x2="560" y2="205" stroke="#bbb" stroke-width="1.5"/>
+  <line x1="560" y1="205" x2="700" y2="95" stroke="#bbb" stroke-width="1.5"/>
+  <line x1="560" y1="205" x2="705" y2="285" stroke="#bbb" stroke-width="1.5"/>
+  <line x1="560" y1="205" x2="410" y2="270" stroke="#bbb" stroke-width="1.5"/>
+  <line x1="410" y1="270" x2="560" y2="365" stroke="#bbb" stroke-width="1.5"/>
+  <line x1="410" y1="270" x2="390" y2="410" stroke="#bbb" stroke-width="1.5"/>
+  <line x1="700" y1="95" x2="820" y2="185" stroke="#bbb" stroke-width="1.5"/>
+  <line x1="705" y1="285" x2="820" y2="185" stroke="#bbb" stroke-width="1.5"/>
+  <line x1="705" y1="285" x2="825" y2="360" stroke="#bbb" stroke-width="1.5"/>
+  <line x1="705" y1="285" x2="560" y2="365" stroke="#bbb" stroke-width="1.5"/>
+  <line x1="560" y1="365" x2="700" y2="420" stroke="#bbb" stroke-width="1.5"/>
+  <line x1="825" y1="360" x2="700" y2="420" stroke="#bbb" stroke-width="1.5"/>
+  <line x1="390" y1="410" x2="560" y2="365" stroke="#bbb" stroke-width="1.5"/>
+  <line x1="820" y1="185" x2="825" y2="360" stroke="#bbb" stroke-width="1.5"/>
+  <line x1="300" y1="480" x2="390" y2="410" stroke="#bbb" stroke-width="1.5"/>
+  <line x1="300" y1="480" x2="255" y2="350" stroke="#bbb" stroke-width="1.5"/>
+  <line x1="300" y1="480" x2="120" y2="400" stroke="#bbb" stroke-width="1.5"/>
+  <line x1="625" y1="485" x2="700" y2="420" stroke="#bbb" stroke-width="1.5"/>
+  <line x1="625" y1="485" x2="560" y2="365" stroke="#bbb" stroke-width="1.5"/>
+  <line x1="840" y1="470" x2="825" y2="360" stroke="#bbb" stroke-width="1.5"/>
+  <line x1="840" y1="470" x2="700" y2="420" stroke="#bbb" stroke-width="1.5"/>
+  <line x1="422" y1="109" x2="678" y2="96" stroke="#999" stroke-width="1.5" stroke-dasharray="3,4"/>
+  <line x1="701" y1="117" x2="704" y2="263" stroke="#999" stroke-width="1.5" stroke-dasharray="3,4"/>
+  <line x1="412" y1="411" x2="678" y2="419" stroke="#999" stroke-width="1.5" stroke-dasharray="3,4"/>
+  <line x1="142" y1="252" x2="388" y2="268" stroke="#999" stroke-width="1.5" stroke-dasharray="3,4"/>
+  <line x1="141.8" y1="235.8" x2="228.2" y2="179.2" stroke="#d79b00" stroke-width="3" stroke-dasharray="8,5" marker-end="url(#ao)"/>
+  <line x1="274.4" y1="156.0" x2="375.6" y2="119.0" stroke="#d79b00" stroke-width="3" stroke-dasharray="8,5" marker-end="url(#ao)"/>
+  <line x1="424.5" y1="101.3" x2="515.5" y2="68.7" stroke="#3b6db3" stroke-width="2.6" marker-end="url(#ab)"/>
+  <line x1="422.4" y1="123.3" x2="537.6" y2="191.7" stroke="#3b6db3" stroke-width="2.6" marker-end="url(#ab)"/>
+  <line x1="401.6" y1="135.9" x2="408.4" y2="244.1" stroke="#3b6db3" stroke-width="2.6" marker-end="url(#ab)"/>
+  <line x1="374.0" y1="108.6" x2="141.0" y2="96.4" stroke="#3b6db3" stroke-width="2.6" marker-end="url(#ab)"/>
+  <line x1="565.4" y1="65.6" x2="674.6" y2="89.4" stroke="#3b6db3" stroke-width="2.6" marker-end="url(#ab)"/>
+  <line x1="582.8" y1="217.6" x2="682.2" y2="272.4" stroke="#3b6db3" stroke-width="2.6" marker-end="url(#ab)"/>
+  <line x1="432.0" y1="283.9" x2="538.0" y2="351.1" stroke="#3b6db3" stroke-width="2.6" marker-end="url(#ab)"/>
+  <line x1="406.3" y1="295.7" x2="393.7" y2="384.3" stroke="#3b6db3" stroke-width="2.6" marker-end="url(#ab)"/>
+  <line x1="386.9" y1="281.9" x2="278.1" y2="338.1" stroke="#3b6db3" stroke-width="2.6" marker-end="url(#ab)"/>
+  <line x1="720.8" y1="110.6" x2="799.2" y2="169.4" stroke="#3b6db3" stroke-width="2.6" marker-end="url(#ab)"/>
+  <line x1="727.0" y1="298.8" x2="803.0" y2="346.2" stroke="#3b6db3" stroke-width="2.6" marker-end="url(#ab)"/>
+  <line x1="584.2" y1="374.5" x2="675.8" y2="410.5" stroke="#3b6db3" stroke-width="2.6" marker-end="url(#ab)"/>
+  <line x1="230.6" y1="359.0" x2="144.4" y2="391.0" stroke="#3b6db3" stroke-width="2.6" marker-end="url(#ab)"/>
+  <line x1="369.5" y1="426.0" x2="320.5" y2="464.0" stroke="#3b6db3" stroke-width="2.6" marker-end="url(#ab)"/>
+  <line x1="572.4" y1="387.9" x2="612.6" y2="462.1" stroke="#3b6db3" stroke-width="2.6" marker-end="url(#ab)"/>
+  <line x1="724.5" y1="428.7" x2="815.5" y2="461.3" stroke="#3b6db3" stroke-width="2.6" marker-end="url(#ab)"/>
+  <line x1="71" y1="456" x2="102" y2="421" stroke="#888" stroke-width="1.5" stroke-dasharray="4,3"/><text x="87" y="445" text-anchor="middle" font-size="18" font-weight="bold" fill="#b85450">✕</text><circle cx="55" cy="475" r="22" fill="#eee" stroke="#888" stroke-width="1.5" stroke-dasharray="4,3"/><text x="85" y="478" font-size="12" fill="#555">outsider: not admitted,</text><text x="85" y="493" font-size="12" fill="#555">no part in GossipSub</text>
+  <circle cx="120" cy="250" r="22" fill="#ffe6cc" stroke="#d79b00" stroke-width="3"/><text x="120" y="255" text-anchor="middle" font-weight="bold" font-size="17" fill="#222">S</text>
+  <circle cx="250" cy="165" r="22" fill="#ffe6cc" stroke="#d79b00" stroke-width="2"/><text x="250" y="170" text-anchor="middle" font-weight="bold" font-size="17" fill="#222">R</text>
+  <circle cx="400" cy="110" r="22" fill="#ffe6cc" stroke="#d79b00" stroke-width="2"/><text x="400" y="115" text-anchor="middle" font-weight="bold" font-size="17" fill="#222">D</text>
+  <circle cx="115" cy="95" r="22" fill="#dae8fc" stroke="#222" stroke-width="1.5"/>
+  <circle cx="255" cy="350" r="22" fill="#dae8fc" stroke="#222" stroke-width="1.5"/>
+  <circle cx="120" cy="400" r="22" fill="#dae8fc" stroke="#222" stroke-width="1.5"/>
+  <circle cx="540" cy="60" r="22" fill="#dae8fc" stroke="#222" stroke-width="1.5"/>
+  <circle cx="560" cy="205" r="22" fill="#dae8fc" stroke="#222" stroke-width="1.5"/>
+  <circle cx="410" cy="270" r="22" fill="#dae8fc" stroke="#222" stroke-width="1.5"/>
+  <circle cx="390" cy="410" r="22" fill="#dae8fc" stroke="#222" stroke-width="1.5"/>
+  <circle cx="700" cy="95" r="22" fill="#dae8fc" stroke="#222" stroke-width="1.5"/>
+  <circle cx="705" cy="285" r="22" fill="#dae8fc" stroke="#222" stroke-width="1.5"/>
+  <circle cx="560" cy="365" r="22" fill="#dae8fc" stroke="#222" stroke-width="1.5"/>
+  <circle cx="820" cy="185" r="22" fill="#dae8fc" stroke="#222" stroke-width="1.5"/>
+  <circle cx="825" cy="360" r="22" fill="#dae8fc" stroke="#222" stroke-width="1.5"/>
+  <circle cx="700" cy="420" r="22" fill="#dae8fc" stroke="#222" stroke-width="1.5"/>
+  <circle cx="300" cy="480" r="22" fill="#d5e8d4" stroke="#222" stroke-width="1.5"/><text x="300" y="484" text-anchor="middle" font-weight="bold" font-size="12" fill="#222">ARC</text>
+  <circle cx="625" cy="485" r="22" fill="#d5e8d4" stroke="#222" stroke-width="1.5"/><text x="625" y="489" text-anchor="middle" font-weight="bold" font-size="12" fill="#222">ARC</text>
+  <circle cx="840" cy="470" r="22" fill="#d5e8d4" stroke="#222" stroke-width="1.5"/><text x="840" y="474" text-anchor="middle" font-weight="bold" font-size="12" fill="#222">ARC</text>
+  <text x="120" y="295" text-anchor="middle" font-size="14">sender</text>
+  <text x="120" y="312" text-anchor="middle" font-size="13" fill="#444">encrypts, signs</text>
+  <text x="250" y="130" text-anchor="middle" font-size="14">stem relay</text>
+  <text x="400" y="75" text-anchor="middle" font-size="14">diffuser</text>
+  <text x="165" y="200" font-size="13" fill="#9a6b00" text-anchor="end">2 random successors</text><text x="165" y="215" font-size="13" fill="#9a6b00" text-anchor="end">per epoch</text>
+  <text x="590" y="25" font-size="14" font-weight="bold">The diffuser D publishes into GossipSub;</text><text x="590" y="43" font-size="14">every peer forwards it to its mesh peers.</text>
+  <line x1="20" y1="530" x2="60" y2="530" stroke="#bbb" stroke-width="1.5"/><text x="68" y="535" font-size="13">full-message (mesh) connection</text><line x1="330" y1="530" x2="370" y2="530" stroke="#999" stroke-width="1.5" stroke-dasharray="3,4"/><text x="378" y="535" font-size="13">metadata-only connection (gossip: IHAVE / IWANT message IDs)</text>
+  <circle cx="40" cy="556" r="9" fill="#d5e8d4" stroke="#222" stroke-width="1.5"/><text x="68" y="561" font-size="13">ARC: archive, stores every message</text>
+  <text x="430" y="587" font-size="13" fill="#555">every node: D = 12 mesh peers, kept between 10 and 24 (graph simplified)</text>
+  <line x1="430" y1="556" x2="470" y2="556" stroke="#3b6db3" stroke-width="2.6"/><text x="478" y="561" font-size="13">GossipSub: forward full message to mesh peers</text>
+  <line x1="20" y1="582" x2="60" y2="582" stroke="#d79b00" stroke-width="3" stroke-dasharray="8,5"/><text x="68" y="587" font-size="13">stem: one hop at a time, unchanged (Dandelion++)</text>
+</svg>

@@ -168,6 +168,8 @@ The AA keeps the archives' KeyPackages in memory only, so do not restart it betw
 
 ## 2. Member registration
 
+<p align="center"><img src="figures/MemberJoinSequence.svg" width="720" alt="Member join: the candidate registers from a throwaway identity, shares its key with the archives, and gets a credential from the AA"></p>
+
 Console: `register_identity <AA PeerID> <name>`.
 
 The AA sees the member's name together with the PeerID a join comes from. So that it cannot link the node's own PeerID to the member, the peer sends the messages of the join from a **throwaway identity** (`dactie-peer/src/join_relay.rs`): a fresh libp2p key, used only for this join and dropped once the member key has arrived. The throwaway identity dials the AA at `-B` and the archives at their `--archive` addresses. Afterwards, the node registers its own PeerID as a sharing peer like any other (section 3), which does not reveal the member.
@@ -219,6 +221,8 @@ sequenceDiagram
 
 ## 3. Additional sharing peers
 
+<p align="center"><img src="figures/CreatesSequence.svg" width="720" alt="A member registers an additional sharing peer with a slot tag"></p>
+
 A member can run further sharing peers under the same member key. Each new peer has its own PeerID and MLS credential, and uses one of the member's `k` slots of the current epoch, so that `m` colluding members run at most `m·k` sharing peers at a time.
 
 **Slot tags** (`thressig/src/tags.rs`). The AA is started with `--epoch-secs` (default 30 days) and `--peers-per-member` `k` (default 5); the epoch is the Unix time divided by the epoch length. A member has slots `1..=k` per epoch, and its tag for a slot is `T = H(epoch, slot)^sk`. The same member always gets the same tag for the same epoch and slot, so the AA accepts each tag once, while tags of different members, slots or epochs cannot be linked. A peer proves its tag without revealing the member (`thressig::prove_member`: a freshly randomized credential and one Schnorr proof for the credential equation and every statement about `sk`). The member therefore never contacts the AA in a way that identifies it after the join, and the AA does not learn which member registers a peer or how many peers a member runs. Which slots a member has used is recorded in `slots.json` next to its `key_material.json`.
@@ -269,6 +273,8 @@ Messages are anonymous: neither the gossip message nor the group signature ident
 
 ## 6. Archive storage
 
+<p align="center"><img src="figures/StoreSequence.svg" width="720" alt="Archives store every message they receive through GossipSub"></p>
+
 Each archive writes to its own PostgreSQL database (`init.sql`):
 
 | Table | Content | Form |
@@ -285,6 +291,8 @@ Each archive writes to its own PostgreSQL database (`init.sql`):
 **Catching up.** A peer that was offline sends a group-signed `Update { group_id, epoch }` to an archive for each private group. The archive returns all stored commits after that epoch and all proposals from that epoch on, and the peer applies them in order. The archive ignores `Update` requests without a valid group signature. Stored CTI messages are not served over the network: they can be searched in the archive's database, e.g. through the Adminer interface of the Docker setup.
 
 ## 7. Opening a signature
+
+<p align="center"><img src="figures/DeanonymizeSequence.svg" width="720" alt="Opening a signature: the AA asks, t archive operators approve, and the AA combines their partial openings"></p>
 
 Opening reveals the member behind a group signature. It needs the AA and at least `t` archives whose operators agree. The AA can ask, but each archive operator decides.
 

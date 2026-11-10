@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Entity-relationship model (Fig. 2). Redrawn from DACTIE_Architecture_TBC.svg in the style of
+     MemberJoinSequence.svg (same role colours). Editable source; the paper includes ERModel.pdf:
+     inkscape ERModel.svg -\-export-type=pdf -\-export-filename=ERModel.pdf -->
+<svg xmlns="http://www.w3.org/2000/svg" width="520" height="505" viewBox="0 0 520 505"
+     font-family="Liberation Sans, Arial, Helvetica, sans-serif" font-size="17">
+  <defs>
+    <marker id="ak" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#222"/></marker>
+    <style>
+      .peer{fill:#dae8fc;stroke:#222;stroke-width:1.5}
+      .aa{fill:#ffe6cc;stroke:#222;stroke-width:1.5}
+      .arc{fill:#d5e8d4;stroke:#222;stroke-width:1.5}
+      .cti{fill:#f5f5f5;stroke:#222;stroke-width:1.5}
+      .rel{fill:#fff;stroke:#222;stroke-width:1.3}
+      .ln{fill:none;stroke:#222;stroke-width:1.3}
+      .t{text-anchor:middle}
+      .e{font-weight:bold}
+      .r{font-size:15px}
+      .c{font-size:14px;fill:#333}
+    </style>
+  </defs>
+  <rect width="520" height="505" fill="#fff"/>
+
+  <!-- permissioned network -->
+  <rect x="6" y="212" width="508" height="262" rx="6" fill="#f4f8fd" stroke="#6c8ebf" stroke-width="2" stroke-dasharray="9,6"/>
+  <text class="t" x="260" y="496" font-weight="bold" fill="#6c8ebf" font-size="16">Permissioned sharing network</text>
+
+  <!-- connections -->
+  <line class="ln" x1="205" y1="48" x2="170" y2="48" marker-end="url(#ak)"/>
+  <line class="ln" x1="315" y1="48" x2="350" y2="48"/>
+  <line class="ln" x1="95" y1="76" x2="95" y2="116"/>
+  <line class="ln" x1="95" y1="184" x2="95" y2="235" marker-end="url(#ak)"/>
+  <path class="ln" d="M150,150 H425 V235" marker-end="url(#ak)"/>
+  <line class="ln" x1="188" y1="263" x2="170" y2="263" marker-end="url(#ak)"/>
+  <line class="ln" x1="332" y1="263" x2="350" y2="263"/>
+  <line class="ln" x1="95" y1="291" x2="95" y2="378"/>
+  <line class="ln" x1="157" y1="418" x2="185" y2="418" marker-end="url(#ak)"/>
+  <line class="ln" x1="425" y1="291" x2="425" y2="384"/>
+  <line class="ln" x1="370" y1="418" x2="335" y2="418" marker-end="url(#ak)"/>
+
+  <!-- entities -->
+  <rect class="peer" x="20" y="20" width="150" height="56" rx="4"/>
+  <text class="t e" x="95" y="54">Member</text>
+  <rect class="aa" x="350" y="20" width="150" height="56" rx="4"/>
+  <text class="t e" x="425" y="44">Authorization</text><text class="t e" x="425" y="65">Authority (AA)</text>
+  <rect class="peer" x="20" y="235" width="150" height="56" rx="4"/>
+  <text class="t e" x="95" y="269">Sharing Peer</text>
+  <rect class="arc" x="350" y="235" width="150" height="56" rx="4"/>
+  <text class="t e" x="425" y="269">Archive (ARC)</text>
+  <rect class="cti" x="185" y="390" width="150" height="56" rx="4"/>
+  <text class="t e" x="260" y="424">CTI</text>
+
+  <!-- relationships -->
+  <path class="rel" d="M260,14 L315,48 L260,82 L205,48 z"/>
+  <text class="t r" x="260" y="53">registers</text>
+  <path class="rel" d="M95,116 L150,150 L95,184 L40,150 z"/>
+  <text class="t r" x="95" y="155">creates</text>
+  <path class="rel" d="M260,221 L332,263 L260,305 L188,263 z"/>
+  <text class="t r" x="260" y="259">de-</text><text class="t r" x="260" y="277">anonymizes</text>
+  <path class="rel" d="M95,378 L157,418 L95,458 L33,418 z"/>
+  <text class="t r" x="95" y="414">publishes/</text><text class="t r" x="95" y="432">receives</text>
+  <path class="rel" d="M425,384 L480,418 L425,452 L370,418 z"/>
+  <text class="t r" x="425" y="423">stores</text>
+
+  <!-- cardinalities -->
+  <g class="c">
+    <text x="176" y="68">N</text><text x="336" y="68">1</text>
+    <text x="101" y="98">1</text><text x="101" y="205">N</text><text x="431" y="205">1</text>
+    <text x="176" y="283">M</text><text x="334" y="283">N</text>
+    <text x="101" y="310">M</text><text x="170" y="438">N</text>
+    <text x="431" y="310">N</text><text x="341" y="438">M</text>
+  </g>
+</svg>

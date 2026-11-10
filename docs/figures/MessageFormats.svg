@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Gossip message formats, as in docs/PROTOCOL.md section 4 and dactie-utils/src/shared_structs.rs.
+     Replaces Messages5.svg. Editable source; the paper includes MessageFormats.pdf, exported with:
+     inkscape MessageFormats.svg -\-export-type=pdf -\-export-filename=MessageFormats.pdf -->
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="368" viewBox="0 0 1000 368"
+     font-family="Liberation Sans, Arial, Helvetica, sans-serif" font-size="15">
+  <rect width="1000" height="368" fill="#fff"/>
+  <defs>
+    <style>
+      .clr{fill:#dae8fc;stroke:#222;stroke-width:1.3}
+      .com{fill:#ffe6cc;stroke:#222;stroke-width:1.3}
+      .grp{fill:#f8cecc;stroke:#222;stroke-width:1.3}
+      .att{fill:#d5e8d4;stroke:#222;stroke-width:1.3}
+      .br{fill:none;stroke:#6c8ebf;stroke-width:1.6}
+      .t{text-anchor:middle}
+      .s{font-size:13px;fill:#333}
+    </style>
+  </defs>
+
+  <!-- grid -->
+  <g fill="none" stroke="#222" stroke-width="1.3">
+    <rect x="125" y="8" width="865" height="276"/>
+    <line x1="557" y1="8" x2="557" y2="284"/>
+    <line x1="125" y1="36" x2="990" y2="36"/>
+    <line x1="10" y1="156" x2="990" y2="156"/>
+  </g>
+  <text class="t" x="341" y="28" font-weight="bold">Public (default)</text>
+  <text class="t" x="773" y="28" font-weight="bold">Private group</text>
+  <text class="t" x="66" y="92" font-weight="bold">Anonymous</text>
+  <text class="t" x="66" y="111">(default)</text>
+  <text class="t" x="66" y="222" font-weight="bold">Attributed</text>
+
+  <!-- ===== row 1: anonymous ===== -->
+  <!-- public -->
+  <rect class="clr" x="140" y="72" width="100" height="40"/>
+  <text class="t" x="190" y="97">Channel</text>
+  <rect class="com" x="240" y="72" width="215" height="40"/>
+  <text class="t" x="347" y="97">Topic + Payload</text>
+  <path class="br" d="M140,120 v6 h315 v-6 M297,126 v6"/>
+  <text class="t s" x="297" y="147">Cam20 signature (randomized)</text>
+  <!-- private -->
+  <rect class="clr" x="572" y="72" width="100" height="40"/>
+  <text class="t" x="622" y="97">GroupID</text>
+  <rect class="com" x="672" y="66" width="215" height="52"/>
+  <rect class="grp" x="690" y="76" width="179" height="32"/>
+  <text class="t" x="779" y="97">Payload</text>
+  <path class="br" d="M572,120 v6 h315 v-6 M729,126 v6"/>
+  <text class="t s" x="729" y="147">Cam20 signature (randomized)</text>
+
+  <!-- ===== row 2: attributed ===== -->
+  <!-- public: attribution inside the common group's encryption -->
+  <rect class="clr" x="140" y="200" width="100" height="40"/>
+  <text class="t" x="190" y="225">Channel</text>
+  <rect class="com" x="240" y="194" width="305" height="52"/>
+  <text class="t" x="333" y="225">Topic + Payload</text>
+  <rect class="att" x="428" y="201" width="110" height="38"/>
+  <text class="t" x="483" y="216" font-size="13">MemberID +</text>
+  <text class="t" x="483" y="232" font-size="13">attr. signature</text>
+  <path class="br" d="M140,252 v6 h405 v-6 M342,258 v6"/>
+  <text class="t s" x="342" y="276">Cam20 signature (randomized)</text>
+  <!-- private: attribution inside both layers -->
+  <rect class="clr" x="572" y="200" width="100" height="40"/>
+  <text class="t" x="622" y="225">GroupID</text>
+  <rect class="com" x="672" y="188" width="305" height="64"/>
+  <rect class="grp" x="684" y="196" width="281" height="48"/>
+  <text class="t" x="755" y="225">Payload</text>
+  <rect class="att" x="845" y="201" width="110" height="38"/>
+  <text class="t" x="900" y="216" font-size="13">MemberID +</text>
+  <text class="t" x="900" y="232" font-size="13">attr. signature</text>
+  <path class="br" d="M572,256 v6 h405 v-6 M774,262 v6"/>
+  <text class="t s" x="774" y="280">Cam20 signature (randomized)</text>
+
+  <!-- legend -->
+  <g font-size="13">
+    <rect class="clr" x="125" y="298" width="18" height="14"/>
+    <text x="150" y="310">in clear</text>
+    <rect class="att" x="245" y="298" width="18" height="14"/>
+    <text x="270" y="310">attribution: MemberID + signature that is not randomized, encrypted with the payload</text>
+    <rect class="com" x="125" y="320" width="18" height="14"/>
+    <text x="150" y="332">encrypted under the MLS common group's key</text>
+    <rect class="grp" x="475" y="320" width="18" height="14"/>
+    <text x="500" y="332">encrypted under the MLS private group's key</text>
+  </g>
+  <text x="125" y="358" font-size="13" font-style="italic" fill="#444">No message carries the sender's PeerID; a receiver sees only the PeerID of the neighbour that forwarded it (propagating peer).</text>
+</svg>

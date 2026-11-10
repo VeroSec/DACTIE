@@ -1,122 +1,305 @@
-# DACTIE: Decentral Anonymous CTI Exchange
-This repository contains the artifacts for the implementation and evaluation of the paper "Share the Indicators, Not the Victim: Revocably Anonymous CTI Sharing with DACTIE".
-DACTIE is a permissioned, decentralized cyber threat intelligence sharing system, which addresses a fundamental tension in collaborative cybersecurity: organizations need to share information about detected threats, but identifying the reporting organization may expose it to reputational damage, legal concerns, or competitive disadvantages. The central idea is to allow an organization to share CTI anonymously while retaining the ability to identify a misbehaving sender if a threshold of independent archives agrees to open the sender's group signature. DACTIE carefully composes technologies, such as Messaging Layer Security and the short threshold dynamic group signatures by Camenisch et al., with cryptographic security and anonymity guarantees. Additionally, network-level anonymity on top of cryptographic anonymity is hardened to protect the originator of a message.
+# DACTIE: Decentralized Anonymous CTI Exchange
 
-This ReadMe gives an overview of the repository content and a short usage example. More detailed explanations can be found in the subdirectories.
+DACTIE lets organizations share cyber threat intelligence (CTI) without revealing that they were the victim, and still keeps senders accountable. It is a permissioned peer-to-peer network without a blockchain: a sender stays anonymous unless a threshold of archives jointly opens its group signature.
 
-## Folder Structure
-- dactie-authority: Implementation of the Authority Peer Type
-- dactie-peer: Implementation of the standard Sharing Peer Type
-- dactie-archive: Implementation of the Archive Peer Type
-- dactie-utils: Helper functions and wrappers, that are used in all peers
-- ps16: Implementation of the Pointcheval-Sanders Group Signature
-- thressig: Implementation of Short Threshold Dynamic Group Signatures by Carmenisch et al (Modified version for single issuer)
-- dactie-experiment-anonymity: The setup of the experiment used to show that gossipsub provides source anonymity
-- dactie-experiment-eclipse: The setup of the experiment used to show that eclipse attacks are not possible
+This repository contains the Rust prototype, the experiments, and the first public implementation of the threshold dynamic group signature scheme of Camenisch et al. (2020) that DACTIE builds on.
 
-## How to use:
-Here we explain of how to use our concept based on a simple example. We will have one authority, two archives and two peers.
+> **TODO (Vero):** link to the paper and add its BibTeX under [Citation](#citation) -> wait for WAITI ACSAC's 2026 proceedings.
 
-### Build from Source
-This is an explanation of how to build the concept from source. For the Docker Version look below.
-1. Install rust(not via Packagemanager)
-2. Clone the repos and navigate to the stored folder
-3. Build the project by running `cargo build`
-4. Create an empty key material folder for each of the 5 peers (e.g. ./key_material/key_material_0..4)
-5. Open four terminals and navigate to the dactie folder
-6. Start two databases. Either use an own PostgresDB or start the docker containers with `ARCHIVE_DB_PASSWORD=<password> docker compose --profile node117 --profile node118 up -d db db2`
+<p align="center">
+  <img src="docs/figures/ERModel.svg" width="420" alt="Peer types of DACTIE: members register with the Authorization Authority and create sharing peers; sharing peers publish and receive CTI; archives store it and can de-anonymize a sender together">
+</p>
 
-In each terminal start:
-1. Start authorization authority(aa) with `RUST_LOG=info cargo run --package dactie-authority -- -K <folder aa_key_material>`. Optional: `--peers-per-member <k>` (default 5) and `--epoch-secs <seconds>` (default 30 days) set how many sharing peers a member can register per epoch, see [Create new Peer with identity of Peer1](#create-new-peer-with-identity-of-peer1-peer2).
-2. Start archive1 with `PGPASSWORD=<password> RUST_LOG=info cargo run --package dactie-archive --bin dactie-archive -- -K <folder archive_key_material> -u "postgres://archive@localhost/archivedb" -i archive1 -a <peer_id_aa> -B /ip4/127.0.0.1/tcp/10001`
-3. Start archive2 with `PGPASSWORD=<password> RUST_LOG=info cargo run --package dactie-archive --bin dactie-archive -- -K <folder archive_key_material> -u "postgres://archive@localhost:5433/archivedb" -i archive2 -a <peer_id_aa> -B /ip4/127.0.0.1/tcp/10001`
-4. Start peer1 with `RUST_LOG=info cargo run --package dactie-peer --bin dactie-peer -- -K <folder peer1_key_material> -b <peer_id_aa> -B /ip4/127.0.0.1/tcp/10001`
-5. Start peer2 with `RUST_LOG=info cargo run --package dactie-peer --bin dactie-peer -- -K <folder peer2_key_material> -b <peer_id_aa> -B /ip4/127.0.0.1/tcp/10001`
+| Role | Binary | What it does |
+| --- | --- | --- |
+| **Authorization Authority (AA)** | `dactie-authority` | Admits members and archives and fixes the opening threshold `t`. Can ask for an opening, but cannot open a signature alone. |
+| **Archive (ARC)** | `dactie-archive` | Stores every message in its own PostgreSQL database and holds one share of every member key. Its operator approves or denies each opening request. |
+| **Member** | – | An organization admitted by the AA. It runs up to `k` sharing peers per epoch (default 5). |
+| **Sharing peer** | `dactie-peer` | Publishes and receives CTI. The AA cannot link a sharing peer's PeerID to its member. |
 
-RUST_LOG=info cargo run --package dactie-peer --bin dactie-peer -- -K ./key_material/key_material_4 -b 12D3KooWLsUHkQfXqqC6DuGaKcZUqYB9bKLWMUgNdnwcRSKdHgBA -B /ip4/127.0.0.1/tcp/10001
+## What DACTIE protects, and what it does not
 
-Only registered peers take part in GossipSub: a node that has not registered gets no messages, and once a node is registered itself, it closes connections of unregistered nodes after 60 s and keeps at most 5 of them open. Register within a minute of connecting, or the node reconnects when you send the request.
+- **Sender anonymity:** every message carries a group signature that proves "an admitted member sent this" but not which one. No message carries the sender's PeerID.
+- **Accountability:** `t` of `n` archives together can open a signature and name the member. Fewer archives cannot, and neither can the AA alone.
+- **Confidentiality and integrity:** messages are encrypted with MLS, to all members or to a private group, and signed.
+- **Receiver anonymity (partitioned channels):** a topic is not a GossipSub topic of its own. Each topic maps to one of 10 channels, `hash(topic) mod 10` (`NUM_CHANNELS` in `dactie-utils/src/mls_wrapper.rs`). Only the channel travels in clear; the topic is inside the ciphertext. A peer receives every message on its channel and drops the topics it did not subscribe to, so neighbours see which channels a peer joined, but not which topics it reads. Fewer channels hide interests better, at the cost of more traffic per peer.
+- **Network-level anonymity:** a stem phase (Dandelion++) hides which peer published a message first. A coalition of `c` colluding peers among `|N_c|` names the sender in about `c/|N_c|` of the cases.
+- **Not covered:** CTI content that itself identifies the victim, global passive adversaries, and `t` colluding archives.
 
-### Local end-to-end test
-`scripts/e2e_local.sh` runs the example above automatically and checks every step: registration, sharing peers with slot tags, a second peer of the same member, a broadcast, an unregistered observer, and an opening. It needs Docker (for the two PostgreSQL databases), tmux, and `cargo build --release`, and takes about two minutes. `scripts/e2e_expiry.sh` runs 60-second epochs and checks that a renewed sharing peer stays while one that did not renew is removed and gets no more messages (about three minutes). `scripts/e2e_nested.sh` runs 120-second epochs and checks private groups nested inside the common group: three sharing peers read each other's messages in a private group, and once the AA has expired one of them, the group's owner removes it and nothing it sends is delivered (about five minutes). Logs go to `target/e2e/`; the processes keep running in tmux session `camera` until you run `tmux kill-session -t camera; docker rm -f camera-pg1 camera-pg2`.
+## How a message travels
 
-### Docker
-This section explains the docker setup. If docker is choosen the part above can be ignored
-1. Clone the GitRepo and move to the folder
-2. Run `build.sh` to create the Docker-Images and create the Key-Material folders. The images do not contain `key_material/` or `.env` (see `.dockerignore`).
-3. Put the database password into `.env` next to `docker-compose.yml`: `ARCHIVE_DB_PASSWORD=<password>`. There is no default.
-4. Run only the authority node with docker containers with `docker compose up authority_node`. This creates a new peer ID.
-5. Copy the BootPeerID into `./key_material/boot_id.env`.  The authority can be stopped after copying the address
-6. Start the whole network with `docker compose up`
-7. Attach to each container by using `docker attach <container_id>`
-8. adminer interface can be found under [http://localhost:8080](http://localhost:8080), on the Docker host only, with credentials `Username: archive`, `Password: <ARCHIVE_DB_PASSWORD>` and `Database: archivedb`. The databases and Adminer are published on 127.0.0.1; set `DB_PUBLISH_ADDR` to publish them elsewhere.
+<p align="center">
+  <img src="docs/figures/network.svg" width="720" alt="The sender S passes its message along a stem to relay R and diffuser D; D publishes it into GossipSub, and every peer forwards it to its mesh peers, archives included">
+</p>
 
-### End the Archive Initialization Progress(Authority):
-`end_init_archive`
+1. The sender `S` encrypts and signs its message, then passes it unchanged along a random **stem** of sharing peers, one hop at a time.
+2. The peer at the end of the stem, the **diffuser** `D`, publishes it into **GossipSub**. Every peer checks the group signature before forwarding, and drops invalid messages.
+3. **Archives** subscribe to all channels and store every message.
+4. Nodes that are not admitted (the outsider) receive nothing.
 
-This also fixes the opening threshold: how many archives must approve before a signature can be opened. It defaults to a strict majority of the registered archives; start the authority with `--threshold <t>` to choose another value between 1 and the number of archives. Every member splits its key for this threshold, so it cannot change afterwards.
+A message is public or sent to a private group, and anonymous or attributed:
 
-### Register Identity for each peer (Peer1):
-1. `register_identity <peer_id_aa> <peer_name>`, peer name can be anything for example peer1 peer2
+<p align="center">
+  <img src="docs/figures/MessageFormats.svg" width="720" alt="The four message formats: public or private group, anonymous or attributed">
+</p>
 
-The join runs from a throwaway identity, so the authority never links this node's own PeerID to the name. Afterwards, the node registers its own PeerID as a sharing peer, which uses one of the member's slots (see below). The authority must be reachable at `-B`, and archives at their `--archive` addresses.
+| Peer command | Who can read it | Sender shown to readers |
+| --- | --- | --- |
+| `broad <topic> <msg>` | all members (common group) | `Sender: anonymous` |
+| `attr_broad <topic> <msg>` | all members | `Attributed to member: <MemberID>` |
+| `enc_broad <group_number> <msg>` | members of one private group | `Sender: anonymous` |
+| `attr_enc_broad <group_number> <msg>` | members of one private group | `Attributed to member: <MemberID>` |
 
-### Create new Peer with identity of Peer1 (Peer2):
-1. Request the opener keys from the authority`get_opener_keys  <authorization_peer_id>`. This also fetches the epoch length and how many sharing peers a member may register per epoch (`--peers-per-member`, `--epoch-secs` on the authority).
-2. Register a new peer with an existing group key material: `peer_from_sig <authorization_peer_id> <save_file_path>`. It uses one of the member's slots of the current epoch and records it in the `slots.json` next to that file. When all slots are used, the peer reports it.
+Attributed messages skip the stem, since they name their member anyway. Members use them, e.g., to build reputation.
 
-A sharing peer stays registered until the end of the epoch of its slot. To keep it, run `renew <authorization_peer_id> <save_file_path>` on the sharing peer before the epoch ends; this uses a slot of the next epoch. The authority removes sharing peers that did not renew from the network; a removed peer can register again with `peer_from_sig`.
+## Quick start: see it work in two minutes
 
-### Subscribe to Topics:
-1. `sub <topic>`
+You need [Rust via rustup](https://rustup.rs) (not your distribution's package), Docker (for two PostgreSQL databases) and tmux.
 
-### Exchange a public message:
-1. `broad <topic> <msg>`
+```bash
+git clone https://github.com/VeroSec/DACTIE.git && cd DACTIE
+cargo build --release
+scripts/e2e_local.sh
+```
 
-Messages are anonymous. To have one attributed to your member, e.g. to build reputation, send it with `attr_broad <topic> <msg>` (or `attr_enc_broad <group_number> <msg>` in a private group). The MemberID and a signature proving it travel inside the encryption, so only those who can read the message see it; they print `Attributed to member: <MemberID>` instead of `Sender: anonymous`.
+The script starts an AA, two archives and several sharing peers, and checks every step. Each passed check prints `OK …`, and the first failure prints `FAIL: …` and stops. It checks:
 
-### Create a group and exchange a private message(all from one Peer):
-1. `req_kps <peer_id_bootstrap_peer>`
-2. `create_group <peer_id_bootstrap_peer>`
-3. `ls_groups` to get group_number
-4. `enc_broad <group_number> <msg>`
+- a member joins from a throwaway identity, so the AA never sees its own PeerID;
+- a second sharing peer of the same member registers;
+- anonymous broadcasts arrive and travel along the stem;
+- an unregistered observer receives nothing;
+- both archives approve an opening, and it names the right member.
 
-### Open a message (Authority and Archives):
-Opening a signature needs the authority and a threshold of archives: the authority can ask, but each archive operator decides.
-1. Send a message over the network to get its signature
-2. Ask every archive for its partial opening (authority): `req_open <signature>`
-3. Decide on the request in each archive's console (see below): `approve <id>` or `deny <id>`
-4. Once enough archives have approved, open the signature (authority): `open <signature>`. It prints the member ID and name, and every PeerID of that member.
+Logs go to `target/e2e/`. The nodes keep running for inspection; stop them with:
 
-#### Archive console
-Each archive reads operator commands from its terminal. With Docker, attach with `docker attach <archive container>` (e.g. `archive_node1`) and detach again with `Ctrl+P`, `Ctrl+Q`, which leaves the archive running.
+```bash
+tmux kill-session -t camera; docker rm -f camera-pg1 camera-pg2
+```
+
+Two longer runs:
+
+- `scripts/e2e_expiry.sh` (about 3 minutes): sharing peers that do not renew are removed at the end of their epoch.
+- `scripts/e2e_nested.sh` (about 5 minutes): private groups, and removing an expired peer from them.
+
+## Walkthrough: run a network by hand
+
+You start one AA, two archives and two sharing peers, each in its own terminal. Build first with `cargo build --release`; all commands below run from the repository root. Lines starting with `>` are typed into a node's console, not the shell.
+
+### 1. Start two databases
+
+```bash
+export PGPASSWORD='change-me'   # choose your own database password
+for i in 1 2; do
+  docker run -d --rm --name dactie-pg$i -e POSTGRES_USER=archive -e POSTGRES_PASSWORD="$PGPASSWORD" \
+    -e POSTGRES_DB=archivedb -v "$PWD/init.sql:/docker-entrypoint-initdb.d/init.sql:ro" \
+    -p 127.0.0.1:$((5431 + i)):5432 postgres:16
+done
+mkdir -p km/aa km/arc1 km/arc2 km/peer1 km/peer2
+```
+
+Archive 1 uses port 5432 and archive 2 port 5433. The archives read the password from `PGPASSWORD`, so it never appears in a URL or the process list; export it in their terminals too (step 3). If a local PostgreSQL already uses 5432, change both ports here and in step 3.
+
+### 2. Start the authority (terminal 1)
+
+```bash
+RUST_LOG=info target/release/dactie-authority -K km/aa
+```
+
+It listens on port 10001. Copy its PeerID from the log line `Local PeerId: 12D3KooW…` and set it in every other terminal:
+
+```bash
+export AA=12D3KooW…   # the AA's PeerID
+```
+
+### 3. Start the archives (terminals 2 and 3), then close the init phase
+
+```bash
+RUST_LOG=info target/release/dactie-archive -K km/arc1 -i archive1 -a $AA -B /ip4/127.0.0.1/tcp/10001 \
+  -u postgres://archive@127.0.0.1:5432/archivedb
+```
+
+```bash
+RUST_LOG=info target/release/dactie-archive -K km/arc2 -i archive2 -a $AA -B /ip4/127.0.0.1/tcp/10001 \
+  -u postgres://archive@127.0.0.1:5433/archivedb
+```
+
+Once both have registered, close the init phase in the AA's console:
+
+```text
+> end_init_archive
+```
+
+The AA logs `Enough Archives registered, ending init phase (opening threshold 2 of 2)`. This fixes the threshold for good, since every member splits its key for it. The default is a strict majority of the archives; start the AA with `--threshold <t>` to choose another. Do not restart the AA between registering the archives and `end_init_archive`.
+
+### 4. Start two sharing peers and join (terminals 4 and 5)
+
+```bash
+RUST_LOG=info target/release/dactie-peer -K km/peer1 -b $AA -B /ip4/127.0.0.1/tcp/10001
+```
+
+```text
+> register_identity <AA PeerID> org1
+```
+
+The peer joins from a throwaway identity (`Joining from throwaway identity …`), and then registers its own PeerID as a sharing peer (`Registering with slot 1 of epoch …`). A node that is not registered gets no messages, and other nodes close its connection after 60 s, so register within a minute of starting; otherwise the node reconnects when you send the request.
+
+Start peer2 the same way with `-K km/peer2`. Then choose one of two options:
+
+- **A second member:** `> register_identity <AA PeerID> org2`
+- **A second sharing peer of org1**, which the AA cannot link to peer1:
+
+  ```text
+  > get_opener_keys <AA PeerID>
+  > peer_from_sig <AA PeerID> km/peer1/key_material.json
+  ```
+
+### 5. Share CTI
+
+On both peers:
+
+```text
+> sub incidents
+```
+
+On peer2:
+
+```text
+> broad incidents Indicator: 203.0.113.7 contacted our VPN gateway
+```
+
+peer1 prints the message, `Sender: anonymous`, and the message's signature as hex. You need the signature for an opening (step 7).
+
+### 6. Share in a private group
+
+Get peer2's PeerID with `> peer_id`, then on peer1:
+
+```text
+> req_kps <peer2 PeerID>
+> create_group <peer2 PeerID>
+> ls_groups
+> enc_broad <group_number> only for this group
+```
+
+### 7. Open a signature
+
+In the AA's console:
+
+```text
+> req_open <signature hex>
+```
+
+Every archive prints `Opening request <id> from the authority is pending`. Each archive operator decides in that archive's console:
+
+```text
+> approve <id>
+```
+
+Or `> deny <id>`, or `> pending` to list open requests. Pending requests are stored in the archive's database and survive a restart. Once `t` archives have approved, run in the AA's console:
+
+```text
+> open <signature hex>
+```
+
+It prints the member's ID and name, and every PeerID of that member.
+
+### Clean up
+
+```bash
+docker rm -f dactie-pg1 dactie-pg2
+rm -rf km   # key material of this test network
+```
+
+## Console commands
+
+All options of the three binaries, with defaults, are in [docs/PROTOCOL.md, "Running the nodes"](docs/PROTOCOL.md#running-the-nodes). A peer prints its command list on any unknown command.
+
+**Sharing peer** (`dactie-peer`)
 
 | Command | Effect |
 | --- | --- |
-| `pending` | Lists opening requests awaiting a decision, with their id and arrival time |
-| `approve <id>` | Computes this archive's partial opening and sends it to the authority |
-| `deny <id>` | Discards the request |
+| `register_identity <AA PeerID> <name>` | Join as a new member |
+| `get_opener_keys <AA PeerID>` | Fetch the archives' keys, the epoch length and `k` (before `peer_from_sig`) |
+| `peer_from_sig <AA PeerID> <key_material.json>` | Register this node as another sharing peer of an existing member, using one of its `k` slots |
+| `renew <AA PeerID> <key_material.json>` | Keep this sharing peer registered in the next epoch; without it, the AA removes the peer when its epoch ends |
+| `sub <topic>` / `unsub <topic>` | Subscribe to or unsubscribe from a topic |
+| `broad`, `attr_broad`, `enc_broad`, `attr_enc_broad` | Send a message; see [How a message travels](#how-a-message-travels) |
+| `req_kps <PeerID>…` | Request MLS key packages from these peers (before adding them to a group) |
+| `create_group <PeerID>…` | Create a private group with these peers |
+| `ls_groups` | List private groups with their `group_number` |
+| `add_group_member <group_number> <PeerID>` / `remove_group_member <group_number> <PeerID>` | Change a group's members (owner only; the owner cannot be removed) |
+| `delete_group_for_all <group_number>` | Delete a group for all its members (owner only) |
+| `update_key_material <group_number>` | Renew your own key material in a group |
+| `update_groups <archive PeerID>` | Fetch missed group updates from an archive |
+| `peer_id` | Print this node's PeerID |
 
-When the authority runs `req_open`, every archive prints the request's id. A session looks like this:
-```
-Opening request 3f9c2a1b7e4d5c60 from the authority is pending. Check the evidence, then run `approve 3f9c2a1b7e4d5c60` or `deny 3f9c2a1b7e4d5c60`.
-pending
-3f9c2a1b7e4d5c60  received 2026-10-11 14:02:51
-approve 3f9c2a1b7e4d5c60
-Submitted this archive's partial opening for 3f9c2a1b7e4d5c60
-```
-Pending requests are stored in the archive's database (table `pending_opens`), so they survive a restart and the operator can decide later.
+**Authority** (`dactie-authority`): `end_init_archive`, `req_open <signature hex>`, `open <signature hex>`.
 
-For automated tests only, start an archive with `--auto-approve-open`: it then answers every request without approval, so the authority could open any signature on its own.
+**Archive** (`dactie-archive`): `pending`, `approve <id>`, `deny <id>`. With Docker, attach with `docker attach <container>` and detach with `Ctrl+P`, `Ctrl+Q`, which leaves the archive running.
 
-### Connection watermarks (Peer):
-Each sharing peer keeps between 50 and 100 connections: it never holds more than `--conn-high` (default 100), and once full it closes connections down to `--conn-low` (default 50), sparing its gossipsub mesh peers, the authority, trusted archives and connections younger than 20 s. This follows go-libp2p's connection manager and keeps large networks from connecting every peer to every other. A full peer refuses new connections before the Noise handshake, like go-libp2p's resource manager, instead of paying for a handshake it then rejects. Inbound connections may fill at most 80% of the slots, so a peer whose inbound side is saturated can still dial, and at most 32 inbound handshakes may be pending at once. The authority and trusted archives are exempt whenever the peer knows their PeerId, i.e. when it dials them. The authority and archives themselves are not capped, since every peer has to reach them.
+## Settings worth knowing
 
-### Stem phase (Peer):
-A peer's own anonymous messages (broadcasts and group messages) first travel along a random stem of sharing peers (`/dactie/stem/1`), and only the peer at its end publishes them into GossipSub, so a colluding mesh neighbour cannot tell the source from the relays (Dandelion++). `--stem-fluff-probability` (default 0.2) is the chance that a peer ends stems in an epoch; `0` turns the stem off. See the Stem phase section of `docs/PROTOCOL.md`.
+- **Trusted archives:** start every peer with `--archive /ip4/<ip>/tcp/<port>/p2p/<archive PeerID>` for each archive, published out of band. The peer then checks the archive keys the AA hands out and refuses to join on a mismatch. Without it, the peer warns and trusts the AA's keys.
+- **Stem phase:** `--stem-fluff-probability` (default 0.2, Monero's value) is the chance that a peer is a diffuser in an epoch. `0` turns the stem off.
+- **Sharing peers per member:** `--peers-per-member <k>` (default 5) and `--epoch-secs` (default 30 days) on the AA.
+- **Connections:** each peer keeps between `--conn-low` (50) and `--conn-high` (100) connections.
+- **Tests only:** `--auto-approve-open` makes an archive approve every opening without its operator, so the AA could open any signature on its own.
 
-### Trusted archives (Peer):
-Members encrypt their key shares to the archives' keys, which the authority hands out. So that a dishonest authority cannot substitute keys it holds, start every peer with each archive's address and PeerId, published out of band: `--archive /ip4/<ip>/tcp/<port>/p2p/<archive PeerId>` (repeat per archive). The peer then confirms every key with its archive before joining, and refuses to join on a mismatch. Without `--archive`, the peer logs a warning and uses the authority's keys unverified.
+## Several hosts with Docker
 
-### Other functions
-Other network functions like adding more group members, etc are described in the ReadMe.md in dactie-peer.
+`docker-compose.yml` describes the paper's evaluation deployment on four hosts, with one compose profile per host (`node116`–`node119`) and fixed IP addresses. `./build.sh` builds the images, and [RUNBOOK.md](RUNBOOK.md) walks through the deployment and its checks. To try DACTIE on one machine, use the [walkthrough](#walkthrough-run-a-network-by-hand) instead.
+
+## Repository layout
+
+| Folder | Contents |
+| --- | --- |
+| `dactie-authority`, `dactie-archive`, `dactie-peer` | The three node types ([peer details](dactie-peer/README.md)) |
+| `dactie-utils` | Code shared by all nodes: networking, admission, MLS wrapper, message types |
+| `thressig` | Threshold dynamic group signatures (Camenisch et al. 2020), single-issuer variant |
+| `ps16` | Pointcheval–Sanders signatures |
+| `benchmark` | Microbenchmarks of `thressig` |
+| `dactie-experiment-anonymity` | Simulation of the coalition first-spy attack, with and without the stem phase |
+| `dactie-experiment-eclipse` | Simulation of eclipse attacks without flood publishing |
+| `scripts` | End-to-end tests and measurement helpers |
+| `docs` | [PROTOCOL.md](docs/PROTOCOL.md) (every message, check and stored value), [DANDELION.md](docs/DANDELION.md) (stem phase design), figures |
+
+## Reproducing the paper's results
+
+| Result | Where |
+| --- | --- |
+| Latency and throughput on four hosts | [RUNBOOK.md](RUNBOOK.md) |
+| Cost of signing, verifying and opening | [benchmark/README.md](benchmark/README.md) |
+| Anonymity against colluding peers | [dactie-experiment-anonymity/README.md](dactie-experiment-anonymity/README.md) |
+| Eclipse attacks | [dactie-experiment-eclipse/README.md](dactie-experiment-eclipse/README.md) |
+
+## Limitations of the prototype
+
+- It is a research prototype and has not been audited.
+- The AA accepts any unused name; a deployment vets each organization out of band.
+- Private groups use P2Panda's workaround for the missing decentralized MLS: only the group owner commits changes, and the owner cannot be removed.
+
+## Citation
+
+> **TODO (Vero):** BibTeX of the paper.
+
+## Contributing
+
+DACTIE is open for contributions: bug reports, fixes, documentation, experiments and research ideas are all welcome.
+
+1. **Understand the protocol first:** [docs/PROTOCOL.md](docs/PROTOCOL.md) lists every message, check and stored value. Change it together with the code it describes.
+2. **Test your change:** `scripts/e2e_local.sh` must print only `OK` lines. If you touch groups, peer expiry or the stem, also run `scripts/e2e_nested.sh` or `scripts/e2e_expiry.sh`.
+3. **Discuss larger changes first:** open an issue on [GitHub](https://github.com/VeroSec/DACTIE/issues), then a pull request against `main`. Small fixes can go straight to a pull request.
+
+Open problems from the paper and the prototype, a good place to start:
+
+- **Sanctions after an opening:** removing or blocking a member once its signature has been opened.
+- **Tor for the first stem hop:** the first stem hop still sees the sender's PeerID; if it colludes, it names the sender.
+- **Decentralized MLS:** removes the group-owner workaround in private groups.
+- **Admission by several authorities:** today a single AA admits members.
+- **Content anonymity:** CTI whose content identifies the victim.
+- **AI-Agent contribution:** Add mechanism for AI-Agent-authorization and let them participate to filter traffic and write CTI for participating companies.
+
+By contributing, you agree that your contribution is licensed under the Apache License 2.0, like the rest of the repository.
+
+## License
+
+Apache License 2.0, see [LICENSE](LICENSE).

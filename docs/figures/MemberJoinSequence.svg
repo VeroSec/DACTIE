@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Slide version: the sharing peer is created after MemKey (paper version: waiti-uncut/Pictures).
+     Member join, as in docs/PROTOCOL.md section 2 (sequence diagram). Editable source; the paper
+     includes MemberJoinSequence.pdf, exported with:
+     inkscape MemberJoinSequence.svg -\-export-type=pdf -\-export-filename=MemberJoinSequence.pdf -->
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="680" viewBox="0 0 1000 680"
+     font-family="Liberation Sans, Arial, Helvetica, sans-serif" font-size="15">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#222"/>
+    </marker>
+    <marker id="arro" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10" fill="none" stroke="#222" stroke-width="1.5"/>
+    </marker>
+  </defs>
+  <style>text{paint-order:stroke;stroke:#fff;stroke-width:5px;stroke-linejoin:round} .n, .n text{stroke:none}</style>
+  <rect width="1000" height="680" fill="#fff"/>
+
+  <!-- participants -->
+  <g stroke="#222" stroke-width="1.5">
+    <rect x="30" y="15" width="170" height="54" rx="4" fill="#dae8fc"/>
+    <rect x="550" y="15" width="140" height="54" rx="4" fill="#ffe6cc"/>
+    <rect x="835" y="15" width="130" height="54" rx="4" fill="#d5e8d4"/>
+  </g>
+  <g text-anchor="middle" class="n">
+    <text x="115" y="38" font-weight="bold">Member candidate</text>
+    <text x="115" y="58">(throwaway PeerID)</text>
+    <text x="620" y="38" font-weight="bold">AA</text>
+    <text x="620" y="58">(issuer)</text>
+    <text x="900" y="38" font-weight="bold">ARC i</text>
+    <text x="900" y="58">(i = 1..n)</text>
+  </g>
+
+  <!-- lifelines -->
+  <g stroke="#555" stroke-width="1.2" stroke-dasharray="6,5">
+    <line x1="115" y1="69" x2="115" y2="580"/>
+    <line x1="300" y1="537" x2="300" y2="648"/>
+    <line x1="620" y1="69" x2="620" y2="648"/>
+    <line x1="900" y1="69" x2="900" y2="648"/>
+  </g>
+
+  <!-- 1 VerifyIdentity -->
+  <line x1="115" y1="110" x2="620" y2="110" stroke="#222" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="367" y="102" text-anchor="middle"><tspan font-weight="bold">VerifyIdentity</tspan> {name}</text>
+
+  <!-- 2 IdentityVerified -->
+  <line x1="620" y1="155" x2="115" y2="155" stroke="#222" stroke-width="1.5" stroke-dasharray="7,4" marker-end="url(#arro)"/>
+  <text x="367" y="147" text-anchor="middle"><tspan font-weight="bold">IdentityVerified</tspan> {MemberID, n, gpk, ARC keys, t, epoch, k}</text>
+
+  <!-- opt frame: confirm ARC keys -->
+  <rect x="70" y="172" width="890" height="102" fill="none" stroke="#777" stroke-width="1.2"/>
+  <path d="M70,172 h52 v16 l-8,8 h-44 z" fill="#eee" stroke="#777" stroke-width="1.2"/>
+  <text x="78" y="189" font-size="13" font-weight="bold" class="n">opt</text>
+  <text x="132" y="189" font-size="13" font-style="italic">[peer started with --archive]</text>
+
+  <!-- 3 RequestOpenerKeys -->
+  <line x1="115" y1="218" x2="900" y2="218" stroke="#222" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="760" y="210" text-anchor="middle"><tspan font-weight="bold">RequestOpenerKeys</tspan></text>
+  <!-- 4 ArchiveOpenerKey -->
+  <line x1="900" y1="258" x2="115" y2="258" stroke="#222" stroke-width="1.5" stroke-dasharray="7,4" marker-end="url(#arro)"/>
+  <text x="760" y="250" text-anchor="middle"><tspan font-weight="bold">ArchiveOpenerKey</tspan> {ElGamal pk}</text>
+  <text x="200" y="250" font-size="13" font-style="italic" fill="#444">abort on mismatch</text>
+
+  <!-- 5 JoinKeyMaterial -->
+  <line x1="115" y1="318" x2="620" y2="318" stroke="#222" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="367" y="310" text-anchor="middle"><tspan font-weight="bold">JoinKeyMaterial</tspan> {g<tspan baseline-shift="super" font-size="11">sk</tspan>, h<tspan baseline-shift="super" font-size="11">sk</tspan>, π<tspan baseline-shift="sub" font-size="11">1</tspan>, π<tspan baseline-shift="sub" font-size="11">2</tspan>, π<tspan baseline-shift="sub" font-size="11">3</tspan>, enc. shares, commitments}</text>
+  <!-- AA verifies -->
+  <rect x="632" y="328" width="190" height="26" fill="#fff8e1" stroke="#999"/>
+  <text x="727" y="346" text-anchor="middle" font-size="13" class="n">verify proofs and shares</text>
+
+  <!-- 6 AddIDShare -->
+  <line x1="620" y1="392" x2="900" y2="392" stroke="#222" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="760" y="368" text-anchor="middle"><tspan font-weight="bold">AddIDShare</tspan> {MemberID,</text>
+  <text x="760" y="385" text-anchor="middle">enc. share i, commitments} (gs)</text>
+  <!-- ARC verifies and stores -->
+  <rect x="820" y="402" width="160" height="26" fill="#fff8e1" stroke="#999"/>
+  <text x="900" y="420" text-anchor="middle" font-size="13" class="n">verify share, store</text>
+
+  <!-- 7 MemKey -->
+  <line x1="620" y1="462" x2="115" y2="462" stroke="#222" stroke-width="1.5" stroke-dasharray="7,4" marker-end="url(#arro)"/>
+  <text x="367" y="454" text-anchor="middle"><tspan font-weight="bold">MemKey</tspan> {σ<tspan baseline-shift="sub" font-size="11">1</tspan>, σ<tspan baseline-shift="sub" font-size="11">2</tspan>, e<tspan baseline-shift="sub" font-size="11">1</tspan>} (gs)</text>
+
+  <!-- member creates its sharing peer -->
+  <line x1="115" y1="510" x2="225" y2="510" stroke="#222" stroke-width="1.5" stroke-dasharray="7,4" marker-end="url(#arro)"/>
+  <text x="170" y="502" text-anchor="middle" font-size="13">«create»</text>
+  <g stroke="#222" stroke-width="1.5"><rect x="225" y="483" width="150" height="54" rx="4" fill="#dae8fc"/></g>
+  <g text-anchor="middle" class="n">
+    <text x="300" y="506" font-weight="bold">Sharing peer</text>
+    <text x="300" y="526">(own PeerID)</text>
+  </g>
+
+  <!-- throwaway identity dropped -->
+  <rect x="35" y="550" width="160" height="26" fill="#fff8e1" stroke="#999"/>
+  <text x="115" y="568" text-anchor="middle" font-size="13" class="n">drop throwaway ID</text>
+  <g stroke="#222" stroke-width="2"><line x1="106" y1="582" x2="124" y2="600"/><line x1="124" y1="582" x2="106" y2="600"/></g>
+
+  <!-- 8 AddPeerToSig -->
+  <line x1="300" y1="625" x2="620" y2="625" stroke="#222" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="460" y="617" text-anchor="middle"><tspan font-weight="bold">AddPeerToSig</tspan> {slot 1, …} (gs)</text>
+  <text x="640" y="630" font-size="13" font-style="italic" fill="#444">continues as an additional sharing peer</text>
+
+  <!-- legend -->
+  <text x="30" y="670" font-size="12" fill="#444">solid: request · dashed: response · (gs): group-signed · n: nonce · k: slots per epoch</text>
+</svg>
