@@ -1,0 +1,11 @@
+== minerva1
+dactie-authority_node-1 0.03%
+== minerva2
+dactie-peer_1-1 95.46%
+dactie-archive_node1-1 81.87%
+== minerva3
+dactie-archive_node2-1 80.53%
+dactie-peer_2-1 94.21%
+== minerva4
+dactie-peer_4-1 73.33%
+dactie-peer_3-1 96.81%
