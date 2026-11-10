@@ -255,7 +255,6 @@ All options of the three binaries, with defaults, are in [docs/PROTOCOL.md, "Run
 | `dactie-authority`, `dactie-archive`, `dactie-peer` | The three node types ([peer details](dactie-peer/README.md)) |
 | `dactie-utils` | Code shared by all nodes: networking, admission, MLS wrapper, message types |
 | `thressig` | Threshold dynamic group signatures (Camenisch et al. 2020), single-issuer variant |
-| `ps16` | Pointcheval–Sanders signatures |
 | `benchmark` | Microbenchmarks of `thressig` |
 | `dactie-experiment-anonymity` | Simulation of the coalition first-spy attack, with and without the stem phase |
 | `dactie-experiment-eclipse` | Simulation of eclipse attacks without flood publishing |

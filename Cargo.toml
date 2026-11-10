@@ -4,7 +4,6 @@ members = [
     "dactie-archive",
     "dactie-utils",
     "dactie-authority",
-    "ps16",
     "dactie-experiment-anonymity",
     "dactie-experiment-eclipse",
     "thressig",

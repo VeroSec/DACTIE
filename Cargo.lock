@@ -3445,16 +3445,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ps16"
-version = "0.1.0"
-dependencies = [
- "amcl_wrapper",
- "bincode",
- "serde",
- "thiserror",
-]
-
-[[package]]
 name = "ptr_meta"
 version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"

@@ -5,7 +5,6 @@
 !Cargo.lock
 !benchmark/
 !dactie-*/
-!ps16/
 !thressig/
 # BENCH_PAYLOAD_FILE=/usr/src/dactie/<file> reads the payload inside the image
 # (scripts/latency_sweep.sh)
