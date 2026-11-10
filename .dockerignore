@@ -1,5 +1,5 @@
-# The images copy the build context with `COPY . .`. Only the Cargo workspace goes in;
-# everything else in the checkout stays out, whatever it is.
+# The images copy the build context with `COPY . .`. Only the Cargo workspace and the
+# benchmark payloads go in; everything else in the checkout stays out, whatever it is.
 *
 !Cargo.toml
 !Cargo.lock
@@ -7,6 +7,10 @@
 !dactie-*/
 !ps16/
 !thressig/
+# BENCH_PAYLOAD_FILE=/usr/src/dactie/<file> reads the payload inside the image
+# (scripts/latency_sweep.sh)
+!misp/
+!stix/
 
 # Key material and node state, also inside the crates if a node was run from there.
 **/key_material
