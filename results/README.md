@@ -14,7 +14,8 @@ harness output of one cell.
 | Stem phase, Figure 2 hollow markers (q = 0.2) | `coalition/stem/stem_q0.2.csv`, raw runs in `coalition/stem/q0.2/` |
 | Timing estimators (extended version) | `coalition/timing/q0/`, `coalition/timing/q0.2/` |
 | Repeated messages and PeerID rotation (extended version) | `repeated/` |
-| Eclipse attacks (847 runs) | `eclipse_parsed.csv` |
+| Early single-attacker series (not in the paper) | `anonymity-early/` |
+| Eclipse attacks (847 runs) | `eclipse/eclipse_parsed.csv`, raw runs in `eclipse/output/`, `eclipse/old_output/` |
 | Latency table | `latency/rerun-2026-10-26.csv` (runs `off-*`, receiver `peer_1`), every receipt in `latency/raw-2026-10-26.csv` |
 | Soak test (33.4 hours) | `latency/soak/` |
 | Microbenchmark | `benchmark/README.md` |
@@ -35,6 +36,31 @@ most 11 peers directly. Regenerate the file with
 ```bash
 python3 scripts/size_figure_data.py results/anonymity_parsed.csv results/sizes
 ```
+
+## Early single-attacker series: `anonymity-early/`
+
+Not used in the paper. The first anonymity runs of the harness, in the repository
+since its first commit (2026-05-28), kept as a larger-scale series than its
+successors at the time. Its configuration (GossipSub parameters, connection
+limits, link delays) was not recorded with the data.
+
+> **TODO (Vero):** add the configuration and when the series ran.
+
+- `anonymity_parsed.csv`: 313 runs with 40 to 850 peers, one row per run:
+  peers, messages received and expected, receipts directly from the source
+  (`from_publisher`) or relayed, their share (`direct_publisher_percent`,
+  `direct_publisher_percent2`) and the number of propagating peers.
+- `output/<max>/`: per-run CSVs `experiment_<min>_<max>_<seconds>_<interval>.csv`
+  and per-setting averages `experiment_avg_*.csv`, for runs of 120 or 240 s with
+  a publication every 3, 60 or 70 s (`Fix(…)`). The folder names give the configured
+  maximum (up to 1,000); the completed runs reach 850 peers, and 17 of the 48 files
+  hold only a header.
+- `output.txt`: the harness console output of a series;
+  `python3 python-anonymity.py output.txt OUT.csv` turns such output into a CSV.
+- `parsed.csv`: another parsed series, including runs in which no peer received
+  the measurement message.
+- `anonymity_parsed3.ods`, `anonymity_parsed3_formulas.ods`: spreadsheets of the
+  parsed runs; `deps_dactie.txt`: the dependency tree of the harness build.
 
 ## Coalition attack: `coalition/`
 
@@ -123,13 +149,13 @@ Both sections are reproduced by
 python3 scripts/repeated_timing_summary.py results
 ```
 
-## Eclipse attacks: `eclipse_parsed.csv`
+## Eclipse attacks: `eclipse/`
 
 One row per run, 847 in all: network size, honest and attacker peers, the
 attacker share (`attacker_ratio`), the share of honest peers that received the
-victim's message (`message_ratio`), and the source folder of
-`dactie-experiment-eclipse/` (`series`: `output` or `old_output`). Rebuild it
-with `dactie-experiment-eclipse/parse_eclipse_output.py`.
+victim's message (`message_ratio`), and the source folder (`series`: `output` or
+`old_output`). The setup is described in `dactie-experiment-eclipse/README.md`.
+Rebuild the CSV with `python3 scripts/parse_eclipse_output.py`.
 
 ## Latency: `latency/`
 

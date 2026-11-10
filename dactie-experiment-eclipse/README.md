@@ -54,12 +54,12 @@ Let `H` be the set of honest peers and `A` the set of attacker peers, with `N = 
 
 If all of `V`'s mesh peers are attackers, no message from `V` reaches another honest peer, and the eclipse succeeded. A run needs at least two honest peers: `V` and one receiver.
 
-The result folders are named after the number of attackers. The file name `experiment_<min honest>_<max honest>_<stop time>_<interval>.csv` gives the series. Each setting in `output/` was repeated three times:
+The runs of the paper are in `results/eclipse/` at the repository root. Their folders are named after the number of attackers, and the file name `experiment_<min honest>_<max honest>_<stop time>_<interval>.csv` gives the series. Each setting in `output/` was repeated three times:
 
 | Folder | Attackers | Honest peers | Network size `n` | Runs |
 | --- | --- | --- | --- | --- |
-| `output/<A>/` | 10, 20, …, 100 | 2 to about A/4 | 12–125 | 375 |
-| `old_output/<A>/` | 10, 60–100 | 100–120 | 110–220 | 472 |
+| `results/eclipse/output/<A>/` | 10, 20, …, 100 | 2 to about A/4 | 12–125 | 375 |
+| `results/eclipse/old_output/<A>/` | 10, 60–100 | 100–120 | 110–220 | 472 |
 
 ## Results
 Across all 847 runs:
@@ -71,6 +71,6 @@ Across all 847 runs:
 So DACTIE stays available with flood publishing disabled, unless an attacker controls almost the entire network.
 
 ## Reproducing the figures
-`python3 parse_eclipse_output.py` collects the single runs of `output/` and `old_output/` into `eclipse_parsed.csv`, one row per run (847 rows). It skips the `experiment_avg_*.csv` files, which hold per-setting averages, and adds `attacker_ratio`, `message_ratio = received_messages / (honest_peers - 1)` and the source folder as `series`. The paper's eclipse figure plots `message_ratio` against `honest_peers` and against `attacker_ratio`.
+`python3 scripts/parse_eclipse_output.py` (from the repository root) collects the single runs of `results/eclipse/output/` and `results/eclipse/old_output/` into `results/eclipse/eclipse_parsed.csv`, one row per run (847 rows). It skips the `experiment_avg_*.csv` files, which hold per-setting averages, and adds `attacker_ratio`, `message_ratio = received_messages / (honest_peers - 1)` and the source folder as `series`. The paper's eclipse figure plots `message_ratio` against `honest_peers` and against `attacker_ratio`.
 
 Options added after these runs (`--flood-publish`, `-D/--mesh-n`, `--mesh-n-low`, …) are listed by `--help`.

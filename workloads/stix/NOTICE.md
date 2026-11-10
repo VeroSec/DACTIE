@@ -32,7 +32,7 @@ file is a valid STIX 2.1 bundle rather than a truncated one — a receiver that
 cannot parse the payload measures nothing. Object selection prefers
 non-`relationship` objects, which carry the substantive threat content.
 
-Sizes mirror the MISP events in `misp/`, so the two workloads are directly
+Sizes mirror the MISP events in `workloads/misp/`, so the two workloads are directly
 comparable at each point.
 
 ## Reproducing

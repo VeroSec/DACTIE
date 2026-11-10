@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Regenerate the STIX evaluation payloads in stix/ from an upstream ATT&CK bundle.
+"""Regenerate the STIX evaluation payloads in workloads/stix/ from an upstream ATT&CK bundle.
 
     curl -LO https://raw.githubusercontent.com/mitre-attack/attack-stix-data/master/ics-attack/ics-attack.json
     ./scripts/make_stix_payloads.py ics-attack.json
 
-Sizes mirror the MISP events in misp/ so the two workloads compare point for point.
-See stix/NOTICE.md for provenance and the MITRE licence terms.
+Sizes mirror the MISP events in workloads/misp/ so the two workloads compare point for point.
+See workloads/stix/NOTICE.md for provenance and the MITRE licence terms.
 """
 import json
 import os
@@ -19,7 +19,7 @@ def bundle(objects):
     return {"type": "bundle", "id": BUNDLE_ID, "objects": objects}
 
 
-def main(src_path, out_dir="stix"):
+def main(src_path, out_dir="workloads/stix"):
     src = json.load(open(src_path))
     objs = src["objects"]
     os.makedirs(out_dir, exist_ok=True)

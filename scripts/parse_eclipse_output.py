@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Collect the single eclipse runs of output/ and old_output/ into eclipse_parsed.csv.
+"""Collect the single eclipse runs of results/eclipse/{output,old_output}/ into results/eclipse/eclipse_parsed.csv.
+
+    python3 scripts/parse_eclipse_output.py
 
 Only the experiment_<min honest>_<max honest>_<stop time>_<interval>.csv files hold single
 runs; the experiment_avg_*.csv files next to them hold per-setting averages and are skipped.
@@ -10,7 +12,7 @@ import glob
 import os
 from typing import List
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "results", "eclipse")
 SERIES = ["output", "old_output"]
 OUTPUT_CSV = os.path.join(BASE_DIR, "eclipse_parsed.csv")
 

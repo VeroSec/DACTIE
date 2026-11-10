@@ -50,7 +50,7 @@ STIX bundles are built from the ATT&CK ICS feed by packing whole objects until j
 each target size; a bundle truncated mid-object does not parse, and an unparseable payload
 measures nothing. `relationship` objects are packed last — they are 1 667 of the 2 173
 objects but carry little substantive content, so a small bundle made only of them would
-not resemble what an organisation shares. See `stix/NOTICE.md` for provenance and the
+not resemble what an organisation shares. See `workloads/stix/NOTICE.md` for provenance and the
 MITRE licence terms; `scripts/make_stix_payloads.py` regenerates them.
 
 ## Two implementation changes this required
@@ -226,7 +226,7 @@ Data: `results/latency/rerun-2026-10-26.csv` (all runs and receivers),
 ```bash
 ./build.sh --no-cache                      # peer image is built with --features bench
 # bring the testbed up per RUNBOOK.md, then on the publisher host:
-BENCH_PAYLOAD_FILE=/usr/src/dactie/misp/<event>.json BENCH_RATE=40 \
+BENCH_PAYLOAD_FILE=/usr/src/dactie/workloads/misp/<event>.json BENCH_RATE=40 \
   docker compose --profile node119 up -d --force-recreate peer_4
 ./scripts/soak_sampler.sh <profile> <service> out.csv   # one row per minute
 ```

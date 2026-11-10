@@ -8,7 +8,7 @@ D=${1:-latency-sweep}; mkdir -p "$D/raw"
 S="ssh -q -o BatchMode=yes -o LogLevel=ERROR -o ConnectTimeout=10 -o ServerAliveInterval=10"
 r() { local h=$1; shift; for _ in 1 2 3 4 5; do $S "$h" "$@" && return 0; sleep 3; done; return 1; }
 HP=". /opt/vero/dactie-helpers.sh"
-MISP=misp/0dc6a09d-e8d7-48fd-a3f7-f554afb8d1b3
+MISP=workloads/misp/0dc6a09d-e8d7-48fd-a3f7-f554afb8d1b3
 run() { # name file rate seconds tcp_nodelay
   local name=$1 file=$2 rate=$3 secs=$4 nd=$5 t0=""
   while [ -z "$t0" ]; do t0=$($S minerva4 'date -u +%Y-%m-%dT%H:%M:%SZ'); [ -z "$t0" ] && sleep 3; done
@@ -33,10 +33,10 @@ recreate() { # tcp_nodelay
 sweep() { # prefix tcp_nodelay
   for size in 1KiB 4KiB 16KiB 64KiB 256KiB; do
     run $1-misp-$size $MISP.$size.json 40 32 $2
-    run $1-stix-$size stix/ics-attack.$size.json 40 32 $2
+    run $1-stix-$size workloads/stix/ics-attack.$size.json 40 32 $2
   done
   run $1-misp-full $MISP.json 5 210 $2
-  run $1-stix-full stix/ics-attack.json 5 210 $2
+  run $1-stix-full workloads/stix/ics-attack.json 5 210 $2
 }
 recreate true;  sweep off true
 recreate false; sweep on false

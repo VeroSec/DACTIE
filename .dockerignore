@@ -8,8 +8,7 @@
 !thressig/
 # BENCH_PAYLOAD_FILE=/usr/src/dactie/<file> reads the payload inside the image
 # (scripts/latency_sweep.sh)
-!misp/
-!stix/
+!workloads/
 
 # Key material and node state, also inside the crates if a node was run from there.
 **/key_material
