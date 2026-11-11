@@ -1,0 +1,38 @@
+# cryptogen input; generate.sh fills in the addresses from hosts/<env>.env.
+# Every node is reached by IP address, so the IPs are in the TLS certificates.
+OrdererOrgs:
+  - Name: Orderer
+    Domain: example.com
+    EnableNodeOUs: true
+    Specs:
+      - Hostname: orderer
+        SANS:
+          - localhost
+          - 127.0.0.1
+          - ${ORDERER_IP}
+
+PeerOrgs:
+  - Name: Org1
+    Domain: org1.example.com
+    EnableNodeOUs: true
+    Template:
+      Count: 2
+      SANS:
+        - localhost
+        - 127.0.0.1
+        - ${P0ORG1_IP}
+        - ${P1ORG1_IP}
+    Users:
+      Count: 1
+  - Name: Org2
+    Domain: org2.example.com
+    EnableNodeOUs: true
+    Template:
+      Count: 2
+      SANS:
+        - localhost
+        - 127.0.0.1
+        - ${P0ORG2_IP}
+        - ${P1ORG2_IP}
+    Users:
+      Count: 1
