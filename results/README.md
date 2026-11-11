@@ -159,7 +159,7 @@ Rebuild the CSV with `python3 scripts/parse_eclipse_output.py`.
 
 ## Latency: `latency/`
 
-Four hosts on a switched LAN (the testbed of `RUNBOOK.md`), 40 messages per
+Four hosts on a switched LAN (the testbed of `docs/RUNBOOK.md`), 40 messages per
 second over the full signed and MLS-encrypted path (5 for the complete MISP
 event and ATT&CK ICS feed), latency from publication to delivery. The paper's
 table is the run of 2026-10-26 with the released code, Nagle off and the
@@ -192,7 +192,7 @@ python3 scripts/latency_summary.py results/latency/raw-2026-10-26.csv results/la
 measurement on the same testbed (2026-08) reported 21.0 to 26.5 ms for 1 to
 256 KiB and 89.8 / 102.2 ms for the complete event and feed; its raw logs were
 not kept. Querying an archive for missed group updates took 105 ms on average
-in that measurement (`evaluation_performance.md`).
+in that measurement (`docs/EVALUATION.md`).
 
 `latency/soak/peer_{1,2,3}.csv` is a 33.4-hour soak test with 16 KiB MISP events
 at 40 messages per second, one row per receiver and 60-second window (sampled

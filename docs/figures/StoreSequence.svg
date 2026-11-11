@@ -1,7 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- ARC stores CTI and serves returning peers, as in docs/PROTOCOL.md section 6 and the paper's
-     "Archive Storage". Same style as MemberJoinSequence.svg. Export:
-     inkscape StoreSequence.svg -\-export-type=pdf -\-export-filename=StoreSequence.pdf -->
+<!-- Archives store CTI and serve returning peers (docs/PROTOCOL.md, section 6). -->
 <svg xmlns="http://www.w3.org/2000/svg" width="920" height="520" viewBox="0 0 920 520"
      font-family="Liberation Sans, Arial, Helvetica, sans-serif" font-size="15">
   <defs>

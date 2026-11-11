@@ -2,7 +2,7 @@
 
 Status: implemented in the sharing peer (`dactie-utils/src/stem.rs`, `dactie-peer/src/stem_relay.rs`)
 and in the anonymity harness (`dactie-experiment-anonymity/src/stem.rs`). Measured results are in
-`results/README.md` and `evaluation_performance.md`; where the code departs from the design below,
+`results/README.md` and `docs/EVALUATION.md`; where the code departs from the design below,
 see "Implementation notes".
 
 Parameter sources: BIP 156 (fluff 10%, routes rebuilt every ten minutes on average, random

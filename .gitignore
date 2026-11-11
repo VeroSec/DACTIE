@@ -4,18 +4,5 @@
 .idea/
 *.swp
 
-# Third-party paper + extracted figures (Thakkar et al., IEEE 2018).
-# Kept privately for reference only — must never be redistributed in the
-# published artifact, which ships under Apache-2.0.
-dataSources/
-
-# Paper submission and rebuttal drafts — never commit
-ACSAC_Submission*.pdf
-rebut.md
-
-# Internal working notes, kept out of the repository
-docs/FUTURE_WORK.md
-docs/notes/
-
 # Compose variables such as ARCHIVE_DB_PASSWORD — never commit
 .env

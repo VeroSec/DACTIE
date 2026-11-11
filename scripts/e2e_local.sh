@@ -61,11 +61,11 @@ send obs "sub t"
 send p1 "sub t"
 send p2 "sub t"
 sleep 6
-send p2 "broad t camera-ready-e2e"
-wait_count "$W/p1.log" 'camera-ready-e2e' 1 30
-SIG=$(grep -A6 "camera-ready-e2e" "$W/p1.log" | grep -A1 '^Signature:' | tail -1 | tr -d '[:space:]')
+send p2 "broad t e2e-broadcast"
+wait_count "$W/p1.log" 'e2e-broadcast' 1 30
+SIG=$(grep -A6 "e2e-broadcast" "$W/p1.log" | grep -A1 '^Signature:' | tail -1 | tr -d '[:space:]')
 [ -n "$SIG" ] || fail "no signature printed by peer1"
-grep -A6 "camera-ready-e2e" "$W/p1.log" | grep -q 'Sender: anonymous' || fail "the broadcast was not shown as anonymous"
+grep -A6 "e2e-broadcast" "$W/p1.log" | grep -q 'Sender: anonymous' || fail "the broadcast was not shown as anonymous"
 echo "OK broadcast: peer1 received peer2's message, sender anonymous"
 
 # Only the channel travels in clear; the topic is inside the ciphertext. "other2"

@@ -1,9 +1,10 @@
 #!/bin/bash
-# Latency sweep on the RUNBOOK.md testbed (minerva1-4, Phases 2-8 done), the rows of the
+# Latency sweep on the docs/RUNBOOK.md testbed (minerva1-4, Phases 2-8 done), the rows of the
 # paper's latency table. One run per payload: recreate peer_4 with the payload, wait until it
 # publishes, collect BENCH_RX at peer_1..3; first with Nagle off (the default), then on.
 # Usage: scripts/latency_sweep.sh [OUT_DIR]. The BENCH_RX lines land in OUT_DIR/raw/<run>.<receiver>;
-# results/latency/raw-2026-10-26.csv holds one such sweep as CSV, see scripts/latency_summary.py.
+# scripts/latency_raw_csv.py turns them into one CSV (results/latency/raw-2026-10-26.csv holds the
+# paper's sweep), and scripts/latency_summary.py summarizes it.
 D=${1:-latency-sweep}; mkdir -p "$D/raw"
 S="ssh -q -o BatchMode=yes -o LogLevel=ERROR -o ConnectTimeout=10 -o ServerAliveInterval=10"
 r() { local h=$1; shift; for _ in 1 2 3 4 5; do $S "$h" "$@" && return 0; sleep 3; done; return 1; }

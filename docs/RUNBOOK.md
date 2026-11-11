@@ -1,7 +1,7 @@
 # DACTIE Multi-Server Runbook
 
-Bring-up and test procedure for the 4-server testbed (minerva1–4), for branch `camera-ready`
-and later. Every step is copy-paste bash: run each block on the host named above it.
+Bring-up and test procedure for the 4-server testbed (minerva1–4) on which the paper's latency
+was measured. Every step is copy-paste bash: run each block on the host named above it.
 
 Last full run: 2026-10-13, all checks in Phase 9 passed.
 
@@ -30,7 +30,7 @@ nothing below needs `sudo` (which would ask for a password).
 | `key_material_6` | `peer_4` | same |
 
 What the options in `docker-compose.yml` mean is in
-[docs/PROTOCOL.md, Running the nodes](docs/PROTOCOL.md#running-the-nodes).
+[docs/PROTOCOL.md, Running the nodes](PROTOCOL.md#running-the-nodes).
 
 ---
 
@@ -76,13 +76,14 @@ The last line sets `$AA`, the authority's PeerId, once Phase 4 has written it.
 
 ## Phase 0 — Put the code on the hosts
 
-**Laptop.** The minervas cannot fetch `camera-ready` themselves, so push it over ssh. The
-branch must not be checked out on a host while you push it, so switch away first if needed.
+**Laptop.** The minervas cannot fetch from GitHub themselves, so push `main` over ssh to the
+branch `testbed`. The branch must not be checked out on a host while you push it, so switch
+away first if needed.
 
 ```bash
-cd ~/projects/dactie-camera
+cd ~/projects/dactie
 for i in 1 2 3 4; do
-  git push ssh://minerva$i/opt/vero/dactie camera-ready:refs/heads/camera-ready
+  git push ssh://minerva$i/opt/vero/dactie main:refs/heads/testbed
 done
 ```
 
@@ -90,12 +91,12 @@ done
 
 ```bash
 cd /opt/vero/dactie
-git checkout camera-ready
+git checkout testbed
 git log -1 --oneline        # the commit you pushed
 ```
 
-To update a host that is already on `camera-ready`, push from the laptop to another name,
-e.g. `camera-ready:refs/heads/camera-ready-next`, then run `git merge --ff-only camera-ready-next`
+To update a host that is already on `testbed`, push from the laptop to another name,
+e.g. `main:refs/heads/testbed-next`, then run `git merge --ff-only testbed-next`
 on the host.
 
 ## Phase 1 — Build
@@ -539,7 +540,6 @@ docker rm -f dactie-observer dactie-peer1b 2>/dev/null
 
 ## Older builds
 
-On `main` before `camera-ready`, peers registered with their own PeerId (no throwaway
-identity), and `register_identity` added that PeerId to the common group directly; there are no
-slot tags, no admission checks and no attribution, so Phase 9 does not apply. The archive
-self-healing and `build.sh` fixes are present since `hardening-docker-runs`.
+Builds from before the throwaway join identity registered peers with their own PeerId and
+added it to the common group directly; they have no slot tags, admission checks or attribution,
+so Phase 9 does not apply to them.

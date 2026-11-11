@@ -1,7 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- ARCs de-anonymize a sharing peer (signature opening), as in docs/PROTOCOL.md section 7 and the
-     paper's "Signature Opening". Same style as MemberJoinSequence.svg. Export:
-     inkscape DeanonymizeSequence.svg -\-export-type=pdf -\-export-filename=DeanonymizeSequence.pdf -->
+<!-- Archives de-anonymize a sharing peer by opening its signature (docs/PROTOCOL.md, section 7). -->
 <svg xmlns="http://www.w3.org/2000/svg" width="900" height="530" viewBox="0 0 900 530"
      font-family="Liberation Sans, Arial, Helvetica, sans-serif" font-size="15">
   <defs>

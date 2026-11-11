@@ -1,38 +1,24 @@
-# DACTIE-Authority
-This package contains the implementation of the authority peer. The authority should be started first and can be used as
-a bootstrap peer for other peers. Other peers need it to get their group member key. This key is need for publishing message or verifying the messages received.
+# dactie-authority
 
-New peers are automatically accepted at the moment.
+The Authorization Authority (AA): it admits archives and members, fixes the opening threshold
+`t` when the archives' init phase ends, owns the common MLS group, registers sharing peers by
+their slot tags, and combines the partial openings of `t` archives to open a signature. It
+cannot open a signature on its own. Start it first: archives and peers bootstrap from it.
 
-## Startup
-```
-Usage: dactie-authority [OPTIONS] --km-dir <KM_DIR>
-Example: dactie-authority --km-dir ./key_material
+- **Run it:** the [walkthrough](../README.md#walkthrough-run-a-network-by-hand) in the main README.
+- **Options:** [docs/PROTOCOL.md, "dactie-authority"](../docs/PROTOCOL.md#dactie-authority).
+- **Console:** `end_init_archive`, `req_open <signature hex>`, `open <signature hex>`
+  ([README, "Console commands"](../README.md#console-commands)).
+- **What it checks and stores:** [docs/PROTOCOL.md](../docs/PROTOCOL.md), sections 1 to 3 and 7.
 
-Options:
-  -K, --km-dir <KM_DIR>        Location of the folder, where the keymaterial should be saved
-  -p, --port <PORT>            Port to run service on
-  -l, --load-file <LOAD_FILE>  Load_file, for stored groups and subscribed topics
-  -h, --help                   Print help
-  -V, --version                Print version
+In the prototype, the authority accepts any unused name at registration; a deployment vets
+each organization out of band.
 
-```
+## Code
 
-## Commands
-The authority takes the following commands:
-```
-- req_open <signatur>: Requests open pairings from archives
-- open <signatur>: Opens Signatur   
-- end_init_archive: Ends Init Phase no new archives can join
-
-```
-## Initialzation phase
-The authority starts in the initialization mode. In this mode it accepts new archive connects. The archives are necessary for the groupmember-key-creation.
-When all archives are registered it can be switched to the normal mode of operation with `end_init_archive`.
-
-## Signature Opening
-The authority can open a signature if it receives the corresponding pairings from the archives. In this demo, the archives always create the pairings when request.
-In a real world scenario they have the freedom of decision.
-
-1. The authority requests the pairings from the archives with `req_open <signature>`
-2. When the authority has received enough pairings to achieve the necessary threshold (num_archives/2) it can open the signature with `open <signature>`
+| File | Contents |
+| --- | --- |
+| `src/main.rs` | Command-line options, start-up |
+| `src/myclient.rs` | Console commands |
+| `src/mybehaviour.rs` | Network behaviour: archive init, member and sharing-peer registration, openings |
+| `src/storage.rs` | Persistent state (`storage.json`): members, archives, threshold, slot tags |

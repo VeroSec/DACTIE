@@ -1,24 +1,22 @@
-# DACTIE-Archive
-This package contains the implementation of the archive peer. 
+# dactie-archive
 
-## Storage
-To start an archive a PostgresDB is needed. It is possible to set an external one up or use the one that comes with the docker compose file.
-The docker database can be build and started with `docker compose up db`
+The archive (ARC): it subscribes to all channels and stores every message in its own
+PostgreSQL database, holds one share of every member key, and serves missed group updates to
+peers that were offline. Its operator approves or denies every request to open a signature.
 
-## Startup
-```
-Usage: dactie-archive [OPTIONS] --km-dir <KM_DIR> --url <URL> --aa-id <AA_ID> --identity <IDENTITY>
-Example: dactie-archive -K ./key_material/ -u "postgres://archive:archivepw@localhost/archivedb" -i archive1 -a 12D3KooWKeDvTggGdBuRjiUnECtJTgC5tjJYMaQ4Q9BGWimsoJjy -B /ip4/127.0.0.1/tcp/10001
+- **Run it:** the [walkthrough](../README.md#walkthrough-run-a-network-by-hand) in the main
+  README. It needs a PostgreSQL database with the tables of [init.sql](../init.sql); pass the
+  password in `PGPASSWORD`, not in the URL.
+- **Options:** [docs/PROTOCOL.md, "dactie-archive"](../docs/PROTOCOL.md#dactie-archive).
+- **Console:** `pending`, `approve <id>`, `deny <id>`
+  ([README, "Console commands"](../README.md#console-commands)).
+- **What it stores and when it opens:** [docs/PROTOCOL.md](../docs/PROTOCOL.md), sections 1, 6
+  and 7.
 
-Options:
-  -K, --km-dir <KM_DIR>      Location of the folder, where the keymaterial should be saved
-  -p, --port <PORT>          Port to run service on
-  -u, --url <URL>            URL of the database
-  -a, --aa-id <AA_ID>        Authorization Authority ID
-  -B, --aa-addr <AA_ADDR>    Address of a Authorization Node [default: /ip4/127.0.0.1/tcp/5005]
-  -i, --identity <IDENTITY>  Identity of Archive
-  -h, --help                 Print help
-  -V, --version              Print version
+## Code
 
-```
-
+| File | Contents |
+| --- | --- |
+| `src/main.rs` | Command-line options, start-up, database connection |
+| `src/myclient.rs` | Operator console |
+| `src/mybehaviour.rs` | Network behaviour: registration, storage, key shares, partial openings |

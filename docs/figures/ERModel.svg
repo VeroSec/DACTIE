@@ -1,7 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Entity-relationship model (Fig. 2). Redrawn from DACTIE_Architecture_TBC.svg in the style of
-     MemberJoinSequence.svg (same role colours). Editable source; the paper includes ERModel.pdf:
-     inkscape ERModel.svg -\-export-type=pdf -\-export-filename=ERModel.pdf -->
+<!-- Entity-relationship model of DACTIE's peer types. -->
 <svg xmlns="http://www.w3.org/2000/svg" width="520" height="505" viewBox="0 0 520 505"
      font-family="Liberation Sans, Arial, Helvetica, sans-serif" font-size="17">
   <defs>

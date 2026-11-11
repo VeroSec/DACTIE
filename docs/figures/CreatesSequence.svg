@@ -1,7 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Member creates an additional sharing peer, as in docs/PROTOCOL.md section 3 and the paper's
-     "Create Additional Sharing Peers". Same style as MemberJoinSequence.svg. Export:
-     inkscape CreatesSequence.svg -\-export-type=pdf -\-export-filename=CreatesSequence.pdf -->
+<!-- A member creates an additional sharing peer (docs/PROTOCOL.md, section 3). -->
 <svg xmlns="http://www.w3.org/2000/svg" width="1000" height="585" viewBox="0 0 1000 585"
      font-family="Liberation Sans, Arial, Helvetica, sans-serif" font-size="15">
   <defs>

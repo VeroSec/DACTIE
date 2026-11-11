@@ -1,8 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Slide version: the sharing peer is created after MemKey (paper version: waiti-uncut/Pictures).
-     Member join, as in docs/PROTOCOL.md section 2 (sequence diagram). Editable source; the paper
-     includes MemberJoinSequence.pdf, exported with:
-     inkscape MemberJoinSequence.svg -\-export-type=pdf -\-export-filename=MemberJoinSequence.pdf -->
+<!-- Member join (docs/PROTOCOL.md, section 2). -->
 <svg xmlns="http://www.w3.org/2000/svg" width="1000" height="680" viewBox="0 0 1000 680"
      font-family="Liberation Sans, Arial, Helvetica, sans-serif" font-size="15">
   <defs>

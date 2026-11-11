@@ -1,7 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Gossip message formats, as in docs/PROTOCOL.md section 4 and dactie-utils/src/shared_structs.rs.
-     Replaces Messages5.svg. Editable source; the paper includes MessageFormats.pdf, exported with:
-     inkscape MessageFormats.svg -\-export-type=pdf -\-export-filename=MessageFormats.pdf -->
+<!-- Gossip message formats (docs/PROTOCOL.md, section 4; dactie-utils/src/shared_structs.rs). -->
 <svg xmlns="http://www.w3.org/2000/svg" width="1000" height="368" viewBox="0 0 1000 368"
      font-family="Liberation Sans, Arial, Helvetica, sans-serif" font-size="15">
   <rect width="1000" height="368" fill="#fff"/>

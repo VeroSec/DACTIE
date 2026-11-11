@@ -246,7 +246,7 @@ All options of the three binaries, with defaults, are in [docs/PROTOCOL.md, "Run
 
 ## Several hosts with Docker
 
-`docker-compose.yml` describes the paper's evaluation deployment on four hosts, with one compose profile per host (`node116`–`node119`) and fixed IP addresses. `./build.sh` builds the images, and [RUNBOOK.md](RUNBOOK.md) walks through the deployment and its checks. To try DACTIE on one machine, use the [walkthrough](#walkthrough-run-a-network-by-hand) instead.
+`docker-compose.yml` describes the paper's evaluation deployment on four hosts, with one compose profile per host (`node116`–`node119`) and fixed IP addresses. `./build.sh` builds the images, and [docs/RUNBOOK.md](docs/RUNBOOK.md) walks through the deployment and its checks. To try DACTIE on one machine, use the [walkthrough](#walkthrough-run-a-network-by-hand) instead.
 
 ## Repository layout
 
@@ -258,17 +258,21 @@ All options of the three binaries, with defaults, are in [docs/PROTOCOL.md, "Run
 | `benchmark` | Microbenchmarks of `thressig` |
 | `dactie-experiment-anonymity` | Simulation of the coalition first-spy attack, with and without the stem phase |
 | `dactie-experiment-eclipse` | Simulation of eclipse attacks without flood publishing |
-| `scripts` | End-to-end tests and measurement helpers |
-| `docs` | [PROTOCOL.md](docs/PROTOCOL.md) (every message, check and stored value), [DANDELION.md](docs/DANDELION.md) (stem phase design), figures |
+| `scripts` | End-to-end tests, evaluation runs and their summaries |
+| `results` | The data behind every result of the paper ([README](results/README.md)) |
+| `workloads` | MISP and STIX payloads of the latency runs |
+| `docs` | [PROTOCOL.md](docs/PROTOCOL.md) (every message, check and stored value), [EVALUATION.md](docs/EVALUATION.md) (how each result was produced), [RUNBOOK.md](docs/RUNBOOK.md) (the four-host testbed), [DANDELION.md](docs/DANDELION.md) (stem phase design), figures |
 
 ## Reproducing the paper's results
 
+[docs/EVALUATION.md](docs/EVALUATION.md) lists for every result how it was produced, the script that runs it again and where its data is. The data itself is in `results/`.
+
 | Result | Where |
 | --- | --- |
-| Latency and throughput on four hosts | [RUNBOOK.md](RUNBOOK.md) |
+| Latency, soak test and archive queries on four hosts | [docs/EVALUATION.md](docs/EVALUATION.md#end-to-end-latency), testbed in [docs/RUNBOOK.md](docs/RUNBOOK.md) |
 | Cost of signing, verifying and opening | [benchmark/README.md](benchmark/README.md) |
-| Anonymity against colluding peers | [dactie-experiment-anonymity/README.md](dactie-experiment-anonymity/README.md) |
-| Eclipse attacks | [dactie-experiment-eclipse/README.md](dactie-experiment-eclipse/README.md) |
+| Anonymity against colluding peers | [docs/EVALUATION.md](docs/EVALUATION.md#anonymity-simulations) |
+| Eclipse attacks | [docs/EVALUATION.md](docs/EVALUATION.md#eclipse-attacks) |
 
 ## Limitations of the prototype
 
