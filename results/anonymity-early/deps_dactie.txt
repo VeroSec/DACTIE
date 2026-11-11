@@ -1,4 +1,4 @@
-dactie-experiments v0.1.0 (/usr/share/mantra/new/dactie/dactie-experiment-anonymity)
+dactie-experiments v0.1.0 (dactie-experiment-anonymity)
 ├── clap v4.5.9
 │   ├── clap_builder v4.5.9
 │   │   ├── anstream v0.6.14

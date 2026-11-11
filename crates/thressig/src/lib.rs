@@ -284,7 +284,7 @@ pub fn check_share_layout(
 }
 
 /**
- * Executes part 1 of the member-side join of the PS16 scheme.
+ * Executes part 1 of the member-side join of the Camenisch et al. (2020) scheme.
  * Member generates sk and provides ZKP.
  */
 pub type JoinMem1Output = (
@@ -328,7 +328,7 @@ pub fn join_mem1(
 }
 
 /**
- * Executes part 2 of the member-side join of the PS16 scheme.
+ * Executes part 2 of the member-side join of the Camenisch et al. (2020) scheme.
  * A member combines sk and the partial key
  */
 pub fn join_mem2(sk: &FieldElement, partial_memkey: &Memkey) -> Memkey {
@@ -353,7 +353,7 @@ pub fn verify_memkey(memkey: &Memkey, grpkey: &Grpkey, id: usize) -> bool {
 }
 
 /**
- * Executes part 1 of the manager-side join of the PS16 scheme.
+ * Executes part 1 of the manager-side join of the Camenisch et al. (2020) scheme.
  * A random number is provided to the member
  */
 pub fn join_mgr1() -> G1 {
@@ -361,7 +361,7 @@ pub fn join_mgr1() -> G1 {
 }
 
 /**
- * Executes part 2 of the manager-side join of the PS16 scheme.
+ * Executes part 2 of the manager-side join of the Camenisch et al. (2020) scheme.
  * Manager validates Member data and indirectly signs sk if valid
  * Implements the not information theoretical implementation of the aggregate function
  */
@@ -502,7 +502,7 @@ fn sign_with<T: Serialize>(
     msg_to_send.extend(e.to_bytes());
     msg_to_send.extend(msg);
 
-    /* c = hash(ipk,ps16_sig->sigma1,ps16_sig->sigma2,e,m) */
+    /* c = H(grpkey, sigma1, sigma2, e, msg) */
     let c = FieldElement::from_msg_hash(&msg_to_send);
     let s = (&c * &memkey.sk) + &k1;
 

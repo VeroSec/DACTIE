@@ -77,13 +77,14 @@ The last line sets `$AA`, the authority's PeerId, once Phase 4 has written it.
 ## Phase 0 — Put the code on the hosts
 
 **Laptop.** The minervas cannot fetch from GitHub themselves, so push `main` over ssh to the
-branch `testbed`. The branch must not be checked out on a host while you push it, so switch
-away first if needed.
+branch `public-main`. The branch must not be checked out on a host while you push it, so switch
+away first if needed. `-c core.sshCommand=ssh` uses your ssh config for the minervas, in case the
+checkout's own `core.sshCommand` points at a GitHub deploy key.
 
 ```bash
 cd ~/projects/dactie
 for i in 1 2 3 4; do
-  git push ssh://minerva$i/opt/vero/dactie main:refs/heads/testbed
+  git -c core.sshCommand=ssh push ssh://minerva$i/opt/vero/dactie main:refs/heads/public-main
 done
 ```
 
@@ -91,12 +92,12 @@ done
 
 ```bash
 cd /opt/vero/dactie
-git checkout testbed
+git checkout public-main
 git log -1 --oneline        # the commit you pushed
 ```
 
-To update a host that is already on `testbed`, push from the laptop to another name,
-e.g. `main:refs/heads/testbed-next`, then run `git merge --ff-only testbed-next`
+To update a host that is already on `public-main`, push from the laptop to another name,
+e.g. `main:refs/heads/public-main-next`, then run `git merge --ff-only public-main-next`
 on the host.
 
 ## Phase 1 — Build

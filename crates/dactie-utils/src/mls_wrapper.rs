@@ -1904,7 +1904,7 @@ pub enum MyOpenMLSError {
     #[error("Opening threshold not set")]
     ThresholdUndefinedError,
     #[error("Group Signature Operation failed: {0}")]
-    PS16Error(#[from] thressig::ThressigError),
+    ThressigError(#[from] thressig::ThressigError),
     #[error("CommonGroup Not Set")]
     CommonGroupUndefinedError,
     #[error("Could not decrypt the group message (malformed, or encrypted under another epoch's key)")]
