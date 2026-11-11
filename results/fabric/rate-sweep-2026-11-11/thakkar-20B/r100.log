@@ -1,0 +1,2 @@
+2026/11/11 02:01:57 submitting 10000 transactions at 100/s, 20-byte records, run 20261111T020155-r100
+2026/11/11 02:03:38 offered 10000 in 100.0 s (100.0/s): committed 10000, invalid 0, failed 0, not committed after 1m0s 0

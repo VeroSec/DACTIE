@@ -8,7 +8,7 @@ data files and their columns are described in [results/README.md](../results/REA
 | Result | Where it runs | Run | Summarize | Data |
 | --- | --- | --- | --- | --- |
 | End-to-end latency, MISP and STIX | testbed, four hosts | `scripts/latency_sweep.sh` | `scripts/latency_raw_csv.py`, `scripts/latency_summary.py` | `results/latency/` |
-| Comparison with Hyperledger Fabric | testbed | `scripts/rate_sweep.sh` | `scripts/rate_sweep_raw_csv.py`, `scripts/rate_sweep_summary.py` | `results/latency/rate-sweep-2026-11-08/` |
+| Comparison with Hyperledger Fabric | testbed | `scripts/rate_sweep.sh`, `experiments/fabric/sweep.sh` | `scripts/rate_sweep_raw_csv.py`, `scripts/rate_sweep_summary.py`, `experiments/fabric/compare.py` | `results/latency/rate-sweep-2026-11-*/`, `results/fabric/` |
 | Soak test, 33.4 hours | testbed | `scripts/soak_sampler.sh` | – | `results/latency/soak/` |
 | Archive queries | testbed | `BENCH_ARCHIVE_*` settings | – | numbers below |
 | Bytes on the wire | one host | `scripts/capture_on_wire.sh` | `scripts/analyze_pcap.sh` | – |
@@ -232,47 +232,80 @@ cargo run --release -p dactie-experiment-eclipse -- -n 6 -N 6 -A 60 -a 15 -s 30 
 
 ## Comparison with Hyperledger Fabric
 
-Most related work builds on Hyperledger Fabric, which Thakkar et al. benchmarked at arrival
-rates of 25 to 175 transactions per second. The rate sweep repeats their rates on the testbed:
-the publisher sends 1 KiB MISP messages for 60 s per rate, without the stem and with Nagle off,
-and all archives and peers are recreated before each rate, so that the backlog of a saturated
-rate does not leak into the next. Throughput and latency use the 50 s after the first 5 s of
-each run; only the first receipt of a message counts.
+Most related work builds on Hyperledger Fabric. Thakkar et al. benchmarked it at arrival rates
+of 25 to 175 transactions per second, with Fabric 1.0 on 32-vCPU nodes. We ran their rates with
+both systems on the testbed:
 
-| Arrival rate (msg/s) | Throughput at `peer_1` | Mean / p95 at `peer_1` | Lost |
-| --- | --- | --- | --- |
-| 25 | 25.0 | 29.2 / 37 ms | 0 |
-| 50 | 50.0 | 17.8 / 26 ms | 0 |
-| 75 | 75.0 | 15.4 / 23 ms | 0 |
-| 100 | 100.0 | 15.8 / 24 ms | 0 |
-| 110 | 110.0 | 16.1 / 24 ms | 0 |
-| 125 | 125.0 | 17.4 / 26 ms | 0 |
-| 150 | 141.0 | 1,871 / 5,366 ms | 0 |
-| 175 | 142.0 | 3,403 / 12,430 ms | 13.7 % |
+- **Software:** DACTIE with `scripts/rate_sweep.sh`; Fabric 2.5.16 with `experiments/fabric/`
+  (setup in its README).
+- **Placement:** the same for both. Fabric's orderer runs where DACTIE's AA runs, the receiver
+  is on minerva2, and the publisher or load generator is on minerva4.
+- **Workload:** every message or transaction carries the same 1 KiB MISP record. Each rate
+  runs about 100 s; the DACTIE publisher stops 60 s after its start line plus the
+  `docker stats` round and its own stop.
+- **Between rates:** all nodes are recreated, so that the backlog of a saturated rate does not
+  leak into the next.
+- **Measurement:** throughput and latency use the 50 s after the first 5 s of each run; only
+  the first receipt of a message counts.
+- **Settings:** DACTIE runs without the stem and with Nagle off. Fabric gets its best case:
+  one Raft orderer, one endorsing peer, LevelDB, and blocks of 30 transactions or 1 s, as in
+  Thakkar et al.
 
-Up to 125 messages per second, all three receivers keep up with the arrival rate. Beyond, they
-saturate at about 141 per second with one CPU core busy each (95–98 % in
-`results/latency/rate-sweep-2026-11-08/cpu/r150.cpu`), close to the rate that verifying the
-group signatures one after another allows; verifying them in parallel would raise it. From
-100 messages per second on, the archives fell behind and forwarded some messages again after
-GossipSub's 60 s duplicate cache had expired, so peers received them twice (the `duplicates`
-column); the summary counts only the first receipt, and peers now drop such late copies
-(`crates/dactie-utils/src/dedup.rs`).
+Both systems were measured on 2026-11-11:
 
-The comparison is indirect: Thakkar et al. measure Fabric, not a CTI-sharing system, and no
-anonymous CTI-sharing prototype is available to measure against. Fabric's latency also
-includes ordering all transactions, which DACTIE does not do and CTI sharing does not need.
+| Arrival rate (per s) | DACTIE at `peer_1`: throughput, mean / p95 | Fabric at `peer0.org1`: throughput, mean / p95 |
+| --- | --- | --- |
+| 25 | 25.0, 24.1 / 29 ms | 25.2, 561 / 1,018 ms |
+| 50 | 50.0, 17.3 / 26 ms | 49.8, 345 / 615 ms |
+| 75 | 75.0, 15.7 / 23 ms | 75.0, 247 / 426 ms |
+| 100 | 100.0, 15.6 / 23 ms | 100.2, 197 / 332 ms |
+| 110 | 110.0, 15.8 / 24 ms | 109.8, 182 / 305 ms |
+| 125 | 125.0, 18.4 / 28 ms | 125.4, 166 / 274 ms |
+| 150 | 140.3, 1,845 / 5,264 ms | 150.0, 141 / 231 ms |
+| 175 | 141.4, 4,762 / 12,867 ms, 4.3 % lost | 174.6, 128 / 204 ms |
+| 1,000 | – | 1,000, 63 / 87 ms |
 
-To run it from a machine with ssh access to the four hosts (about 3 minutes per rate):
+**Latency.** Up to 125 messages per second, DACTIE delivers within 16 to 24 ms on average and
+Fabric commits within 166 to 561 ms. Most of Fabric's latency is waiting for a block to fill:
+30 transactions or 1 s, and from 50 per second on every block is full.
+
+**Saturation.** DACTIE saturates at about 141 messages per second, with one CPU core busy at
+each receiving peer (93–95 % in `results/latency/rate-sweep-2026-11-11/cpu/r150.cpu`). That is
+close to the rate that verifying the group signatures one after another allows; verifying them
+in parallel would raise it. Fabric committed every transaction at every rate up to 1,000 per
+second, with no node above 1.7 cores. Its peers check ECDSA signatures, and its clients are not
+anonymous in this setup.
+
+**Thakkar et al.'s workload.** Their 20-byte value
+(`results/fabric/rate-sweep-2026-11-11/thakkar-20B/`) changes Fabric's numbers by less than
+4 ms. Their Fabric 1.0 took 421 to 820 ms and saturated at about 140 per second.
+
+**The sweep of 2026-11-08.** It ran the released build `bec9c1c` and gave the same DACTIE
+numbers within a few milliseconds, with 13.7 % lost at 175 per second. From 100 messages per
+second on, the archives fell behind and forwarded some messages again after GossipSub's 60 s
+duplicate cache had expired, so peers received them twice (the `duplicates` column). Peers now
+drop such late copies (`crates/dactie-utils/src/dedup.rs`), and the 2026-11-11 rerun has none.
+
+Fabric's latency also includes ordering all transactions, which DACTIE does not do and CTI
+sharing does not need.
+
+To run both from a machine with ssh access to the four hosts (about 4 minutes per rate for
+DACTIE, about 2.5 minutes for Fabric):
 
 ```bash
 scripts/rate_sweep.sh OUT_DIR                      # raw BENCH_RX lines in OUT_DIR/r<rate>.<receiver>
 python3 scripts/rate_sweep_raw_csv.py OUT_DIR      # OUT_DIR/raw.csv.gz
 python3 scripts/rate_sweep_summary.py OUT_DIR      # OUT_DIR/summary.csv
+cd experiments/fabric
+./generate.sh hosts/minervas.env && ./deploy.sh    # Fabric network on the four hosts
+./sweep.sh misp FABRIC_OUT_DIR                     # FABRIC_OUT_DIR/raw.csv.gz and summary.csv
+python3 compare.py OUT_DIR FABRIC_OUT_DIR > comparison.csv
 ```
 
-The last two steps regenerate `results/latency/rate-sweep-2026-11-08/summary.csv` byte for
-byte from the sweep's raw lines.
+`scripts/rate_sweep_raw_csv.py` and `scripts/rate_sweep_summary.py` regenerate
+`results/latency/rate-sweep-2026-11-08/summary.csv` byte for byte from the sweep's raw lines.
+Stop the DACTIE network before running Fabric, and the other way round: they would share the
+hosts' CPUs.
 
 ## Scope
 

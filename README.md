@@ -258,6 +258,7 @@ All options of the three binaries, with defaults, are in [docs/PROTOCOL.md, "Run
 | `experiments/anonymity` | Simulation of the coalition first-spy attack, with and without the stem phase |
 | `experiments/eclipse` | Simulation of eclipse attacks without flood publishing |
 | `experiments/benchmark` | Microbenchmarks of `thressig` |
+| `experiments/fabric` | Hyperledger Fabric 2.5 on the same testbed, for the comparison with DACTIE's rate sweep ([README](experiments/fabric/README.md)) |
 | `scripts` | End-to-end tests, evaluation runs and their summaries |
 | `results` | The data behind every result of the paper ([README](results/README.md)) |
 | `workloads` | MISP and STIX payloads of the latency runs |
@@ -273,6 +274,7 @@ All options of the three binaries, with defaults, are in [docs/PROTOCOL.md, "Run
 | Cost of signing, verifying and opening | [experiments/benchmark/README.md](experiments/benchmark/README.md) |
 | Anonymity against colluding peers | [docs/EVALUATION.md](docs/EVALUATION.md#anonymity-simulations) |
 | Eclipse attacks | [docs/EVALUATION.md](docs/EVALUATION.md#eclipse-attacks) |
+| Comparison with Hyperledger Fabric on the same hosts | [docs/EVALUATION.md](docs/EVALUATION.md#comparison-with-hyperledger-fabric) |
 
 ## Limitations of the prototype
 

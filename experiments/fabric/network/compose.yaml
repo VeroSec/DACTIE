@@ -1,0 +1,163 @@
+# Fabric 2.5 network for the comparison with DACTIE's rate sweep. Host networking on every
+# node, as in DACTIE's docker-compose.yml. A profile selects the services of one host:
+#   m1: orderer               (where DACTIE's AA runs)
+#   m2: peer0.org1 + cc       (archive 1 and peer_1, the receiver of both sweeps)
+#   m3: peer0.org2 + cc       (archive 2 and peer_2)
+#   m4: peer1.org1, peer1.org2 + cc, and the load generator (peer_3 and the publisher peer_4)
+#   local: everything on one machine
+# Start with: docker compose -f network/compose.yaml --env-file build/hosts.env --profile <p> up -d
+# Ports: orderer 7050 (admin 7053), peers 7051/8051/9051/10051 (chaincode 1 higher),
+# operations/metrics 9443-9447, chaincode server 127.0.0.1:9999.
+name: dactie-fabric
+
+x-peer: &peer
+  image: hyperledger/fabric-peer:${FABRIC_VERSION:-2.5.16}
+  network_mode: host
+  restart: unless-stopped
+
+x-peer-env: &peer-env
+  FABRIC_LOGGING_SPEC: INFO
+  CORE_PEER_TLS_ENABLED: "true"
+  CORE_PEER_TLS_CERT_FILE: /etc/hyperledger/fabric/tls/server.crt
+  CORE_PEER_TLS_KEY_FILE: /etc/hyperledger/fabric/tls/server.key
+  CORE_PEER_TLS_ROOTCERT_FILE: /etc/hyperledger/fabric/tls/ca.crt
+  CORE_PEER_PROFILE_ENABLED: "false"
+  # Every peer pulls blocks from the orderer itself (no gossip dissemination in between).
+  CORE_PEER_GOSSIP_USELEADERELECTION: "false"
+  CORE_PEER_GOSSIP_ORGLEADER: "true"
+  CORE_METRICS_PROVIDER: prometheus
+  CORE_CHAINCODE_EXECUTETIMEOUT: 300s
+
+services:
+  orderer:
+    image: hyperledger/fabric-orderer:${FABRIC_VERSION:-2.5.16}
+    profiles: [m1, local]
+    container_name: fabric-orderer
+    network_mode: host
+    restart: unless-stopped
+    environment:
+      FABRIC_LOGGING_SPEC: INFO
+      ORDERER_GENERAL_LISTENADDRESS: 0.0.0.0
+      ORDERER_GENERAL_LISTENPORT: "7050"
+      ORDERER_GENERAL_LOCALMSPID: OrdererMSP
+      ORDERER_GENERAL_LOCALMSPDIR: /var/hyperledger/orderer/msp
+      ORDERER_GENERAL_TLS_ENABLED: "true"
+      ORDERER_GENERAL_TLS_PRIVATEKEY: /var/hyperledger/orderer/tls/server.key
+      ORDERER_GENERAL_TLS_CERTIFICATE: /var/hyperledger/orderer/tls/server.crt
+      ORDERER_GENERAL_TLS_ROOTCAS: "[/var/hyperledger/orderer/tls/ca.crt]"
+      ORDERER_GENERAL_CLUSTER_CLIENTCERTIFICATE: /var/hyperledger/orderer/tls/server.crt
+      ORDERER_GENERAL_CLUSTER_CLIENTPRIVATEKEY: /var/hyperledger/orderer/tls/server.key
+      ORDERER_GENERAL_CLUSTER_ROOTCAS: "[/var/hyperledger/orderer/tls/ca.crt]"
+      ORDERER_GENERAL_BOOTSTRAPMETHOD: none
+      ORDERER_CHANNELPARTICIPATION_ENABLED: "true"
+      ORDERER_ADMIN_TLS_ENABLED: "true"
+      ORDERER_ADMIN_TLS_CERTIFICATE: /var/hyperledger/orderer/tls/server.crt
+      ORDERER_ADMIN_TLS_PRIVATEKEY: /var/hyperledger/orderer/tls/server.key
+      ORDERER_ADMIN_TLS_ROOTCAS: "[/var/hyperledger/orderer/tls/ca.crt]"
+      ORDERER_ADMIN_TLS_CLIENTROOTCAS: "[/var/hyperledger/orderer/tls/ca.crt]"
+      ORDERER_ADMIN_LISTENADDRESS: 0.0.0.0:7053
+      ORDERER_OPERATIONS_LISTENADDRESS: 0.0.0.0:9443
+      ORDERER_METRICS_PROVIDER: prometheus
+    volumes:
+      - ../build/crypto/ordererOrganizations/example.com/orderers/orderer.example.com/msp:/var/hyperledger/orderer/msp:ro
+      - ../build/crypto/ordererOrganizations/example.com/orderers/orderer.example.com/tls:/var/hyperledger/orderer/tls:ro
+      - orderer:/var/hyperledger/production/orderer
+
+  peer0org1:
+    <<: *peer
+    profiles: [m2, local]
+    container_name: fabric-peer0org1
+    environment:
+      <<: *peer-env
+      CORE_PEER_ID: peer0.org1.example.com
+      CORE_PEER_LOCALMSPID: Org1MSP
+      CORE_PEER_ADDRESS: ${P0ORG1_IP}:7051
+      CORE_PEER_LISTENADDRESS: 0.0.0.0:7051
+      CORE_PEER_CHAINCODEADDRESS: ${P0ORG1_IP}:7052
+      CORE_PEER_CHAINCODELISTENADDRESS: 0.0.0.0:7052
+      CORE_PEER_GOSSIP_BOOTSTRAP: ${P1ORG1_IP}:9051
+      CORE_PEER_GOSSIP_EXTERNALENDPOINT: ${P0ORG1_IP}:7051
+      CORE_OPERATIONS_LISTENADDRESS: 0.0.0.0:9444
+    volumes:
+      - ../build/crypto/peerOrganizations/org1.example.com/peers/peer0.org1.example.com/msp:/etc/hyperledger/fabric/msp:ro
+      - ../build/crypto/peerOrganizations/org1.example.com/peers/peer0.org1.example.com/tls:/etc/hyperledger/fabric/tls:ro
+      - peer0org1:/var/hyperledger/production
+
+  peer0org2:
+    <<: *peer
+    profiles: [m3, local]
+    container_name: fabric-peer0org2
+    environment:
+      <<: *peer-env
+      CORE_PEER_ID: peer0.org2.example.com
+      CORE_PEER_LOCALMSPID: Org2MSP
+      CORE_PEER_ADDRESS: ${P0ORG2_IP}:8051
+      CORE_PEER_LISTENADDRESS: 0.0.0.0:8051
+      CORE_PEER_CHAINCODEADDRESS: ${P0ORG2_IP}:8052
+      CORE_PEER_CHAINCODELISTENADDRESS: 0.0.0.0:8052
+      CORE_PEER_GOSSIP_BOOTSTRAP: ${P1ORG2_IP}:10051
+      CORE_PEER_GOSSIP_EXTERNALENDPOINT: ${P0ORG2_IP}:8051
+      CORE_OPERATIONS_LISTENADDRESS: 0.0.0.0:9445
+    volumes:
+      - ../build/crypto/peerOrganizations/org2.example.com/peers/peer0.org2.example.com/msp:/etc/hyperledger/fabric/msp:ro
+      - ../build/crypto/peerOrganizations/org2.example.com/peers/peer0.org2.example.com/tls:/etc/hyperledger/fabric/tls:ro
+      - peer0org2:/var/hyperledger/production
+
+  peer1org1:
+    <<: *peer
+    profiles: [m4, local]
+    container_name: fabric-peer1org1
+    environment:
+      <<: *peer-env
+      CORE_PEER_ID: peer1.org1.example.com
+      CORE_PEER_LOCALMSPID: Org1MSP
+      CORE_PEER_ADDRESS: ${P1ORG1_IP}:9051
+      CORE_PEER_LISTENADDRESS: 0.0.0.0:9051
+      CORE_PEER_CHAINCODEADDRESS: ${P1ORG1_IP}:9052
+      CORE_PEER_CHAINCODELISTENADDRESS: 0.0.0.0:9052
+      CORE_PEER_GOSSIP_BOOTSTRAP: ${P0ORG1_IP}:7051
+      CORE_PEER_GOSSIP_EXTERNALENDPOINT: ${P1ORG1_IP}:9051
+      CORE_OPERATIONS_LISTENADDRESS: 0.0.0.0:9446
+    volumes:
+      - ../build/crypto/peerOrganizations/org1.example.com/peers/peer1.org1.example.com/msp:/etc/hyperledger/fabric/msp:ro
+      - ../build/crypto/peerOrganizations/org1.example.com/peers/peer1.org1.example.com/tls:/etc/hyperledger/fabric/tls:ro
+      - peer1org1:/var/hyperledger/production
+
+  peer1org2:
+    <<: *peer
+    profiles: [m4, local]
+    container_name: fabric-peer1org2
+    environment:
+      <<: *peer-env
+      CORE_PEER_ID: peer1.org2.example.com
+      CORE_PEER_LOCALMSPID: Org2MSP
+      CORE_PEER_ADDRESS: ${P1ORG2_IP}:10051
+      CORE_PEER_LISTENADDRESS: 0.0.0.0:10051
+      CORE_PEER_CHAINCODEADDRESS: ${P1ORG2_IP}:10052
+      CORE_PEER_CHAINCODELISTENADDRESS: 0.0.0.0:10052
+      CORE_PEER_GOSSIP_BOOTSTRAP: ${P0ORG2_IP}:8051
+      CORE_PEER_GOSSIP_EXTERNALENDPOINT: ${P1ORG2_IP}:10051
+      CORE_OPERATIONS_LISTENADDRESS: 0.0.0.0:9447
+    volumes:
+      - ../build/crypto/peerOrganizations/org2.example.com/peers/peer1.org2.example.com/msp:/etc/hyperledger/fabric/msp:ro
+      - ../build/crypto/peerOrganizations/org2.example.com/peers/peer1.org2.example.com/tls:/etc/hyperledger/fabric/tls:ro
+      - peer1org2:/var/hyperledger/production
+
+  # Chaincode as a service: the peers of this host connect to it at 127.0.0.1:9999 (the
+  # address in the chaincode package, see generate.sh).
+  cc:
+    image: dactie-fabric-cc:1
+    profiles: [m2, m3, m4, local]
+    container_name: fabric-cc
+    network_mode: host
+    restart: unless-stopped
+    env_file: [../build/chaincode.env]
+    environment:
+      CHAINCODE_SERVER_ADDRESS: 127.0.0.1:9999
+
+volumes:
+  orderer:
+  peer0org1:
+  peer0org2:
+  peer1org1:
+  peer1org2:
