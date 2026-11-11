@@ -17,6 +17,7 @@ harness output of one cell.
 | Early single-attacker series (not in the paper) | `anonymity-early/` |
 | Eclipse attacks (847 runs) | `eclipse/eclipse_parsed.csv`, raw runs in `eclipse/output/`, `eclipse/old_output/` |
 | Latency table | `latency/rerun-2026-10-26.csv` (runs `off-*`, receiver `peer_1`), every receipt in `latency/raw-2026-10-26.csv` |
+| Comparison with Hyperledger Fabric (arrival rates 25 to 175 msg/s) | `latency/rate-sweep-2026-11-08/` |
 | Soak test (33.4 hours) | `latency/soak/` |
 | Microbenchmark | `benchmark/README.md` |
 
@@ -198,6 +199,21 @@ in that measurement (`docs/EVALUATION.md`).
 at 40 messages per second, one row per receiver and 60-second window (sampled
 about every 62 s): number of deliveries in the window (`n`), mean, median, p95
 and maximum latency in ms, resident memory in MB and established connections.
+
+## Comparison with Hyperledger Fabric: `latency/rate-sweep-2026-11-08/`
+
+The arrival-rate sweep of 2026-11-08 on the same testbed: 1 KiB MISP messages at 25, 50, 75,
+100, 110, 125, 150 and 175 messages per second, 60 s each, without the stem and with Nagle off,
+receivers `peer_1` to `peer_3` (setup and results in `docs/EVALUATION.md`).
+
+- `raw.csv.gz`: every `BENCH_RX` line, with the arrival rate, the receiver, docker's receive
+  timestamp (`received_at`), the forwarding neighbour's PeerID (`via`), the publisher's
+  sequence number and the latency in ms.
+- `summary.csv`: per rate and receiver, the throughput and the mean and p95 latency over the
+  50 s after the first 5 s of the run, the share of sequence numbers never received (`loss`),
+  and the first receipts and later copies (`receipts`, `duplicates`). Regenerate it with
+  `python3 scripts/rate_sweep_summary.py results/latency/rate-sweep-2026-11-08`.
+- `cpu/r<rate>.cpu`: `docker stats` of every node 40 s into each rate.
 
 ## Earlier re-measurement: `latency/rerun-2026-10-22.csv`
 

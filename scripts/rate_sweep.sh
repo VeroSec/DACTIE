@@ -1,5 +1,5 @@
 #!/bin/bash
-# Arrival-rate sweep on the RUNBOOK.md testbed (minerva1-4, Phases 2-8 done), for the comparison
+# Arrival-rate sweep on the docs/RUNBOOK.md testbed (minerva1-4, Phases 2-8 done), for the comparison
 # with Thakkar et al.'s Fabric benchmark: 1 KiB MISP, stem off, Nagle off. The publisher runs 60 s
 # after its start line plus the docker stats round and its own stop, about 100 s per rate in the
 # 2026-11-08 sweep; the summary uses 50 s of each run (5 to 55 s after the first receipt).
@@ -7,13 +7,13 @@
 # backlog of a saturated run does not leak into the next. Mid-run (t+40 s), docker stats on every
 # host shows which node saturates.
 # Usage: [RATES="25 50"] scripts/rate_sweep.sh [OUT_DIR]. BENCH_RX lines land in OUT_DIR/r<rate>.<receiver>;
-# results/latency/rate-sweep-2026-11-08/raw.csv.gz holds one sweep as CSV, summarized by
-# scripts/rate_sweep_summary.py.
+# scripts/rate_sweep_raw_csv.py turns them into OUT_DIR/raw.csv.gz (results/latency/rate-sweep-2026-11-08/
+# holds the paper's sweep), and scripts/rate_sweep_summary.py summarizes it.
 D=${1:-rate-sweep}; mkdir -p "$D"
 S="ssh -q -o BatchMode=yes -o LogLevel=ERROR -o ConnectTimeout=10 -o ServerAliveInterval=10"
 r() { local h=$1; shift; for _ in 1 2 3 4 5; do $S "$h" "$@" && return 0; sleep 3; done; return 1; }
 HP="cd /opt/vero/dactie; logs() { docker logs \"\$@\" 2>&1 | sed 's/\x1b\[[0-9;]*m//g'; }"
-FILE=/usr/src/dactie/misp/0dc6a09d-e8d7-48fd-a3f7-f554afb8d1b3.1KiB.json
+FILE=/usr/src/dactie/workloads/misp/0dc6a09d-e8d7-48fd-a3f7-f554afb8d1b3.1KiB.json
 for rate in ${RATES:-25 50 75 100 110 125 150 175}; do
   r minerva2 "$HP; docker compose --profile node117 up -d --force-recreate archive_node1 peer_1 >/dev/null 2>&1" &
   r minerva3 "$HP; docker compose --profile node118 up -d --force-recreate archive_node2 peer_2 >/dev/null 2>&1" &
