@@ -22,7 +22,7 @@ This repository contains the Rust prototype, the experiments, and the first publ
 - **Sender anonymity:** every message carries a group signature that proves "an admitted member sent this" but not which one. No message carries the sender's PeerID.
 - **Accountability:** `t` of `n` archives together can open a signature and name the member. Fewer archives cannot, and neither can the AA alone.
 - **Confidentiality and integrity:** messages are encrypted with MLS, to all members or to a private group, and signed.
-- **Receiver anonymity (partitioned channels):** a topic is not a GossipSub topic of its own. Each topic maps to one of 10 channels, `hash(topic) mod 10` (`NUM_CHANNELS` in `dactie-utils/src/mls_wrapper.rs`). Only the channel travels in clear; the topic is inside the ciphertext. A peer receives every message on its channel and drops the topics it did not subscribe to, so neighbours see which channels a peer joined, but not which topics it reads. Fewer channels hide interests better, at the cost of more traffic per peer.
+- **Receiver anonymity (partitioned channels):** a topic is not a GossipSub topic of its own. Each topic maps to one of 10 channels, `hash(topic) mod 10` (`NUM_CHANNELS` in `crates/dactie-utils/src/mls_wrapper.rs`). Only the channel travels in clear; the topic is inside the ciphertext. A peer receives every message on its channel and drops the topics it did not subscribe to, so neighbours see which channels a peer joined, but not which topics it reads. Fewer channels hide interests better, at the cost of more traffic per peer.
 - **Network-level anonymity:** a stem phase (Dandelion++) hides which peer published a message first. A coalition of `c` colluding peers among `|N_c|` names the sender in about `c/|N_c|` of the cases.
 - **Not covered:** CTI content that itself identifies the victim, global passive adversaries, and `t` colluding archives.
 
@@ -252,12 +252,12 @@ All options of the three binaries, with defaults, are in [docs/PROTOCOL.md, "Run
 
 | Folder | Contents |
 | --- | --- |
-| `dactie-authority`, `dactie-archive`, `dactie-peer` | The three node types ([peer details](dactie-peer/README.md)) |
-| `dactie-utils` | Code shared by all nodes: networking, admission, MLS wrapper, message types |
-| `thressig` | Threshold dynamic group signatures (Camenisch et al. 2020), single-issuer variant |
-| `benchmark` | Microbenchmarks of `thressig` |
-| `dactie-experiment-anonymity` | Simulation of the coalition first-spy attack, with and without the stem phase |
-| `dactie-experiment-eclipse` | Simulation of eclipse attacks without flood publishing |
+| `crates/dactie-authority`, `crates/dactie-archive`, `crates/dactie-peer` | The three node types ([authority](crates/dactie-authority/README.md), [archive](crates/dactie-archive/README.md), [peer](crates/dactie-peer/README.md)) |
+| `crates/dactie-utils` | Code shared by all nodes: networking, admission, MLS wrapper, message types ([modules](crates/dactie-utils/README.md)) |
+| `crates/thressig` | Threshold dynamic group signatures (Camenisch et al. 2020), single-issuer variant |
+| `experiments/anonymity` | Simulation of the coalition first-spy attack, with and without the stem phase |
+| `experiments/eclipse` | Simulation of eclipse attacks without flood publishing |
+| `experiments/benchmark` | Microbenchmarks of `thressig` |
 | `scripts` | End-to-end tests, evaluation runs and their summaries |
 | `results` | The data behind every result of the paper ([README](results/README.md)) |
 | `workloads` | MISP and STIX payloads of the latency runs |
@@ -270,7 +270,7 @@ All options of the three binaries, with defaults, are in [docs/PROTOCOL.md, "Run
 | Result | Where |
 | --- | --- |
 | Latency, soak test and archive queries on four hosts | [docs/EVALUATION.md](docs/EVALUATION.md#end-to-end-latency), testbed in [docs/RUNBOOK.md](docs/RUNBOOK.md) |
-| Cost of signing, verifying and opening | [benchmark/README.md](benchmark/README.md) |
+| Cost of signing, verifying and opening | [experiments/benchmark/README.md](experiments/benchmark/README.md) |
 | Anonymity against colluding peers | [docs/EVALUATION.md](docs/EVALUATION.md#anonymity-simulations) |
 | Eclipse attacks | [docs/EVALUATION.md](docs/EVALUATION.md#eclipse-attacks) |
 

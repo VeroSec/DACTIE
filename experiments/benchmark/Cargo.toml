@@ -6,7 +6,7 @@ publish = false
 description = "Criterion microbenchmarks for the threshold group signature (thressig) used by DACTIE"
 
 [dependencies]
-thressig = { path = "../thressig" }
+thressig = { path = "../../crates/thressig" }
 bincode = "1.3.3"
 
 [dev-dependencies]

@@ -2,7 +2,7 @@
 
 This document describes how the DACTIE prototype works at the protocol level: who sends which message to whom, what is checked, and what is stored where. The paper presents the design and its evaluation. This document covers the protocol detail the paper leaves out. For build and usage instructions, see the [README](../README.md).
 
-All statements describe the code in this repository. Message names refer to `dactie-utils/src/shared_structs.rs`.
+All statements describe the code in this repository. Message names refer to `crates/dactie-utils/src/shared_structs.rs`.
 
 ## Roles
 
@@ -17,7 +17,7 @@ All statements describe the code in this repository. Message names refer to `dac
 | Name | What it is | Held by |
 | --- | --- | --- |
 | PeerID | libp2p peer ID, derived from the node's Ed25519 key in its key-material folder | each node |
-| Throwaway join identity | Fresh libp2p key a peer joins from; the only PeerID the AA links to a name, used once and dropped (`dactie-peer/src/join_relay.rs`) | joining peer, briefly |
+| Throwaway join identity | Fresh libp2p key a peer joins from; the only PeerID the AA links to a name, used once and dropped (`crates/dactie-peer/src/join_relay.rs`) | joining peer, briefly |
 | MemberID | Numeric ID derived by hashing the name a member registers with | AA (`gml`: MemberID → name) |
 | Group public key / manager key | Keys of the threshold dynamic group signature scheme (`thressig`, Camenisch et al. 2020, single-issuer variant) | AA (manager key); all nodes (group key) |
 | Member key | Member secret `sk` plus the AA's credential `(σ1, σ2, e1)` on it, with `σ1 = g^{H0(MemberID)}`; signing randomizes the credential, except for the attribution inside an attributed message (section 4) | member peers (`key_material.json`) |
@@ -107,17 +107,17 @@ All nodes use libp2p over TCP with Noise and Yamux. GossipSub is configured as f
 - `validate_messages()`: the application checks every message before GossipSub forwards it.
 - Maximum message size 8 MiB, instead of the default 64 KiB that silently dropped complete MISP events.
 - Sharing peers use `flood_publish(false)` and `MessageAuthenticity::Anonymous`. Without flood publishing, a new message leaves its publisher only towards its mesh peers. Anonymous authenticity puts no author or sequence number into gossip messages.
-- All nodes use the mesh band `mesh_n_low = 10`, `mesh_n = 12`, `mesh_n_high = 24` (`dactie-utils/src/net.rs`). GossipSub grafts only below `mesh_n_low` and prunes only above `mesh_n_high`, so the paper's anonymity bound is evaluated at `mesh_n_high`. The experiments in `dactie-experiment-anonymity` and `dactie-experiment-eclipse` set the band themselves with `-D`, `--mesh-n-low` and `--mesh-n-high`.
+- All nodes use the mesh band `mesh_n_low = 10`, `mesh_n = 12`, `mesh_n_high = 24` (`crates/dactie-utils/src/net.rs`). GossipSub grafts only below `mesh_n_low` and prunes only above `mesh_n_high`, so the paper's anonymity bound is evaluated at `mesh_n_high`. The experiments in `experiments/anonymity` and `experiments/eclipse` set the band themselves with `-D`, `--mesh-n-low` and `--mesh-n-high`.
 
 ### Admission to GossipSub
 
-Any libp2p node can connect to a DACTIE node, e.g. to register with the AA or to fetch archive keys, and GossipSub itself has no access control. Every node therefore scores its GossipSub peers by admission (`dactie-utils/src/admission.rs`): PeerIDs in the common MLS group, i.e. the AA, the archives and every registered sharing peer, score 0; all others score −60, below GossipSub's publish threshold. A node never grafts a peer with a negative score into a mesh, prunes such peers at every heartbeat, and sends them neither its own or forwarded messages nor gossip. Subscriptions of non-admitted peers are still recorded, so a new peer joins meshes as soon as the commit that admits it arrives. Like members, non-admitted peers still see which channels a node subscribes to. Nodes re-score their peers whenever the common group changes. A node publishing to a channel it does not subscribe to (the AA, or a stem diffuser) uses GossipSub's fanout; at the pinned rust-libp2p rev the heartbeat tops a fanout up with peers *below* the publish threshold, so every node sets the fanout TTL to zero and each publish picks fresh fanout peers (`admission::FANOUT_TTL`).
+Any libp2p node can connect to a DACTIE node, e.g. to register with the AA or to fetch archive keys, and GossipSub itself has no access control. Every node therefore scores its GossipSub peers by admission (`crates/dactie-utils/src/admission.rs`): PeerIDs in the common MLS group, i.e. the AA, the archives and every registered sharing peer, score 0; all others score −60, below GossipSub's publish threshold. A node never grafts a peer with a negative score into a mesh, prunes such peers at every heartbeat, and sends them neither its own or forwarded messages nor gossip. Subscriptions of non-admitted peers are still recorded, so a new peer joins meshes as soon as the commit that admits it arrives. Like members, non-admitted peers still see which channels a node subscribes to. Nodes re-score their peers whenever the common group changes. A node publishing to a channel it does not subscribe to (the AA, or a stem diffuser) uses GossipSub's fanout; at the pinned rust-libp2p rev the heartbeat tops a fanout up with peers *below* the publish threshold, so every node sets the fanout TTL to zero and each publish picks fresh fanout peers (`admission::FANOUT_TTL`).
 
 Non-admitted nodes would still occupy connection slots, and PeerIDs cost nothing, so an unregistered node could fill every slot and cut a node off from members. Once a node is admitted itself, it keeps at most 5 non-admitted connections open at once, refuses further ones, and closes each after 60 s, enough to register with the AA or fetch archive keys (`admission::Gate`). Before a node is admitted, the gate does nothing, so a newcomer can reach the AA and the archives.
 
 ### Partitioned channels
 
-A topic is not a GossipSub topic of its own. `get_channel` in `dactie-utils/src/mls_wrapper.rs` maps it to one of `NUM_CHANNELS = 10` channels:
+A topic is not a GossipSub topic of its own. `get_channel` in `crates/dactie-utils/src/mls_wrapper.rs` maps it to one of `NUM_CHANNELS = 10` channels:
 
 ```text
 channel = "channel_" + (hash(topic) mod 10)      // topics "0".."9" map directly to their channel
@@ -172,7 +172,7 @@ The AA keeps the archives' KeyPackages in memory only, so do not restart it betw
 
 Console: `register_identity <AA PeerID> <name>`.
 
-The AA sees the member's name together with the PeerID a join comes from. So that it cannot link the node's own PeerID to the member, the peer sends the messages of the join from a **throwaway identity** (`dactie-peer/src/join_relay.rs`): a fresh libp2p key, used only for this join and dropped once the member key has arrived. The throwaway identity dials the AA at `-B` and the archives at their `--archive` addresses. Afterwards, the node registers its own PeerID as a sharing peer like any other (section 3), which does not reveal the member.
+The AA sees the member's name together with the PeerID a join comes from. So that it cannot link the node's own PeerID to the member, the peer sends the messages of the join from a **throwaway identity** (`crates/dactie-peer/src/join_relay.rs`): a fresh libp2p key, used only for this join and dropped once the member key has arrived. The throwaway identity dials the AA at `-B` and the archives at their `--archive` addresses. Afterwards, the node registers its own PeerID as a sharing peer like any other (section 3), which does not reveal the member.
 
 ```mermaid
 sequenceDiagram
@@ -225,7 +225,7 @@ sequenceDiagram
 
 A member can run further sharing peers under the same member key. Each new peer has its own PeerID and MLS credential, and uses one of the member's `k` slots of the current epoch, so that `m` colluding members run at most `m·k` sharing peers at a time.
 
-**Slot tags** (`thressig/src/tags.rs`). The AA is started with `--epoch-secs` (default 30 days) and `--peers-per-member` `k` (default 5); the epoch is the Unix time divided by the epoch length. A member has slots `1..=k` per epoch, and its tag for a slot is `T = H(epoch, slot)^sk`. The same member always gets the same tag for the same epoch and slot, so the AA accepts each tag once, while tags of different members, slots or epochs cannot be linked. A peer proves its tag without revealing the member (`thressig::prove_member`: a freshly randomized credential and one Schnorr proof for the credential equation and every statement about `sk`). The member therefore never contacts the AA in a way that identifies it after the join, and the AA does not learn which member registers a peer or how many peers a member runs. Which slots a member has used is recorded in `slots.json` next to its `key_material.json`.
+**Slot tags** (`crates/thressig/src/tags.rs`). The AA is started with `--epoch-secs` (default 30 days) and `--peers-per-member` `k` (default 5); the epoch is the Unix time divided by the epoch length. A member has slots `1..=k` per epoch, and its tag for a slot is `T = H(epoch, slot)^sk`. The same member always gets the same tag for the same epoch and slot, so the AA accepts each tag once, while tags of different members, slots or epochs cannot be linked. A peer proves its tag without revealing the member (`thressig::prove_member`: a freshly randomized credential and one Schnorr proof for the credential equation and every statement about `sk`). The member therefore never contacts the AA in a way that identifies it after the join, and the AA does not learn which member registers a peer or how many peers a member runs. Which slots a member has used is recorded in `slots.json` next to its `key_material.json`.
 
 1. `get_opener_keys <AA PeerID>`: the new peer fetches the archives' keys, `t`, the epoch length and `k` (`RequestOpenerKeys` → group-signed `OpenerKeys`). If the peer was started with `--archive`, it confirms the keys as in step 3 above.
 2. `peer_from_sig <AA PeerID> <key_material.json of an existing peer>`: the new peer loads the member key, claims the lowest free slot of the current epoch in the `slots.json` next to that file, shares the same `sk` again with fresh blinding and a fresh polynomial, and sends a **group-signed** `AddPeerToSig { keypackage, enc_shares, commitments, tag, proof }`. Because the request is group-signed, the AA learns only that the requester is some admitted member, not which one. `proof` shows that the first commitment and the slot tag hide the `sk` of a valid member credential, bound to the KeyPackage. It reveals no more about the member than a group signature.

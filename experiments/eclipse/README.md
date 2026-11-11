@@ -43,7 +43,7 @@ The recipients of this message report if they got it or not.
 cargo run --package dactie-experiment-eclipse --bin dactie-experiment-eclipse -- -n 6 -N 6 -A 60 -a 15 -s 30 -r 20 
 ```
 ## Why this experiment exists
-DACTIE disables GossipSub's flood publishing (`flood_publish(false)` in `dactie-peer/src/mybehaviour.rs`), because with it the publisher sends every new message directly to every known subscriber, and any attacker among them learns who the sender is. Flood publishing is, however, one of GossipSub's defenses against eclipse attacks (Vyzovitis et al., *GossipSub: Attack-Resilient Message Propagation in the Filecoin and ETH2.0 Networks*, 2020). This experiment checks whether DACTIE stays available without it. The paper reports only the summary below.
+DACTIE disables GossipSub's flood publishing (`flood_publish(false)` in `crates/dactie-peer/src/mybehaviour.rs`), because with it the publisher sends every new message directly to every known subscriber, and any attacker among them learns who the sender is. Flood publishing is, however, one of GossipSub's defenses against eclipse attacks (Vyzovitis et al., *GossipSub: Attack-Resilient Message Propagation in the Filecoin and ETH2.0 Networks*, 2020). This experiment checks whether DACTIE stays available without it. The paper reports only the summary below.
 
 ## Setup
 Let `H` be the set of honest peers and `A` the set of attacker peers, with `N = H ∪ A`, `H ∩ A = ∅`, `n = |N|` and the attacker fraction `α = |A| / n`.

@@ -5,11 +5,11 @@ The Authorization Authority (AA): it admits archives and members, fixes the open
 their slot tags, and combines the partial openings of `t` archives to open a signature. It
 cannot open a signature on its own. Start it first: archives and peers bootstrap from it.
 
-- **Run it:** the [walkthrough](../README.md#walkthrough-run-a-network-by-hand) in the main README.
-- **Options:** [docs/PROTOCOL.md, "dactie-authority"](../docs/PROTOCOL.md#dactie-authority).
+- **Run it:** the [walkthrough](../../README.md#walkthrough-run-a-network-by-hand) in the main README.
+- **Options:** [docs/PROTOCOL.md, "dactie-authority"](../../docs/PROTOCOL.md#dactie-authority).
 - **Console:** `end_init_archive`, `req_open <signature hex>`, `open <signature hex>`
-  ([README, "Console commands"](../README.md#console-commands)).
-- **What it checks and stores:** [docs/PROTOCOL.md](../docs/PROTOCOL.md), sections 1 to 3 and 7.
+  ([README, "Console commands"](../../README.md#console-commands)).
+- **What it checks and stores:** [docs/PROTOCOL.md](../../docs/PROTOCOL.md), sections 1 to 3 and 7.
 
 In the prototype, the authority accepts any unused name at registration; a deployment vets
 each organization out of band.

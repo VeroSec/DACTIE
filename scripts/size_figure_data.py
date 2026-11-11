@@ -4,7 +4,7 @@
     python3 scripts/size_figure_data.py OUT.csv RESULT_DIR
 
 RESULT_DIR holds one `N*/` folder per network size with the
-`experiment_*.csv` files written by dactie-experiment-anonymity.
+`experiment_*.csv` files written by the anonymity harness (experiments/anonymity).
 `direct_publisher_percent2` is the share of the other peers that received the
 measurement message directly from its source (`from_publisher / (N - 1)`).
 """

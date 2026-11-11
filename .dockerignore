@@ -3,9 +3,8 @@
 *
 !Cargo.toml
 !Cargo.lock
-!benchmark/
-!dactie-*/
-!thressig/
+!crates/
+!experiments/
 # BENCH_PAYLOAD_FILE=/usr/src/dactie/<file> reads the payload inside the image
 # (scripts/latency_sweep.sh)
 !workloads/

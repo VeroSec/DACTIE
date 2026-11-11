@@ -12,7 +12,7 @@
 //! diffuser probability q per epoch (Monero 0.2, BIP 156 and Grin 0.1), epochs
 //! of 10 minutes plus up to 30 s of jitter, and a fail-safe embargo of 39 s on
 //! average (Monero). The anonymity harness has its own copy of the routing
-//! logic (`dactie-experiment-anonymity/src/stem.rs`).
+//! logic (`experiments/anonymity/src/stem.rs`).
 
 use async_trait::async_trait;
 use futures::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};

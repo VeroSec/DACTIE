@@ -23,7 +23,7 @@
 //!   trimming never closes.
 //!
 //! The anonymity experiment has its own, simpler copy without exemptions or
-//! pending limit (`dactie-experiment-anonymity/src/conn_cap.rs`).
+//! pending limit (`experiments/anonymity/src/conn_cap.rs`).
 
 use libp2p::core::{ConnectedPoint, Endpoint, Multiaddr};
 use libp2p::swarm::{

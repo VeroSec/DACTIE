@@ -1,12 +1,12 @@
 [workspace]
 members = [
-    "dactie-peer",
-    "dactie-archive",
-    "dactie-utils",
-    "dactie-authority",
-    "dactie-experiment-anonymity",
-    "dactie-experiment-eclipse",
-    "thressig",
-    "benchmark"]
+    "crates/dactie-peer",
+    "crates/dactie-archive",
+    "crates/dactie-utils",
+    "crates/dactie-authority",
+    "crates/thressig",
+    "experiments/anonymity",
+    "experiments/eclipse",
+    "experiments/benchmark"]
 resolver = "2"
 

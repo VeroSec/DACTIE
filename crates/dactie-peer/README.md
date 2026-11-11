@@ -4,11 +4,11 @@ The sharing peer: it publishes and receives CTI, relays other peers' messages on
 manages private MLS groups. A member runs up to `k` sharing peers per epoch, none of which the
 authority can link to the member.
 
-- **Run it:** the [walkthrough](../README.md#walkthrough-run-a-network-by-hand) in the main README.
-- **Options:** [docs/PROTOCOL.md, "dactie-peer"](../docs/PROTOCOL.md#dactie-peer).
-- **Console commands:** [README, "Console commands"](../README.md#console-commands). The peer
+- **Run it:** the [walkthrough](../../README.md#walkthrough-run-a-network-by-hand) in the main README.
+- **Options:** [docs/PROTOCOL.md, "dactie-peer"](../../docs/PROTOCOL.md#dactie-peer).
+- **Console commands:** [README, "Console commands"](../../README.md#console-commands). The peer
   prints the list on any unknown command.
-- **What it sends and checks:** [docs/PROTOCOL.md](../docs/PROTOCOL.md), sections 2 to 6.
+- **What it sends and checks:** [docs/PROTOCOL.md](../../docs/PROTOCOL.md), sections 2 to 6.
 
 ## Code
 

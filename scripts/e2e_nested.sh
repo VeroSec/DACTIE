@@ -5,7 +5,7 @@
 # messages in it. Once the AA has expired p4, p2 must remove p4 from the private group, p3 must
 # still read p2's private messages, and nothing p4 sends there may be delivered.
 # That a removed peer can neither send nor read in a private group it still belongs to is shown
-# by the unit tests in dactie-utils/src/mls_wrapper.rs (nested_group_tests): after the expiry,
+# by the unit tests in crates/dactie-utils/src/mls_wrapper.rs (nested_group_tests): after the expiry,
 # the admission gate usually closes p4's connections, so its messages need not arrive at all.
 # Run with the setup in e2e_common.sh, which also describes the requirements. About 5 minutes.
 source "$(dirname "$0")/e2e_common.sh"

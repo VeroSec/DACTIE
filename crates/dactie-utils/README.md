@@ -15,4 +15,4 @@ Code shared by the authority, the archives and the sharing peers.
 | `slot_store` | The slots a member has used per epoch (`slots.json`) |
 | `stem` | The stem phase (Dandelion++) for sharing peers |
 
-How these pieces fit together is described in [docs/PROTOCOL.md](../docs/PROTOCOL.md).
+How these pieces fit together is described in [docs/PROTOCOL.md](../../docs/PROTOCOL.md).

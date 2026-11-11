@@ -11,14 +11,14 @@ data files and their columns are described in [results/README.md](../results/REA
 | Soak test, 33.4 hours | testbed | `scripts/soak_sampler.sh` | – | `results/latency/soak/` |
 | Archive queries | testbed | `BENCH_ARCHIVE_*` settings | – | numbers below |
 | Bytes on the wire | one host | `scripts/capture_on_wire.sh` | `scripts/analyze_pcap.sh` | – |
-| Signing, verifying, opening | one CPU core | `cargo bench -p dactie-benchmark` | – | `benchmark/README.md` |
+| Signing, verifying, opening | one CPU core | `cargo bench -p dactie-benchmark` | – | `experiments/benchmark/README.md` |
 | Single-attacker bound | simulation | `scripts/anonymity_sizes.sh` | `scripts/size_figure_data.py` | `results/sizes/`, `results/anonymity_parsed.csv` |
 | Coalition first-spy attack | simulation | `scripts/anonymity_coalition.sh OUT 0` | `scripts/coalition_figure_data.py` | `results/coalition/` |
 | Stem phase | simulation | `scripts/anonymity_coalition.sh OUT 0.2 0.1 0.5` | `scripts/coalition_figure_data.py` | `results/coalition/stem/` |
 | Timing estimators | simulation | `scripts/anonymity_coalition.sh OUT 0 0.2` | `scripts/repeated_timing_summary.py` | `results/coalition/timing/` |
 | Repeated messages, PeerID rotation | simulation | `scripts/anonymity_repeated.sh` | `scripts/repeated_timing_summary.py` | `results/repeated/` |
 | Cost of the source's loop re-send | model | `scripts/stem_loop_cost.py 100 500` | – | [DANDELION.md](DANDELION.md) |
-| Eclipse attacks | simulation | `dactie-experiment-eclipse` | `scripts/parse_eclipse_output.py` | `results/eclipse/` |
+| Eclipse attacks | simulation | `experiments/eclipse` | `scripts/parse_eclipse_output.py` | `results/eclipse/` |
 
 The payloads of the latency runs are in `workloads/`: a MISP event from the abuse.ch
 MalwareBazaar feed (`workloads/misp/`) and STIX 2.1 bundles from the MITRE ATT&CK ICS domain
@@ -171,14 +171,14 @@ on a peer.
 
 `cargo bench -p dactie-benchmark --bench thressig` measures signing, verifying, joining and
 opening on one CPU core, in about 5 minutes. Setup and results are in
-[benchmark/README.md](../benchmark/README.md).
+[experiments/benchmark/README.md](../experiments/benchmark/README.md).
 
 ## Anonymity simulations
 
-The anonymity harness `dactie-experiment-anonymity` runs all peers of a network in one
+The anonymity harness (`experiments/anonymity`, package `dactie-experiments`) runs all peers of a network in one
 process, over simulated links of 10 to 100 ms by distance between peers, with 50 to 100
 connections per peer and GossipSub's mesh band 10/12/24 unless set otherwise (details in its
-[README](../dactie-experiment-anonymity/README.md)). Every run publishes one measurement message
+[README](../experiments/anonymity/README.md)). Every run publishes one measurement message
 (ten in the repeated-message runs) and records who received it from whom and when; the
 attacks then sample coalitions among the peers and try to name the source.
 
@@ -215,10 +215,10 @@ messages each and gives the cost of the source's re-send when its message loops 
 
 ## Eclipse attacks
 
-The eclipse harness `dactie-experiment-eclipse` lets attackers stop forwarding a victim's
+The eclipse harness (`experiments/eclipse`) lets attackers stop forwarding a victim's
 messages after a set time and counts how many honest peers still receive the victim's
 measurement message, without flood publishing. Its
-[README](../dactie-experiment-eclipse/README.md) describes the setup and the two series of the
+[README](../experiments/eclipse/README.md) describes the setup and the two series of the
 paper (847 runs, 12 to 220 peers). The repository does not record the exact commands of those
 series; one run of the kind they contain is
 

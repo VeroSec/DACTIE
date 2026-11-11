@@ -108,22 +108,22 @@ four hosts in parallel.
 
 ```bash
 cd /opt/vero/dactie
-docker build -t dactie-authority -f ./dactie-authority/Dockerfile .
+docker build -t dactie-authority -f ./crates/dactie-authority/Dockerfile .
 ```
 
 **minerva2 and minerva3:**
 
 ```bash
 cd /opt/vero/dactie
-docker build -t dactie-archive -f ./dactie-archive/Dockerfile .
-docker build -t dactie-peer -f ./dactie-peer/Dockerfile . --build-arg FEATURES=bench
+docker build -t dactie-archive -f ./crates/dactie-archive/Dockerfile .
+docker build -t dactie-peer -f ./crates/dactie-peer/Dockerfile . --build-arg FEATURES=bench
 ```
 
 **minerva4:**
 
 ```bash
 cd /opt/vero/dactie
-docker build -t dactie-peer -f ./dactie-peer/Dockerfile . --build-arg FEATURES=bench
+docker build -t dactie-peer -f ./crates/dactie-peer/Dockerfile . --build-arg FEATURES=bench
 ```
 
 The peer image needs `FEATURES=bench` for the benchmark publisher of `peer_4`.

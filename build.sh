@@ -17,6 +17,6 @@ for i in {0..9}; do mkdir -p ./key_material/key_material_$i; done
 #Builds Docker images
 # The peer image is built with the bench feature: the BENCH load generator is
 # compiled out otherwise, and BENCH_PUBLISH in the compose has no effect.
-docker build -t dactie-peer      -f ./dactie-peer/Dockerfile      . --build-arg FEATURES=bench "${DOCKER_FLAGS[@]}"
-docker build -t dactie-authority -f ./dactie-authority/Dockerfile . "${DOCKER_FLAGS[@]}"
-docker build -t dactie-archive   -f ./dactie-archive/Dockerfile   . "${DOCKER_FLAGS[@]}"
+docker build -t dactie-peer      -f ./crates/dactie-peer/Dockerfile      . --build-arg FEATURES=bench "${DOCKER_FLAGS[@]}"
+docker build -t dactie-authority -f ./crates/dactie-authority/Dockerfile . "${DOCKER_FLAGS[@]}"
+docker build -t dactie-archive   -f ./crates/dactie-archive/Dockerfile   . "${DOCKER_FLAGS[@]}"

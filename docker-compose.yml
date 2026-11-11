@@ -55,7 +55,7 @@ services:
         max-file: "3"
     build:
       context: .
-      dockerfile: ./dactie-authority/Dockerfile
+      dockerfile: ./crates/dactie-authority/Dockerfile
     network_mode: "host"
     tty: true
     stdin_open: true
@@ -81,7 +81,7 @@ services:
         max-file: "3"
     build:
       context: .
-      dockerfile: ./dactie-archive/Dockerfile
+      dockerfile: ./crates/dactie-archive/Dockerfile
     network_mode: "host"
     tty: true
     stdin_open: true
@@ -117,7 +117,7 @@ services:
         max-file: "3"
     build:
       context: .
-      dockerfile: ./dactie-archive/Dockerfile
+      dockerfile: ./crates/dactie-archive/Dockerfile
     network_mode: "host"
     tty: true
     stdin_open: true
@@ -152,7 +152,7 @@ services:
         max-file: "3"
     build:
       context: .
-      dockerfile: ./dactie-peer/Dockerfile
+      dockerfile: ./crates/dactie-peer/Dockerfile
       args:
         FEATURES: bench
     network_mode: "host"
@@ -187,7 +187,7 @@ services:
         max-file: "3"
     build:
       context: .
-      dockerfile: ./dactie-peer/Dockerfile
+      dockerfile: ./crates/dactie-peer/Dockerfile
       args:
         FEATURES: bench
     network_mode: "host"
@@ -222,7 +222,7 @@ services:
         max-file: "3"
     build:
       context: .
-      dockerfile: ./dactie-peer/Dockerfile
+      dockerfile: ./crates/dactie-peer/Dockerfile
       args:
         FEATURES: bench
     network_mode: "host"
@@ -256,7 +256,7 @@ services:
         max-file: "3"
     build:
       context: .
-      dockerfile: ./dactie-peer/Dockerfile
+      dockerfile: ./crates/dactie-peer/Dockerfile
       args:
         FEATURES: bench
     network_mode: "host"

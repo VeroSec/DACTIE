@@ -1,7 +1,7 @@
 # Stem phase against coalition first-spy (Dandelion++ for DACTIE)
 
-Status: implemented in the sharing peer (`dactie-utils/src/stem.rs`, `dactie-peer/src/stem_relay.rs`)
-and in the anonymity harness (`dactie-experiment-anonymity/src/stem.rs`). Measured results are in
+Status: implemented in the sharing peer (`crates/dactie-utils/src/stem.rs`, `crates/dactie-peer/src/stem_relay.rs`)
+and in the anonymity harness (`experiments/anonymity/src/stem.rs`). Measured results are in
 `results/README.md` and `docs/EVALUATION.md`; where the code departs from the design below,
 see "Implementation notes".
 
