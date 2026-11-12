@@ -55,6 +55,7 @@ Console: `end_init_archive` closes the init phase (section 1); `req_open <signat
 ```text
 dactie-archive -K <dir> -u <postgres-url> -a <AA PeerID> -B <AA multiaddr> -i <name>
                [-p <port>] [--advertise-addr <multiaddr>] [--auto-approve-open]
+               [--db-queue-mib <MiB>]
 ```
 
 | Option | Default | What it does |
@@ -67,6 +68,7 @@ dactie-archive -K <dir> -u <postgres-url> -a <AA PeerID> -B <AA multiaddr> -i <n
 | `-p, --port <port>` | random | TCP port the archive listens on. |
 | `--advertise-addr <multiaddr>` | none | As for the AA. |
 | `--auto-approve-open` | off | Answers every opening request without asking the operator. For automated tests only: with it, the AA alone could open any signature. |
+| `--db-queue-mib <MiB>` | `64` | Memory for gossip messages waiting to be stored (section 6). Beyond it, broadcasts and private-group messages are forwarded but not stored, and the archive logs how many; commits and proposals are always stored. 64 MiB hold about 20 minutes of 1 KiB messages at 40 per second. |
 
 Console: `pending`, `approve <id>`, `deny <id>` (section 7).
 
@@ -287,6 +289,13 @@ Each archive writes to its own PostgreSQL database (`init.sql`):
 | `pending_opens(id, signature, received_at)` | opening requests awaiting the operator | — |
 
 `id` is the GossipSub message ID, a hash of the message content. Data is kept indefinitely.
+
+**Writing.** The archive's network loop never waits for the database.
+- **Gossip messages:** it verifies a message, forwards it, and queues it for a writer task. The writer stores whatever is queued in one transaction per batch of up to 256 messages, and skips a message that is already stored.
+- **Requests that need the database** (`Update`, shares, openings, the console): they run in their own tasks, and the answer goes out once the database has answered. A share is acknowledged only after it is stored, as before.
+- **A slow or paused database:** messages wait in the queue up to `--db-queue-mib`. Beyond that, broadcasts and private-group messages are not stored, and the archive logs how many. Commits and proposals are always stored, since peers need them to catch up.
+
+Before this change, the loop waited for every insert. A paused database then kept the archive from reading its connections, and every neighbour buffered all messages for it, because GossipSub 0.46 does not bound its send queues.
 
 **Catching up.** A peer that was offline sends a group-signed `Update { group_id, epoch }` to an archive for each private group. The archive returns all stored commits after that epoch and all proposals from that epoch on, and the peer applies them in order. The archive ignores `Update` requests without a valid group signature. Stored CTI messages are not served over the network: they can be searched in the archive's database, e.g. through the Adminer interface of the Docker setup.
 

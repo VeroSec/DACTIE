@@ -1,17 +1,12 @@
 use crate::abstswarm::Instruction;
-use async_trait::async_trait;
+use crate::db::Db;
 use dactie_utils::mls_wrapper::MyOpenMls;
 use libp2p::swarm::NetworkBehaviour;
 
-#[async_trait]
+/// Handles operator commands on the event loop; like `EventHandler`, without waiting.
 pub(crate) trait InstructionHandler
 where
     Self: NetworkBehaviour,
 {
-    async fn handle_instruction(
-        &mut self,
-        instruction: Instruction,
-        pool: &sqlx::PgPool,
-        my_open_mls: &MyOpenMls,
-    );
+    fn handle_instruction(&mut self, instruction: Instruction, db: &mut Db, my_open_mls: &MyOpenMls);
 }
