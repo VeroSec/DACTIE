@@ -17,7 +17,7 @@ harness output of one cell.
 | Early single-attacker series (not in the paper) | `anonymity-early/` |
 | Eclipse attacks (847 runs) | `eclipse/eclipse_parsed.csv`, raw runs in `eclipse/output/`, `eclipse/old_output/` |
 | Latency table | `latency/rerun-2026-10-26.csv` (runs `off-*`, receiver `peer_1`), every receipt in `latency/raw-2026-10-26.csv` |
-| Comparison with Hyperledger Fabric (arrival rates 25 to 175 msg/s) | `latency/rate-sweep-2026-11-08/` |
+| Comparison with Hyperledger Fabric (arrival rates 25 to 175 msg/s) | DACTIE `latency/rate-sweep-2026-11-08/`, `latency/rate-sweep-2026-11-11/`; Fabric `fabric/rate-sweep-2026-11-11/`; side by side `fabric/rate-sweep-2026-11-11/comparison.csv` |
 | Soak test (33.4 hours) | `latency/soak/` |
 | Microbenchmark | `benchmark/README.md` |
 
@@ -200,11 +200,21 @@ at 40 messages per second, one row per receiver and 60-second window (sampled
 about every 62 s): number of deliveries in the window (`n`), mean, median, p95
 and maximum latency in ms, resident memory in MB and established connections.
 
-## Comparison with Hyperledger Fabric: `latency/rate-sweep-2026-11-08/`
+## Comparison with Hyperledger Fabric: `latency/rate-sweep-2026-11-*/`, `fabric/`
 
-The arrival-rate sweep of 2026-11-08 on the same testbed: 1 KiB MISP messages at 25, 50, 75,
-100, 110, 125, 150 and 175 messages per second, 60 s each, without the stem and with Nagle off,
-receivers `peer_1` to `peer_3` (setup and results in `docs/EVALUATION.md`).
+Arrival-rate sweeps on the same testbed: 1 KiB MISP messages at 25, 50, 75, 100, 110, 125, 150
+and 175 messages per second. Each rate runs about 100 s: the publisher stops 60 s after its
+start line plus the `docker stats` round and its own stop. DACTIE runs without the stem and
+with Nagle off. Setup and results are in `docs/EVALUATION.md`.
+
+- **`latency/rate-sweep-2026-11-08/`:** the released build `bec9c1c`, receivers `peer_1` to
+  `peer_3`.
+- **`latency/rate-sweep-2026-11-11/`:** `main` with the dedup fix, the same day as the Fabric
+  sweep, receivers `peer_1` and `peer_2`. `peer_3` verified and forwarded every message but
+  logged no receipts, most likely because its topic subscription was not saved before the
+  sweep recreated it.
+
+The DACTIE directories hold:
 
 - `raw.csv.gz`: every `BENCH_RX` line, with the arrival rate, the receiver, docker's receive
   timestamp (`received_at`), the forwarding neighbour's PeerID (`via`), the publisher's
@@ -214,6 +224,21 @@ receivers `peer_1` to `peer_3` (setup and results in `docs/EVALUATION.md`).
   and the first receipts and later copies (`receipts`, `duplicates`). Regenerate it with
   `python3 scripts/rate_sweep_summary.py results/latency/rate-sweep-2026-11-08`.
 - `cpu/r<rate>.cpu`: `docker stats` of every node 40 s into each rate.
+
+`fabric/rate-sweep-2026-11-11/` is Fabric 2.5.16 on the same hosts (`experiments/fabric/`).
+`misp-1KiB/` uses the same record at the same rates and also at 200 to 1,000 per second;
+`thakkar-20B/` uses Thakkar et al.'s 20-byte value. Each holds:
+
+- `raw.csv.gz`: every committed transaction at the receiver `peer0.org1`, in the columns above
+  minus `via`, plus the block number.
+- `summary.csv`: from the same `scripts/rate_sweep_summary.py`.
+- `cpu/r<rate>.cpu`: `docker stats` of every Fabric container 40 s into each rate.
+- `r<rate>.log` and `r<rate>.failures.csv`: the load generator's output and the transactions
+  that failed or never committed (none in these runs).
+
+`fabric/rate-sweep-2026-11-11/comparison.csv` puts DACTIE (2026-11-11) and both Fabric series
+side by side, per arrival rate:
+`python3 experiments/fabric/compare.py results/latency/rate-sweep-2026-11-11 results/fabric/rate-sweep-2026-11-11/misp-1KiB results/fabric/rate-sweep-2026-11-11/thakkar-20B`.
 
 ## Earlier re-measurement: `latency/rerun-2026-10-22.csv`
 
