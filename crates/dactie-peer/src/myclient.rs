@@ -105,9 +105,6 @@ impl MyClient {
 
             tokio::spawn(async move {
                 let mut seq: u64 = 0;
-                let mut ticker = tokio::time::interval(period);
-                // Avoid immediate burst from first tick
-                ticker.tick().await;
 
                 // Publishing before this peer has joined the common group cannot
                 // succeed: send_to_topic encrypts against it, so every attempt
@@ -147,6 +144,18 @@ impl MyClient {
                     extra_bytes,
                     waited.as_secs_f64()
                 );
+                // The schedule starts now. A ticker created before the registration wait
+                // would fire every tick missed during the wait at once (wait x rate
+                // messages; 4.5 s at 40/s gave 180, and stem hops failed with "max
+                // sub-streams reached").
+                let mut ticker = tokio::time::interval(period);
+                // Open loop: a tick delayed by a busy runtime is caught up, so the offered
+                // load stays rate x run time. Delay or Skip would publish less whenever the
+                // publisher's host is busy, i.e. exactly under load (coordinated omission).
+                ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Burst);
+                // The first tick completes immediately; the first message goes out one
+                // period after registration.
+                ticker.tick().await;
                 loop {
                     ticker.tick().await;
                     let now = SystemTime::now()
