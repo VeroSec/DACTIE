@@ -25,7 +25,10 @@ mod g1_compressed {
         // amcl_wrapper's G1::from_bytes prints every element it decodes to stdout, which puts
         // key material into logs. Same length check and decoding, without the print.
         if v.len() != GroupG1_SIZE && v.len() != G1_COMP_BYTE_SIZE {
-            return Err(D::Error::custom(format!("G1: unexpected length {}", v.len())));
+            return Err(D::Error::custom(format!(
+                "G1: unexpected length {}",
+                v.len()
+            )));
         }
         // amcl decodes bytes that are not a curve point to the identity, where every pairing
         // is 1. A signature with sigma1 = identity would verify without any member key.

@@ -21,9 +21,9 @@ use crate::abstswarm::AbstSwarmError::{MLSError, SendError};
 use crate::abstswarm::{AbstSwarmError, Notification};
 use crate::storage::{ReturnMemkeyArgs, Storage};
 use dactie_utils::admission;
-use dactie_utils::net::{is_unroutable_addr, MESH_N, MESH_N_HIGH, MESH_N_LOW};
 use dactie_utils::mls_wrapper::MyOpenMLSError::SerializationError;
 use dactie_utils::mls_wrapper::{MyOpenMLSError, MyOpenMls};
+use dactie_utils::net::{is_unroutable_addr, MESH_N, MESH_N_HIGH, MESH_N_LOW};
 use dactie_utils::shared_structs::RequestMessage::RequestOpen;
 use dactie_utils::shared_structs::*;
 use thressig::structs::{EncShare, EncSharePairing, Signature};
@@ -300,7 +300,11 @@ impl MyBehaviour {
 
     /// A member must create one share per archive and Feldman commitments for exactly the
     /// network's threshold, or it could pick a threshold that lets fewer archives open it.
-    fn shares_match_network(storage: &Storage, enc_shares: &[EncShare], commits: &[thressig::G1]) -> bool {
+    fn shares_match_network(
+        storage: &Storage,
+        enc_shares: &[EncShare],
+        commits: &[thressig::G1],
+    ) -> bool {
         storage.get_threshold() == Some(commits.len())
             && enc_shares.len() == storage.get_opener_pubkeys().len()
     }
@@ -407,13 +411,7 @@ impl MyBehaviour {
             let archive_ids = storage.get_archive_peer_ids();
             let group_numb = my_open_mls.create_mls_group(&archive_ids)?;
             my_open_mls.move_to_common(group_numb);
-            self.send_out_id_enc_shares(
-                my_open_mls,
-                &archive_ids,
-                id,
-                &enc_shares,
-                &commits,
-            )?;
+            self.send_out_id_enc_shares(my_open_mls, &archive_ids, id, &enc_shares, &commits)?;
             storage.to_file()?;
         } else {
             log::error!(
@@ -447,7 +445,11 @@ impl MyBehaviour {
                 for addr in listen_addrs {
                     // Skip addresses no remote host can dial (loopback, Docker bridges).
                     if is_unroutable_addr(&addr) {
-                        log::debug!("Ignoring unroutable addr from identify for {}: {}", peer_id, addr);
+                        log::debug!(
+                            "Ignoring unroutable addr from identify for {}: {}",
+                            peer_id,
+                            addr
+                        );
                         continue;
                     }
                     log::debug!("Adding received IdentifyInfo matching protocol to the DHT. Peer: {}, addr: {}", peer_id, addr);
@@ -580,7 +582,8 @@ impl MyBehaviour {
                             if storage.remove_n(&peer).is_some() {
                                 let keypackage: KeyPackage = bincode::deserialize(&keypackage)
                                     .map_err(|x| SerializationError(x.to_string()))?;
-                                let keypackage = my_open_mls.validate_key_package(keypackage, peer)?;
+                                let keypackage =
+                                    my_open_mls.validate_key_package(keypackage, peer)?;
                                 let res = ResponseMessage::MemKey {
                                     partial_memkey: None,
                                 };
@@ -611,23 +614,26 @@ impl MyBehaviour {
                         // A sharing peer keeps its registration for another epoch with one of
                         // its member's slot tags. Unsigned: the proof shows it is a member's tag.
                         RequestMessage::RenewPeer { tag, proof } => {
-                            let body = if !my_open_mls.verify_renewal(&proof, &tag, &peer.to_bytes())
-                            {
-                                ResponseMessage::RenewRefused {
-                                    reason: "the slot tag does not belong to a member".to_string(),
-                                }
-                            } else {
-                                match storage.renew_peer(&peer, &tag) {
-                                    Ok(until_epoch) => {
-                                        log::info!("Renewed sharing peer {peer} until epoch {until_epoch}");
-                                        ResponseMessage::PeerRenewed { until_epoch }
+                            let body =
+                                if !my_open_mls.verify_renewal(&proof, &tag, &peer.to_bytes()) {
+                                    ResponseMessage::RenewRefused {
+                                        reason: "the slot tag does not belong to a member"
+                                            .to_string(),
                                     }
-                                    Err(reason) => {
-                                        log::info!("Refused to renew {peer}: {reason}");
-                                        ResponseMessage::RenewRefused { reason }
+                                } else {
+                                    match storage.renew_peer(&peer, &tag) {
+                                        Ok(until_epoch) => {
+                                            log::info!(
+                                            "Renewed sharing peer {peer} until epoch {until_epoch}"
+                                        );
+                                            ResponseMessage::PeerRenewed { until_epoch }
+                                        }
+                                        Err(reason) => {
+                                            log::info!("Refused to renew {peer}: {reason}");
+                                            ResponseMessage::RenewRefused { reason }
+                                        }
                                     }
-                                }
-                            };
+                                };
                             self.request_response
                                 .send_response(channel, my_open_mls.sign(body)?)
                                 .unwrap_or(());
@@ -669,19 +675,31 @@ impl MyBehaviour {
                                 storage.get_opener_pubkeys().len(),
                                 &keypackage,
                             ) {
-                                refusal = Some("the shares or the slot tag do not hide a member key".to_string());
+                                refusal = Some(
+                                    "the shares or the slot tag do not hide a member key"
+                                        .to_string(),
+                                );
                             }
                             //Verify Keypackage belongs to Peer
                             let keypackage: KeyPackage = bincode::deserialize(&keypackage)
                                 .map_err(|x| SerializationError(x.to_string()))?;
                             if refusal.is_none() {
-                                if let Err(e) = my_open_mls.validate_key_package(keypackage.clone(), peer) {
-                                    refusal = Some(format!("the KeyPackage does not belong to the peer: {e}"));
+                                if let Err(e) =
+                                    my_open_mls.validate_key_package(keypackage.clone(), peer)
+                                {
+                                    refusal = Some(format!(
+                                        "the KeyPackage does not belong to the peer: {e}"
+                                    ));
                                 }
                             }
 
-                            if refusal.is_none() && !Self::shares_match_network(storage, &enc_shares, &commits) {
-                                refusal = Some("the shares do not match the archives and threshold".to_string());
+                            if refusal.is_none()
+                                && !Self::shares_match_network(storage, &enc_shares, &commits)
+                            {
+                                refusal = Some(
+                                    "the shares do not match the archives and threshold"
+                                        .to_string(),
+                                );
                             }
 
                             if refusal.is_none() {
@@ -694,7 +712,9 @@ impl MyBehaviour {
                                         &commits,
                                         Some(key.clone()),
                                     ) {
-                                        refusal = Some("an encrypted share could not be verified".to_string());
+                                        refusal = Some(
+                                            "an encrypted share could not be verified".to_string(),
+                                        );
                                         break;
                                     }
                                 }
@@ -708,11 +728,14 @@ impl MyBehaviour {
                             }
 
                             if let Some(reason) = refusal {
-                                log::info!("Verification of new Peer from existing Sig failed, {reason}");
+                                log::info!(
+                                    "Verification of new Peer from existing Sig failed, {reason}"
+                                );
                                 self.request_response
                                     .send_response(
                                         channel,
-                                        my_open_mls.sign(ResponseMessage::PeerRefused { reason })?,
+                                        my_open_mls
+                                            .sign(ResponseMessage::PeerRefused { reason })?,
                                     )
                                     .unwrap_or(());
                             } else {
@@ -757,7 +780,9 @@ impl MyBehaviour {
                             enc_share_peer_pairings,
                         } => {
                             if !storage.get_archive_peer_ids().contains(&peer) {
-                                log::warn!("Ignoring opening pairings from non-archive peer {peer}");
+                                log::warn!(
+                                    "Ignoring opening pairings from non-archive peer {peer}"
+                                );
                                 return Ok(());
                             }
                             Self::store_open_pairings(
@@ -794,7 +819,9 @@ impl MyBehaviour {
                 request_response::Message::Response { response, .. } => {
                     //Ignore all other Responses for now
                     if let ResponseMessage::OpenPending = response.body {
-                        log::info!("Archive {peer} queued the opening request for operator approval");
+                        log::info!(
+                            "Archive {peer} queued the opening request for operator approval"
+                        );
                     }
                 }
             }
@@ -818,11 +845,7 @@ impl MyBehaviour {
                 None => log::warn!("Outgoing connection error (no peer id): {}", error),
                 Some(peer_id) => log::error!("Could not connect to peer '{}': {}", peer_id, error),
             },
-            SwarmEvent::ConnectionClosed {
-                peer_id,
-                cause,
-                ..
-            } => {
+            SwarmEvent::ConnectionClosed { peer_id, cause, .. } => {
                 if let Some(connerror) = cause {
                     log::error!(
                         "Connection to peer {} closed because of an error: {}",

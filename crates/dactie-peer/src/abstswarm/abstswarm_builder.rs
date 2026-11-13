@@ -1,6 +1,6 @@
 use std::convert::Infallible;
-use std::sync::Arc;
 use std::io;
+use std::sync::Arc;
 use std::time::Duration;
 
 use thiserror::Error;

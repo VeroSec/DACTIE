@@ -218,12 +218,10 @@ impl Peer {
                 propagation_source: peer_id,
                 message,
                 ..
-            })) => {
-                if String::from_utf8_lossy(&message.data[..4]) == "Stop" {
-                    self.response_channel
-                        .send(PeerOut { _prop_id: peer_id })
-                        .unwrap();
-                }
+            })) if String::from_utf8_lossy(&message.data[..4]) == "Stop" => {
+                self.response_channel
+                    .send(PeerOut { _prop_id: peer_id })
+                    .unwrap();
             }
             //e => println!("{:?}",e)
             _ => (),

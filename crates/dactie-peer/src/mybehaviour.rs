@@ -1,15 +1,17 @@
-use crate::mybehaviour::MyBehaviourError::PubSubBehaviourError;
-use async_trait::async_trait;
-use dactie_utils::dedup;
-use dactie_utils::net::{is_unroutable_addr, MESH_N, MESH_N_HIGH, MESH_N_LOW};
 use crate::join_relay;
+use crate::mybehaviour::MyBehaviourError::PubSubBehaviourError;
 use crate::outstanding::{self, Asked};
+use crate::stem_relay;
+use async_trait::async_trait;
 use dactie_utils::admission;
 use dactie_utils::conn_cap;
-use dactie_utils::stem::{self, Resend, Route, StemAck, StemCodec, StemConfig, StemMessage, STEM_PROTOCOL};
-use crate::stem_relay;
+use dactie_utils::dedup;
 use dactie_utils::key_store;
+use dactie_utils::net::{is_unroutable_addr, MESH_N, MESH_N_HIGH, MESH_N_LOW};
 use dactie_utils::slot_store::SlotStore;
+use dactie_utils::stem::{
+    self, Resend, Route, StemAck, StemCodec, StemConfig, StemMessage, STEM_PROTOCOL,
+};
 use libp2p::gossipsub::{IdentTopic, MessageAcceptance};
 use libp2p::identity::{Keypair, ParseError};
 use libp2p::kad::store::MemoryStore;
@@ -359,7 +361,10 @@ impl MyBehaviour {
         // Anonymous broadcasts enter the stem. Attributed messages name their
         // member anyway, and MLS control messages are not CTI.
         let stem_eligible = !attributed
-            && matches!(body, MessageBody::Broadcast { .. } | MessageBody::Group { .. })
+            && matches!(
+                body,
+                MessageBody::Broadcast { .. } | MessageBody::Group { .. }
+            )
             && stem_relay::state().is_on();
         let (body, channel) = match body.clone() {
             MessageBody::Broadcast { ref topic, data } => (
@@ -367,7 +372,8 @@ impl MyBehaviour {
                 my_open_mls.get_channel(topic.as_bytes().to_vec()),
             ),
             MessageBody::Group { group_number, data } => {
-                let (body, group_id) = self.send_to_group(my_open_mls, group_number, data, attributed)?;
+                let (body, group_id) =
+                    self.send_to_group(my_open_mls, group_number, data, attributed)?;
                 (body, my_open_mls.get_channel(group_id))
             }
             MessageBody::Commit { group_id, .. } => (body, my_open_mls.get_channel(group_id)),
@@ -431,7 +437,11 @@ impl MyBehaviour {
 
     /// Sends one of this peer's own messages into the stem. Lines about own messages are
     /// logged at debug: at info, collected logs would show which peer a message started at.
-    fn stem_publish_own(&mut self, channel: String, payload: Vec<u8>) -> Result<(), AbstSwarmError> {
+    fn stem_publish_own(
+        &mut self,
+        channel: String,
+        payload: Vec<u8>,
+    ) -> Result<(), AbstSwarmError> {
         let id = stem::message_id(&payload);
         let candidates = self.stem_candidates();
         let route = {
@@ -467,7 +477,13 @@ impl MyBehaviour {
                 state.sent_own(id, next);
             }
             if subscribed {
-                state.arm_embargo(id, message.clone(), from, Instant::now(), &mut rand::thread_rng());
+                state.arm_embargo(
+                    id,
+                    message.clone(),
+                    from,
+                    Instant::now(),
+                    &mut rand::thread_rng(),
+                );
             }
         }
         let request = self.stem.send_request(&next, message.clone());
@@ -502,7 +518,9 @@ impl MyBehaviour {
                 self.send_stem(next, id, message.clone(), None);
             }
             Some(Resend::FirstHop(next)) => {
-                log::debug!("Stem: every stem peer has own message {id:016x}, back to the first hop {next}");
+                log::debug!(
+                    "Stem: every stem peer has own message {id:016x}, back to the first hop {next}"
+                );
                 self.send_stem(next, id, message.clone(), None);
             }
             None => log::debug!("Stem: own message left to the embargo"),
@@ -585,7 +603,10 @@ impl MyBehaviour {
             }
         };
         if expected != message.channel {
-            log::warn!("Stem: {from} sent a message for {expected} as {}", message.channel);
+            log::warn!(
+                "Stem: {from} sent a message for {expected} as {}",
+                message.channel
+            );
             return Ok(());
         }
         if let Err(e) = my_open_mls.verify_message(gossip) {
@@ -606,7 +627,12 @@ impl MyBehaviour {
             return Ok(());
         }
         let candidates = self.stem_candidates();
-        let route = stem_relay::state().route(Some(from), &candidates, Instant::now(), &mut rand::thread_rng());
+        let route = stem_relay::state().route(
+            Some(from),
+            &candidates,
+            Instant::now(),
+            &mut rand::thread_rng(),
+        );
         match route {
             Route::Forward(next) => {
                 log::info!("Stem: relayed a message from {from} to {next}");
@@ -628,7 +654,9 @@ impl MyBehaviour {
     ) -> Result<(), AbstSwarmError> {
         match event {
             request_response::Event::Message { peer, message } => match message {
-                request_response::Message::Request { request, channel, .. } => {
+                request_response::Message::Request {
+                    request, channel, ..
+                } => {
                     let _ = self.stem.send_response(channel, StemAck);
                     self.on_stem(notification_tx, peer, request, my_open_mls)
                 }
@@ -650,7 +678,9 @@ impl MyBehaviour {
                         None => {
                             self.retry_own_stem(id, &message, None, Some(peer));
                         }
-                        Some(from) => self.publish_relayed(notification_tx, my_open_mls, message, from)?,
+                        Some(from) => {
+                            self.publish_relayed(notification_tx, my_open_mls, message, from)?
+                        }
                     }
                 }
                 Ok(())
@@ -681,7 +711,10 @@ impl MyBehaviour {
     ) -> Result<(MessageBody, Vec<u8>), AbstSwarmError> {
         // Nested inside the common group's encryption, see MyOpenMls::seal_group.
         let group_id = my_open_mls.get_group_id(group_number)?.to_vec();
-        Ok((my_open_mls.seal_group(group_number, data, attributed)?, group_id))
+        Ok((
+            my_open_mls.seal_group(group_number, data, attributed)?,
+            group_id,
+        ))
     }
 
     // Get key Pakcage from other Peers
@@ -830,7 +863,9 @@ impl MyBehaviour {
     /// Claims a free slot of `epoch` in the slots.json next to the member's key file.
     fn claim_slot(member_dir: &Path, epoch: u64, k: usize) -> Result<u32, AbstSwarmError> {
         SlotStore::claim_in(member_dir, epoch, k)
-            .map_err(|e| AbstSwarmError::SlotStoreError { reason: e.to_string() })?
+            .map_err(|e| AbstSwarmError::SlotStoreError {
+                reason: e.to_string(),
+            })?
             .ok_or(AbstSwarmError::NoFreeSlot {
                 dir: member_dir.display().to_string(),
                 epoch,
@@ -881,7 +916,9 @@ impl MyBehaviour {
         peer_id: PeerId,
         member_dir: &Path,
     ) -> Result<(), AbstSwarmError> {
-        let (epoch, k) = my_open_mls.epoch_policy().ok_or(AbstSwarmError::NoEpochPolicy)?;
+        let (epoch, k) = my_open_mls
+            .epoch_policy()
+            .ok_or(AbstSwarmError::NoEpochPolicy)?;
         let slot = Self::claim_slot(member_dir, epoch, k)?;
         let keypackage = my_open_mls.generate_key_package()?;
         let keypackage =
@@ -910,7 +947,9 @@ impl MyBehaviour {
     ) -> Result<(), AbstSwarmError> {
         let path = PathBuf::from_str(&sig_file_path).map_err(|_| KeyMaterialFileError)?;
         let member_dir = path.parent().map(PathBuf::from).unwrap_or_default();
-        let (epoch, k) = my_open_mls.epoch_policy().ok_or(AbstSwarmError::NoEpochPolicy)?;
+        let (epoch, k) = my_open_mls
+            .epoch_policy()
+            .ok_or(AbstSwarmError::NoEpochPolicy)?;
         let slot = Self::claim_slot(&member_dir, epoch + 1, k)?;
         let (tag, proof) =
             my_open_mls.prove_renewal(&my_open_mls.get_peerid().to_bytes(), epoch + 1, slot)?;
@@ -1140,7 +1179,10 @@ impl MyBehaviour {
                 message,
             } => {
                 // Log raw gossipsub payload size (on-application payload pre-libp2p overhead)
-                log::info!("Received gossipsub payload: {} bytes from {peer_id}", message.data.len());
+                log::info!(
+                    "Received gossipsub payload: {} bytes from {peer_id}",
+                    message.data.len()
+                );
                 let stem_id = stem::message_id(&message.data);
                 // A copy GossipSub's duplicate cache has already forgotten, e.g.
                 // one an archive forwards late: not delivered or forwarded again.
@@ -1168,7 +1210,11 @@ impl MyBehaviour {
                     if IdentTopic::new(channel.clone()).hash() != arrived_on {
                         log::warn!("Rejecting a broadcast for {channel} that arrived on {arrived_on} from {peer_id}");
                         self.gossipsub
-                            .report_message_validation_result(&id, &peer_id, MessageAcceptance::Reject)
+                            .report_message_validation_result(
+                                &id,
+                                &peer_id,
+                                MessageAcceptance::Reject,
+                            )
                             .map_err(|_| MessageValidationError)?;
                         return Ok(());
                     }
@@ -1208,7 +1254,13 @@ impl MyBehaviour {
                     }
                 };
 
-                self.deliver(notification_tx, my_open_mls, message_body, signature, peer_id)?;
+                self.deliver(
+                    notification_tx,
+                    my_open_mls,
+                    message_body,
+                    signature,
+                    peer_id,
+                )?;
             }
             _ => log::debug!("Received Pubsub event:  {event:?}"),
         }
@@ -1238,33 +1290,62 @@ impl MyBehaviour {
                 let decrypt_res = my_open_mls.open_group(group_id, data, nonce);
                 match decrypt_res {
                     Ok((group_number_option, data, attributed_to)) => {
-                        let group_number = group_number_option.ok_or(GroupNotAvailable("".to_string()))?;
-                        let message_body = MessageBody::Group {group_number, data};
-                        Self::notify(notification_tx, Notification::Data{propagation_source:peer_id, message_body, signature:signature.to_bytes(), attributed_to})
+                        let group_number =
+                            group_number_option.ok_or(GroupNotAvailable("".to_string()))?;
+                        let message_body = MessageBody::Group { group_number, data };
+                        Self::notify(
+                            notification_tx,
+                            Notification::Data {
+                                propagation_source: peer_id,
+                                message_body,
+                                signature: signature.to_bytes(),
+                                attributed_to,
+                            },
+                        )
                     }
                     Err(e) => match e {
-                        GroupNotAvailable(_) => {}, //Do nothing, because not my group
-                        CommonLayerError => log::info!("Dropping a private-group message from {peer_id}: {}", CommonLayerError),
-                        e @ MyOpenMLSError::AttributionInvalid { .. } => log::warn!("Dropping a private-group message from {peer_id}: {e}"),
-                        MyOpenMLSError::SignatureInvalid{signature} => log::error!("Received message with invalid Signature: {}", hex::encode(signature.as_ref().to_bytes())),
-                        SerializationError(e) => log::error!("Received message but could not decode: {e}"),
-                        _ => log::error!("Received a gossipsub message, which caused an unhandeled error: {e}"),
-                    }
+                        GroupNotAvailable(_) => {} //Do nothing, because not my group
+                        CommonLayerError => log::info!(
+                            "Dropping a private-group message from {peer_id}: {}",
+                            CommonLayerError
+                        ),
+                        e @ MyOpenMLSError::AttributionInvalid { .. } => {
+                            log::warn!("Dropping a private-group message from {peer_id}: {e}")
+                        }
+                        MyOpenMLSError::SignatureInvalid { signature } => log::error!(
+                            "Received message with invalid Signature: {}",
+                            hex::encode(signature.as_ref().to_bytes())
+                        ),
+                        SerializationError(e) => {
+                            log::error!("Received message but could not decode: {e}")
+                        }
+                        _ => log::error!(
+                            "Received a gossipsub message, which caused an unhandeled error: {e}"
+                        ),
+                    },
                 }
             }
 
-            MessageBody::BroadcastEnc { channel, data, nonce } => {
+            MessageBody::BroadcastEnc {
+                channel,
+                data,
+                nonce,
+            } => {
                 // Handle public message. The topic is inside the
                 // ciphertext: decrypt every broadcast on a subscribed
                 // channel and filter by topic here.
-                let (topic, data, attributed_to) = match my_open_mls.open_broadcast(&channel, data, nonce) {
-                    Ok(opened) => opened,
-                    Err(e @ (MyOpenMLSError::ChannelMismatch { .. } | MyOpenMLSError::AttributionInvalid { .. })) => {
-                        log::warn!("Dropping broadcast from {peer_id}: {e}");
-                        return Ok(());
-                    }
-                    Err(e) => return Err(MLSError(e)),
-                };
+                let (topic, data, attributed_to) =
+                    match my_open_mls.open_broadcast(&channel, data, nonce) {
+                        Ok(opened) => opened,
+                        Err(
+                            e @ (MyOpenMLSError::ChannelMismatch { .. }
+                            | MyOpenMLSError::AttributionInvalid { .. }),
+                        ) => {
+                            log::warn!("Dropping broadcast from {peer_id}: {e}");
+                            return Ok(());
+                        }
+                        Err(e) => return Err(MLSError(e)),
+                    };
                 if my_open_mls.subscibed_to_topic(topic.as_bytes().to_vec()) {
                     let message_body = MessageBody::Broadcast { topic, data };
                     Self::notify(
@@ -1456,7 +1537,10 @@ impl MyBehaviour {
             guard.take()
         };
         if let Some(pending) = ready {
-            log::info!("All {} archive keys confirmed by the archives", pending.keys.len());
+            log::info!(
+                "All {} archive keys confirmed by the archives",
+                pending.keys.len()
+            );
             self.accept_archive_keys(pending.keys, pending.threshold, pending.join, my_open_mls)?;
         }
         Ok(())
@@ -1624,8 +1708,8 @@ impl MyBehaviour {
                     };
                 };
                 log::info!("Response with KeyPackage from {}", peer.to_string());
-                let keypackage: KeyPackage = bincode::deserialize(val)
-                    .map_err(|x| SerializationError(x.to_string()))?;
+                let keypackage: KeyPackage =
+                    bincode::deserialize(val).map_err(|x| SerializationError(x.to_string()))?;
                 if let Err(e) = my_open_mls.insert_foreign_kp(peer, keypackage) {
                     log::warn!("Not using the KeyPackage from {peer}: {e}");
                 }
@@ -1667,7 +1751,9 @@ impl MyBehaviour {
                 peers_per_member,
             } => {
                 if peer != my_open_mls.get_authorityid() {
-                    log::warn!("Ignoring an identity verification from {peer}, which is not the authority");
+                    log::warn!(
+                        "Ignoring an identity verification from {peer}, which is not the authority"
+                    );
                     return Ok(());
                 }
                 log::info!("Identity was verified, proceeding with memkey creation.");
@@ -1683,12 +1769,7 @@ impl MyBehaviour {
                     n,
                     group_key,
                 };
-                self.verify_archive_keys(
-                    opener_pubkeys,
-                    threshold,
-                    Some(join),
-                    my_open_mls,
-                )?;
+                self.verify_archive_keys(opener_pubkeys, threshold, Some(join), my_open_mls)?;
             }
             ResponseMessage::MemKey { ref partial_memkey } => {
                 // Only the AA hands out member keys, signed, and only during this node's join.
@@ -1722,7 +1803,9 @@ impl MyBehaviour {
                 log::info!("Got Opener Keys.");
                 my_open_mls.set_epoch_policy(epoch_secs, peers_per_member);
                 let Some(threshold) = threshold else {
-                    log::error!("Authority sent no opening threshold; end its archive init phase first");
+                    log::error!(
+                        "Authority sent no opening threshold; end its archive init phase first"
+                    );
                     return Ok(());
                 };
                 self.verify_archive_keys(opener_pubkeys, threshold, None, my_open_mls)?;
@@ -1764,7 +1847,12 @@ impl MyBehaviour {
                     }
                 }
             }
-            SwarmEvent::ConnectionEstablished { peer_id, endpoint, num_established, .. } => {
+            SwarmEvent::ConnectionEstablished {
+                peer_id,
+                endpoint,
+                num_established,
+                ..
+            } => {
                 if num_established.get() == 1 {
                     if endpoint.is_dialer() {
                         stem_relay::outbound().insert(peer_id);
@@ -1773,7 +1861,12 @@ impl MyBehaviour {
                     }
                 }
             }
-            SwarmEvent::ConnectionClosed { peer_id, cause, num_established, .. } => {
+            SwarmEvent::ConnectionClosed {
+                peer_id,
+                cause,
+                num_established,
+                ..
+            } => {
                 if num_established == 0 {
                     stem_relay::outbound().remove(&peer_id);
                 }

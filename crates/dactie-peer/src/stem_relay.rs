@@ -23,7 +23,12 @@ pub(crate) fn init(config: StemConfig) {
 /// Routing state. Do not hold the guard across a call that locks it again.
 pub(crate) fn state() -> MutexGuard<'static, StemState> {
     STATE
-        .get_or_init(|| Mutex::new(StemState::new(StemConfig { q: 0.0, ..StemConfig::default() })))
+        .get_or_init(|| {
+            Mutex::new(StemState::new(StemConfig {
+                q: 0.0,
+                ..StemConfig::default()
+            }))
+        })
         .lock()
         .unwrap()
 }

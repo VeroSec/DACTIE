@@ -15,7 +15,10 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 fn env_usize(name: &str, default: usize) -> usize {
-    std::env::var(name).ok().and_then(|v| v.parse().ok()).unwrap_or(default)
+    std::env::var(name)
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(default)
 }
 
 fn group_sizes() -> Vec<usize> {
@@ -58,15 +61,25 @@ fn member_join(c: &mut Criterion) {
     let group = Group::new(0, archives, threshold);
     let mut g = c.benchmark_group("join");
     g.sample_size(20);
-    g.bench_function(BenchmarkId::new("full_join", format!("{archives}_archives")), |b| {
-        b.iter_batched(
-            HashMap::new,
-            |mut gml| {
-                join(0, &group.grpkey, &group.mgrkey, threshold, &group.opener_pub_keys, &mut gml)
-            },
-            BatchSize::SmallInput,
-        )
-    });
+    g.bench_function(
+        BenchmarkId::new("full_join", format!("{archives}_archives")),
+        |b| {
+            b.iter_batched(
+                HashMap::new,
+                |mut gml| {
+                    join(
+                        0,
+                        &group.grpkey,
+                        &group.mgrkey,
+                        threshold,
+                        &group.opener_pub_keys,
+                        &mut gml,
+                    )
+                },
+                BatchSize::SmallInput,
+            )
+        },
+    );
     g.finish();
 }
 

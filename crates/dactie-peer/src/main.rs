@@ -338,10 +338,15 @@ mod tests {
     #[test]
     fn split_p2p_separates_peer_id_from_dial_address() {
         let peer_id = PeerId::random();
-        let addr: Multiaddr = format!("/ip4/10.0.0.1/tcp/20011/p2p/{peer_id}").parse().unwrap();
+        let addr: Multiaddr = format!("/ip4/10.0.0.1/tcp/20011/p2p/{peer_id}")
+            .parse()
+            .unwrap();
         let (parsed, base) = split_p2p(&addr).unwrap();
         assert_eq!(parsed, peer_id);
-        assert_eq!(base, "/ip4/10.0.0.1/tcp/20011".parse::<Multiaddr>().unwrap());
+        assert_eq!(
+            base,
+            "/ip4/10.0.0.1/tcp/20011".parse::<Multiaddr>().unwrap()
+        );
     }
 
     #[test]

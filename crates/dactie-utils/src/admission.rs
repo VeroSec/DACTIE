@@ -106,7 +106,10 @@ struct NotAdmitted;
 
 impl std::fmt::Display for NotAdmitted {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{NON_ADMITTED_BUDGET} non-admitted connections are already open")
+        write!(
+            f,
+            "{NON_ADMITTED_BUDGET} non-admitted connections are already open"
+        )
     }
 }
 
@@ -129,9 +132,7 @@ impl Gate {
     }
 
     fn check(&self, peer: &PeerId) -> Result<THandler<Self>, ConnectionDenied> {
-        if gate_active()
-            && !is_admitted(peer)
-            && self.non_admitted().count() >= NON_ADMITTED_BUDGET
+        if gate_active() && !is_admitted(peer) && self.non_admitted().count() >= NON_ADMITTED_BUDGET
         {
             log::info!("Refusing connection from {peer}: not admitted");
             return Err(ConnectionDenied::new(NotAdmitted));
@@ -198,7 +199,10 @@ impl NetworkBehaviour for Gate {
         match event {}
     }
 
-    fn poll(&mut self, cx: &mut Context<'_>) -> Poll<ToSwarm<Self::ToSwarm, THandlerInEvent<Self>>> {
+    fn poll(
+        &mut self,
+        cx: &mut Context<'_>,
+    ) -> Poll<ToSwarm<Self::ToSwarm, THandlerInEvent<Self>>> {
         let tick = self
             .tick
             .get_or_insert_with(|| tokio::time::interval(Duration::from_secs(5)));
@@ -246,22 +250,29 @@ mod tests {
         let now = Instant::now();
         let old = now.checked_sub(GRACE + Duration::from_secs(1)).unwrap();
         for _ in 0..NON_ADMITTED_BUDGET {
-            gate.connections
-                .insert(ConnectionId::new_unchecked(gate.connections.len()), (PeerId::random(), now));
+            gate.connections.insert(
+                ConnectionId::new_unchecked(gate.connections.len()),
+                (PeerId::random(), now),
+            );
         }
 
         // Before this node is admitted, the gate lets everyone in and closes nothing.
         *SCORED.lock().unwrap() = None;
         assert!(gate.check(&stranger).is_ok());
-        gate.connections.insert(ConnectionId::new_unchecked(100), (stranger, old));
+        gate.connections
+            .insert(ConnectionId::new_unchecked(100), (stranger, old));
         assert!(gate.expired(now).is_empty());
 
         // Admitted: the budget is full, members still get in, the old stranger is closed.
         *SCORED.lock().unwrap() = Some(HashSet::from([member]));
         assert!(gate.check(&PeerId::random()).is_err());
         assert!(gate.check(&member).is_ok());
-        gate.connections.insert(ConnectionId::new_unchecked(101), (member, old));
-        assert_eq!(gate.expired(now), vec![(stranger, ConnectionId::new_unchecked(100))]);
+        gate.connections
+            .insert(ConnectionId::new_unchecked(101), (member, old));
+        assert_eq!(
+            gate.expired(now),
+            vec![(stranger, ConnectionId::new_unchecked(100))]
+        );
 
         // A stranger that registers in time no longer counts and is not closed.
         *SCORED.lock().unwrap() = Some(HashSet::from([member, stranger]));

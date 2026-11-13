@@ -6,6 +6,8 @@ use libp2p::swarm::{NetworkBehaviour, SwarmEvent};
 use libp2p::PeerId;
 use tokio::sync::mpsc;
 
+// async_trait marks the boxed future #[must_use] a second time.
+#[allow(clippy::double_must_use)]
 #[async_trait]
 pub(crate) trait EventHandler
 where

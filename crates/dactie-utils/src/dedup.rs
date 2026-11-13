@@ -31,7 +31,12 @@ pub struct Seen {
 
 impl Seen {
     pub fn new(window: Duration, now: Instant) -> Self {
-        Seen { window, rotate_at: now + window, current: HashSet::new(), previous: HashSet::new() }
+        Seen {
+            window,
+            rotate_at: now + window,
+            current: HashSet::new(),
+            previous: HashSet::new(),
+        }
     }
 
     fn expire(&mut self, now: Instant) {
@@ -59,7 +64,9 @@ static SEEN: OnceLock<Mutex<Seen>> = OnceLock::new();
 
 /// This process's set. Do not hold the guard across a call that locks it again.
 pub fn seen() -> MutexGuard<'static, Seen> {
-    SEEN.get_or_init(|| Mutex::new(Seen::new(WINDOW, Instant::now()))).lock().unwrap()
+    SEEN.get_or_init(|| Mutex::new(Seen::new(WINDOW, Instant::now())))
+        .lock()
+        .unwrap()
 }
 
 /// Records a received or published gossip message; true the first time.

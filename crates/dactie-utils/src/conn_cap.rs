@@ -28,8 +28,8 @@
 use libp2p::core::{ConnectedPoint, Endpoint, Multiaddr};
 use libp2p::swarm::{
     behaviour::{ConnectionEstablished, ListenFailure},
-    dummy, ConnectionClosed, ConnectionDenied, ConnectionId, FromSwarm, NetworkBehaviour,
-    THandler, THandlerInEvent, THandlerOutEvent, ToSwarm,
+    dummy, ConnectionClosed, ConnectionDenied, ConnectionId, FromSwarm, NetworkBehaviour, THandler,
+    THandlerInEvent, THandlerOutEvent, ToSwarm,
 };
 use libp2p::PeerId;
 use std::collections::{HashMap, HashSet};
@@ -322,11 +322,18 @@ mod tests {
         let mut cap = ConnCap::new(limits(4, 2, 8), []);
         inbound(&mut cap, 1, PeerId::random()).unwrap();
         inbound(&mut cap, 2, PeerId::random()).unwrap();
-        assert!(cap.handle_pending_inbound_connection(id(3), &addr(), &addr()).is_err());
+        assert!(cap
+            .handle_pending_inbound_connection(id(3), &addr(), &addr())
+            .is_err());
         outbound(&mut cap, 4, PeerId::random()).unwrap();
         outbound(&mut cap, 5, PeerId::random()).unwrap();
         assert!(cap
-            .handle_pending_outbound_connection(id(6), Some(PeerId::random()), &[], Endpoint::Dialer)
+            .handle_pending_outbound_connection(
+                id(6),
+                Some(PeerId::random()),
+                &[],
+                Endpoint::Dialer
+            )
             .is_err());
     }
 
@@ -335,9 +342,13 @@ mod tests {
     #[test]
     fn stalled_handshakes_fill_only_the_pending_limit() {
         let mut cap = ConnCap::new(limits(4, 4, 2), []);
-        cap.handle_pending_inbound_connection(id(1), &addr(), &addr()).unwrap();
-        cap.handle_pending_inbound_connection(id(2), &addr(), &addr()).unwrap();
-        assert!(cap.handle_pending_inbound_connection(id(3), &addr(), &addr()).is_err());
+        cap.handle_pending_inbound_connection(id(1), &addr(), &addr())
+            .unwrap();
+        cap.handle_pending_inbound_connection(id(2), &addr(), &addr())
+            .unwrap();
+        assert!(cap
+            .handle_pending_inbound_connection(id(3), &addr(), &addr())
+            .is_err());
         outbound(&mut cap, 4, PeerId::random()).unwrap();
         let (local, remote) = (addr(), addr());
         cap.on_swarm_event(FromSwarm::ListenFailure(ListenFailure {
@@ -347,7 +358,9 @@ mod tests {
             connection_id: id(1),
             peer_id: None,
         }));
-        assert!(cap.handle_pending_inbound_connection(id(5), &addr(), &addr()).is_ok());
+        assert!(cap
+            .handle_pending_inbound_connection(id(5), &addr(), &addr())
+            .is_ok());
     }
 
     /// The authority and trusted archives get through a full node whenever
@@ -362,7 +375,12 @@ mod tests {
             .handle_established_inbound_connection(id(3), authority, &addr(), &addr())
             .is_ok());
         assert!(cap
-            .handle_pending_outbound_connection(id(4), Some(PeerId::random()), &[], Endpoint::Dialer)
+            .handle_pending_outbound_connection(
+                id(4),
+                Some(PeerId::random()),
+                &[],
+                Endpoint::Dialer
+            )
             .is_err());
     }
 

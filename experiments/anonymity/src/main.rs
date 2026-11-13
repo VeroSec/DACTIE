@@ -1,10 +1,10 @@
 mod adversary;
 mod conn_cap;
-mod link_latency;
-mod stem;
 mod experiment;
+mod link_latency;
 mod multi_message;
 mod peer;
+mod stem;
 mod timing;
 
 use crate::adversary::{clamp_coalition_size, coalition_size_for, run_attack, Estimator};
@@ -178,7 +178,10 @@ struct Args {
 /// about N * conn_high descriptors. Common soft limits (1024, 65536) are far
 /// below that for large runs, so raise the soft limit to the hard one.
 fn raise_fd_limit(needed: u64) {
-    let mut lim = libc::rlimit { rlim_cur: 0, rlim_max: 0 };
+    let mut lim = libc::rlimit {
+        rlim_cur: 0,
+        rlim_max: 0,
+    };
     // SAFETY: getrlimit and setrlimit only read and write the struct passed in.
     unsafe {
         if libc::getrlimit(libc::RLIMIT_NOFILE, &mut lim) != 0 {
@@ -191,7 +194,7 @@ fn raise_fd_limit(needed: u64) {
             }
         }
     }
-    if (lim.rlim_cur as u64) < needed {
+    if lim.rlim_cur < needed {
         eprintln!(
             "WARNING: open-file limit {} is below the ~{needed} this run needs; raise the hard limit (ulimit -Hn)",
             lim.rlim_cur
@@ -459,8 +462,11 @@ async fn start_experiment_series(args: StartExperimentSeriesArgs) -> Result<(), 
                 .collect();
 
             // Shortest paths from every peer, once per run for all coalitions.
-            let timing_model =
-                TimingModel::calibrated(&outcome.topology, &outcome.all_peers, &outcome.observations);
+            let timing_model = TimingModel::calibrated(
+                &outcome.topology,
+                &outcome.all_peers,
+                &outcome.observations,
+            );
             let fit = timing_model.fit_from(outcome.source);
             println!(
                 "Timing model: processing {:.0} us/hop, hop {:.0} us ({} relay steps); from the source: RMS residual {:.0} us, {} receipts unreachable",
@@ -498,7 +504,11 @@ async fn start_experiment_series(args: StartExperimentSeriesArgs) -> Result<(), 
                 let rows = Estimator::ALL
                     .iter()
                     .map(|e| (e.to_string(), rates[e]))
-                    .chain(TimingEstimator::ALL.iter().map(|e| (e.to_string(), timing_rates[e])));
+                    .chain(
+                        TimingEstimator::ALL
+                            .iter()
+                            .map(|e| (e.to_string(), timing_rates[e])),
+                    );
                 for (estimator, rate) in rows {
                     println!("  attack c={c} (f={f_effective:.4}) {estimator}: {rate:.4}");
                     writeln!(

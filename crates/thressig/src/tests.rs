@@ -144,8 +144,14 @@ fn test_signature_bincode_roundtrip() {
     let bytes = bincode::serialize(&sig).expect("serialize");
     let back: Signature = bincode::deserialize(&bytes).expect("deserialize");
 
-    assert_eq!(sig.sigma1, back.sigma1, "sigma1 did not survive the round trip");
-    assert_eq!(sig.sigma2, back.sigma2, "sigma2 did not survive the round trip");
+    assert_eq!(
+        sig.sigma1, back.sigma1,
+        "sigma1 did not survive the round trip"
+    );
+    assert_eq!(
+        sig.sigma2, back.sigma2,
+        "sigma2 did not survive the round trip"
+    );
     assert_eq!(sig.c, back.c, "c did not survive the round trip");
     assert_eq!(sig.s, back.s, "s did not survive the round trip");
     assert_eq!(sig, back);
@@ -209,7 +215,9 @@ fn forged_identity_signature(grpkey: &Grpkey, msg: &[u8]) -> Signature {
     let c = FieldElement::random();
     // r_pub as verify() computes it; every pairing with the identity is 1
     let r_pub = (GT::ate_pairing(&(&sigma1).neg(), &grpkey.x_pub_tilde)
-        * GT::ate_pairing(&sigma2, &grpkey.g_tilde)).pow(&c).inverse()
+        * GT::ate_pairing(&sigma2, &grpkey.g_tilde))
+    .pow(&c)
+    .inverse()
         * GT::ate_pairing(&(&sigma1 * &s), &grpkey.y1_pub_tilde);
     let mut transcript: Vec<u8> = Vec::new();
     transcript.extend(grpkey.to_bytes());
@@ -217,7 +225,12 @@ fn forged_identity_signature(grpkey: &Grpkey, msg: &[u8]) -> Signature {
     transcript.extend(sigma2.to_bytes(false));
     transcript.extend(r_pub.to_bytes());
     transcript.extend(bincode::serialize(&msg).unwrap());
-    Signature { sigma1, sigma2, c: FieldElement::from_msg_hash(&transcript), s }
+    Signature {
+        sigma1,
+        sigma2,
+        c: FieldElement::from_msg_hash(&transcript),
+        s,
+    }
 }
 
 #[test]
@@ -225,23 +238,37 @@ fn test_identity_signature_rejected() {
     let (grpkey, _) = setup();
     let msg = "forged".as_bytes();
     let forged = forged_identity_signature(&grpkey, msg);
-    assert!(verify(&forged, &grpkey, &msg).is_err(), "a non-member forged a valid group signature");
+    assert!(
+        verify(&forged, &grpkey, &msg).is_err(),
+        "a non-member forged a valid group signature"
+    );
     // Opening it must not name every member.
     let members: HashSet<usize> = [1usize, 2, 3].into_iter().collect();
-    let all_sj: HashMap<usize, Vec<(usize, GT)>> =
-        (1..=3).map(|j| (j, members.iter().map(|m| (*m, GT::one())).collect())).collect();
+    let all_sj: HashMap<usize, Vec<(usize, GT)>> = (1..=3)
+        .map(|j| (j, members.iter().map(|m| (*m, GT::one())).collect()))
+        .collect();
     assert!(open(&forged, &grpkey, &members, &all_sj).is_empty());
 }
 
 #[test]
 fn test_off_curve_signature_bytes_rejected() {
     // [u64 len][sigma1][u64 len][sigma2][u64 len][c][u64 len][s]
-    let honest = Signature { sigma1: G1::random(), sigma2: G1::random(), c: FieldElement::one(), s: FieldElement::one() };
+    let honest = Signature {
+        sigma1: G1::random(),
+        sigma2: G1::random(),
+        c: FieldElement::one(),
+        s: FieldElement::one(),
+    };
     let mut bytes = bincode::serialize(&honest).unwrap();
     assert!(bincode::deserialize::<Signature>(&bytes).is_ok());
     let len = u64::from_le_bytes(bytes[0..8].try_into().unwrap()) as usize;
     let off_curve = (1u8..=255)
-        .map(|x| { let mut b = vec![0u8; len]; b[0] = bytes[8]; b[len - 1] = x; b })
+        .map(|x| {
+            let mut b = vec![0u8; len];
+            b[0] = bytes[8];
+            b[len - 1] = x;
+            b
+        })
         .find(|b| G1::from(amcl_wrapper::types::GroupG1::frombytes(b)).is_identity())
         .expect("no off-curve encoding found");
     bytes[8..8 + len].copy_from_slice(&off_curve);
@@ -255,6 +282,7 @@ fn join_setup(n: usize) -> (Grpkey, Mgrkey, Vec<G2>, Vec<FieldElement>, G1) {
     (grpkey, mgrkey, pks, sks, join_mgr1())
 }
 
+#[allow(clippy::too_many_arguments)] // a test helper that spells out every input
 fn try_join(
     id: usize,
     grpkey: &Grpkey,
@@ -299,7 +327,17 @@ fn test_join_rejects_shares_of_another_secret() {
     // the archives could never open this member.
     let (other_shares, other_commits) =
         create_enc_shares(&id, &grpkey, 3, &pks, &FieldElement::random());
-    assert!(try_join(id, &grpkey, &mgrkey, &pks, &n, &material, &other_shares, &other_commits).is_err());
+    assert!(try_join(
+        id,
+        &grpkey,
+        &mgrkey,
+        &pks,
+        &n,
+        &material,
+        &other_shares,
+        &other_commits
+    )
+    .is_err());
 }
 
 #[test]
@@ -313,13 +351,28 @@ fn test_join_rejects_shares_that_cannot_be_interpolated() {
     // distinct indices exist and no opening can ever interpolate sk.
     let h_blind = enc_shares[0].h_blind.clone();
     let (s, c) = shamir_feldman_share(sk, 3, 4, &h_blind);
-    let same_index: Vec<EncShare> =
-        pks.iter().map(|pk| prove_enc_share(&grpkey, &s[0], pk, &h_blind, &c)).collect();
-    assert!(same_index.iter().zip(&pks).all(|(e, pk)| verify_enc_share_correctness(e, &grpkey, pk, &c)));
+    let same_index: Vec<EncShare> = pks
+        .iter()
+        .map(|pk| prove_enc_share(&grpkey, &s[0], pk, &h_blind, &c))
+        .collect();
+    assert!(same_index
+        .iter()
+        .zip(&pks)
+        .all(|(e, pk)| verify_enc_share_correctness(e, &grpkey, pk, &c)));
     assert!(try_join(id, &grpkey, &mgrkey, &pks, &n, &material, &same_index, &c).is_err());
 
     // Too few shares for the archives.
-    assert!(try_join(id, &grpkey, &mgrkey, &pks, &n, &material, &enc_shares[..3], commits).is_err());
+    assert!(try_join(
+        id,
+        &grpkey,
+        &mgrkey,
+        &pks,
+        &n,
+        &material,
+        &enc_shares[..3],
+        commits
+    )
+    .is_err());
 }
 
 #[test]
@@ -328,14 +381,23 @@ fn test_member_proof_for_additional_peer() {
     let id = 9usize;
     let material = join_mem1(id, n.clone(), &grpkey, 3, &pks);
     let (_, _, _, _, _, sk, enc_shares, commits) = &material;
-    let memkey = join_mem2(sk, &try_join(id, &grpkey, &mgrkey, &pks, &n, &material, enc_shares, commits).unwrap());
+    let memkey = join_mem2(
+        sk,
+        &try_join(
+            id, &grpkey, &mgrkey, &pks, &n, &material, enc_shares, commits,
+        )
+        .unwrap(),
+    );
 
     // The member shares its key again, under a fresh base, for a new sharing peer, and uses
     // its slot 1 of epoch 5.
     let (peer_shares, peer_commits) = create_enc_shares(&id, &grpkey, 3, &pks, &memkey.sk);
     let h_blind = check_share_layout(&peer_shares, &peer_commits, pks.len()).unwrap();
     let slot = tags::tag(&memkey.sk, 5, 1);
-    let pairs = [(h_blind.clone(), peer_commits[0].clone()), tags::statement(&slot)];
+    let pairs = [
+        (h_blind.clone(), peer_commits[0].clone()),
+        tags::statement(&slot),
+    ];
     let context = b"keypackage of the new peer";
     let proof = prove_member(&memkey, &grpkey, &pairs, context).unwrap();
     let proof: MemberProof = bincode::deserialize(&bincode::serialize(&proof).unwrap()).unwrap();
@@ -343,7 +405,8 @@ fn test_member_proof_for_additional_peer() {
     assert!(!verify_member(&proof, &grpkey, &pairs, b"another peer"));
 
     // Shares of another secret, or a tag of another key, cannot be proven.
-    let (bad_shares, bad_commits) = create_enc_shares(&id, &grpkey, 3, &pks, &FieldElement::random());
+    let (bad_shares, bad_commits) =
+        create_enc_shares(&id, &grpkey, 3, &pks, &FieldElement::random());
     let bad_h = check_share_layout(&bad_shares, &bad_commits, pks.len()).unwrap();
     let bad_pairs = [(bad_h, bad_commits[0].clone()), tags::statement(&slot)];
     let bad_proof = prove_member(&memkey, &grpkey, &bad_pairs, context).unwrap();
@@ -351,10 +414,18 @@ fn test_member_proof_for_additional_peer() {
     let foreign = tags::tag(&FieldElement::random(), 5, 1);
     let foreign_pairs = [pairs[0].clone(), tags::statement(&foreign)];
     let foreign_proof = prove_member(&memkey, &grpkey, &foreign_pairs, context).unwrap();
-    assert!(!verify_member(&foreign_proof, &grpkey, &foreign_pairs, context));
+    assert!(!verify_member(
+        &foreign_proof,
+        &grpkey,
+        &foreign_pairs,
+        context
+    ));
 
     // A relabeled tag (other epoch or slot, same value) fails too.
-    let relabeled = SlotTag { slot: 2, ..slot.clone() };
+    let relabeled = SlotTag {
+        slot: 2,
+        ..slot.clone()
+    };
     let relabeled_pairs = [pairs[0].clone(), tags::statement(&relabeled)];
     assert!(!verify_member(&proof, &grpkey, &relabeled_pairs, context));
 
@@ -390,7 +461,13 @@ fn test_attributed_signature() {
     let (id, other) = (11usize, 12usize);
     let material = join_mem1(id, n.clone(), &grpkey, 2, &pks);
     let (_, _, _, _, _, sk, enc_shares, commits) = &material;
-    let memkey = join_mem2(sk, &try_join(id, &grpkey, &mgrkey, &pks, &n, &material, enc_shares, commits).unwrap());
+    let memkey = join_mem2(
+        sk,
+        &try_join(
+            id, &grpkey, &mgrkey, &pks, &n, &material, enc_shares, commits,
+        )
+        .unwrap(),
+    );
     let msg = ("indicator", id);
 
     // Attributed: verifies like any signature and names its member.
@@ -442,13 +519,20 @@ fn test_member_checks_its_key() {
     let id = 21usize;
     let material = join_mem1(id, n.clone(), &grpkey, 2, &pks);
     let (_, _, _, _, _, sk, enc_shares, commits) = &material;
-    let partial = try_join(id, &grpkey, &mgrkey, &pks, &n, &material, enc_shares, commits).unwrap();
+    let partial = try_join(
+        id, &grpkey, &mgrkey, &pks, &n, &material, enc_shares, commits,
+    )
+    .unwrap();
     let memkey = join_mem2(sk, &partial);
     assert!(verify_memkey(&memkey, &grpkey, id));
 
     // Another MemberID, another sk, a changed credential, or another manager's group key.
     assert!(!verify_memkey(&memkey, &grpkey, id + 1));
-    assert!(!verify_memkey(&join_mem2(&FieldElement::random(), &partial), &grpkey, id));
+    assert!(!verify_memkey(
+        &join_mem2(&FieldElement::random(), &partial),
+        &grpkey,
+        id
+    ));
     let mut forged = memkey.clone();
     forged.sigma2 = Some(G1::random());
     assert!(!verify_memkey(&forged, &grpkey, id));

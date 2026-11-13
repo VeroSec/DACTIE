@@ -2,7 +2,7 @@
 # Checks rule 1 (CONTRIBUTING.md) before anything leaves this machine: on a public
 # repository, CI only finds a leak after it is published. Checks the messages and every
 # added line of the commits that the remote does not have yet, and ruff (rule 2) if it is
-# installed. Install once per clone:
+# installed, and rustfmt. Install once per clone:
 #   ln -s ../../scripts/hooks/pre-push .git/hooks/pre-push
 # Skip in an emergency with `git push --no-verify`.
 
@@ -19,6 +19,9 @@ while read -r local_ref local_sha remote_ref remote_sha; do
 done
 if command -v ruff >/dev/null 2>&1; then
     (cd "$root" && ruff check --quiet .) || status=1
+fi
+if command -v cargo >/dev/null 2>&1; then
+    (cd "$root" && cargo fmt --all --check >/dev/null) || { echo "pre-push: run cargo fmt --all" >&2; status=1; }
 fi
 [ $status -eq 0 ] || echo "pre-push: fix the findings above, or push with --no-verify" >&2
 exit $status
