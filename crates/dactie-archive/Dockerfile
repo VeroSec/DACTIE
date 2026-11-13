@@ -1,6 +1,5 @@
 # Use the official Rust image as the base image
-# Pinned like rust-toolchain.toml: Rust 1.100 no longer compiles sqlx 0.7 (never-type
-# fallback, rust-lang/rust#148922). Upgrade both together, with sqlx 0.8.
+# Pinned like rust-toolchain.toml (see the reason there). Upgrade both together.
 FROM rust:1.99
 
 # Set the working directory inside the container
