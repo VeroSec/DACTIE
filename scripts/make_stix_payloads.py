@@ -20,7 +20,8 @@ def bundle(objects):
 
 
 def main(src_path, out_dir="workloads/stix"):
-    src = json.load(open(src_path))
+    with open(src_path) as src_file:
+        src = json.load(src_file)
     objs = src["objects"]
     os.makedirs(out_dir, exist_ok=True)
 

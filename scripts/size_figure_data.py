@@ -16,9 +16,10 @@ import sys
 def main(out, result_dir):
     rows = []
     for f in sorted(glob.glob(f"{result_dir}/N*/experiment_[0-9]*.csv")):
-        for r in csv.DictReader(open(f)):
-            if r["total_peers"].isdigit():
-                rows.append(r)
+        with open(f) as src:
+            for r in csv.DictReader(src):
+                if r["total_peers"].isdigit():
+                    rows.append(r)
     rows.sort(key=lambda r: int(r["total_peers"]))
     with open(out, "w", newline="") as fh:
         w = csv.writer(fh)

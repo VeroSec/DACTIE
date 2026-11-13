@@ -1,0 +1,28 @@
+# Public domains that may appear in the repository (rule 1 in CONTRIBUTING.md).
+# One per line; a domain also allows its subdomains. Never add a domain of our own
+# infrastructure, our institutions' hosts, or a personal domain.
+
+# Code hosting and package sources
+github.com
+githubusercontent.com
+golang.org
+google.golang.org
+go.uber.org
+
+# Standards, papers and licences
+apache.org
+iacr.org
+ietf.org
+w3.org
+
+# Threat-intelligence sources named in the docs
+abuse.ch
+
+# Placeholders (Fabric's sample organisations use example.com)
+example.com
+example.org
+example.net
+
+# Attribution lines in commits and pull requests
+anthropic.com
+claude.com

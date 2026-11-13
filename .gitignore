@@ -6,3 +6,5 @@
 
 # Compose variables such as ARCHIVE_DB_PASSWORD — never commit
 .env
+__pycache__/
+.ruff_cache/

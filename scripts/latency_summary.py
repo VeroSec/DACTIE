@@ -17,8 +17,9 @@ import sys
 
 def main(raw, out):
     cells = collections.OrderedDict()
-    for r in csv.DictReader(open(raw)):
-        cells.setdefault((r["run"], r["receiver"]), []).append((int(r["seq"]), int(r["latency_ms"])))
+    with open(raw) as src:
+        for r in csv.DictReader(src):
+            cells.setdefault((r["run"], r["receiver"]), []).append((int(r["seq"]), int(r["latency_ms"])))
     rows = []
     for (run, receiver), rx in cells.items():
         rate = 5 if "full" in run else 40
@@ -27,8 +28,8 @@ def main(raw, out):
         if not lat:
             continue
         ls = sorted(lat)
-        rows.append(dict(run=run, receiver=receiver, mean_ms=round(st.mean(lat), 1),
-                         p95_ms=ls[max(0, int(round(0.95 * len(ls))) - 1)], n=len(lat)))
+        rows.append({"run": run, "receiver": receiver, "mean_ms": round(st.mean(lat), 1),
+                         "p95_ms": ls[max(0, round(0.95 * len(ls)) - 1)], "n": len(lat)})
     with open(out, "w", newline="") as fh:
         w = csv.DictWriter(fh, fieldnames=["run", "receiver", "mean_ms", "p95_ms", "n"])
         w.writeheader()

@@ -1,0 +1,96 @@
+# The three rules in CONTRIBUTING.md, checked on every pull request and every push to main.
+name: checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: checks-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  public:
+    name: "Rule 1: nothing that points at our infrastructure"
+    runs-on: ubuntu-24.04
+    env:
+      # User names and internal domains that the check must also refuse. A secret, because
+      # listing them in the repository would publish them.
+      PUBLIC_DENYLIST: ${{ secrets.PUBLIC_DENYLIST }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Files
+        run: python3 scripts/check_public.py tree
+      - name: Commits of the pull request (messages and every added line)
+        if: github.event_name == 'pull_request'
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: python3 scripts/check_public.py commits "$HEAD" --not "$BASE"
+      - name: Pushed commits (messages and every added line)
+        if: github.event_name == 'push' && github.event.before != '0000000000000000000000000000000000000000'
+        env:
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.event.after }}
+        run: python3 scripts/check_public.py commits "$AFTER" --not "$BEFORE"
+
+  ruff:
+    name: "Rule 2: ruff"
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: pipx run ruff==0.17.5 check --output-format=github .
+
+  compose:
+    name: "Rule 3: docker-compose.yml is valid"
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # The env file that the bring-up writes (docs/RUNBOOK.md, Phase 4), with a placeholder.
+      - run: mkdir -p key_material && echo 'BOOT_PEER_ID=placeholder' > key_material/boot_id.env
+      - run: >-
+          docker compose --profile node116 --profile node117 --profile node118
+          --profile node119 config --quiet
+
+  docker:
+    name: "Rule 3: docker build ${{ matrix.name }}"
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: dactie-authority
+            dockerfile: crates/dactie-authority/Dockerfile
+            context: .
+          - name: dactie-archive
+            dockerfile: crates/dactie-archive/Dockerfile
+            context: .
+          - name: dactie-peer
+            dockerfile: crates/dactie-peer/Dockerfile
+            context: .
+          # The compose file and the benchmarks build the peer with the load generator.
+          - name: dactie-peer (bench)
+            dockerfile: crates/dactie-peer/Dockerfile
+            context: .
+            args: --build-arg FEATURES=bench
+          - name: fabric loadgen
+            dockerfile: experiments/fabric/loadgen/Dockerfile
+            context: experiments/fabric/loadgen
+          - name: fabric chaincode
+            dockerfile: experiments/fabric/chaincode/Dockerfile
+            context: experiments/fabric/chaincode
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: docker build
+        env:
+          DOCKERFILE: ${{ matrix.dockerfile }}
+          CONTEXT: ${{ matrix.context }}
+          ARGS: ${{ matrix.args }}
+        # ARGS is unquoted on purpose: it holds whole arguments, or nothing.
+        run: docker build --progress=plain -f "$DOCKERFILE" $ARGS "$CONTEXT"

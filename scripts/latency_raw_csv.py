@@ -22,10 +22,11 @@ LINE = re.compile(r"BENCH_RX .*?via=(\S+) seq=(\d+) latency_ms=(\d+)")
 def main(raw_dir, out, peers=None):
     names = {}
     if peers:
-        for line in open(peers):
-            if line.strip():
-                peer_id, name = line.split()[:2]
-                names[peer_id] = name
+        with open(peers) as src:
+            for line in src:
+                if line.strip():
+                    peer_id, name = line.split()[:2]
+                    names[peer_id] = name
     files = sorted((f for f in os.listdir(raw_dir) if "." in f),
                    key=lambda f: (os.path.getmtime(os.path.join(raw_dir, f)), f))
     n = 0
@@ -34,12 +35,13 @@ def main(raw_dir, out, peers=None):
         w.writerow(["run", "receiver", "via", "seq", "latency_ms"])
         for f in files:
             run, receiver = f.rsplit(".", 1)
-            for line in open(os.path.join(raw_dir, f), errors="replace"):
-                m = LINE.search(line)
-                if m:
-                    via, seq, latency = m.groups()
-                    w.writerow([run, receiver, names.get(via, via), seq, latency])
-                    n += 1
+            with open(os.path.join(raw_dir, f), errors="replace") as src:
+                for line in src:
+                    m = LINE.search(line)
+                    if m:
+                        via, seq, latency = m.groups()
+                        w.writerow([run, receiver, names.get(via, via), seq, latency])
+                        n += 1
     print(f"{n} receipts from {len(files)} files written to {out}")
 
 

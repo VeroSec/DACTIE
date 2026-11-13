@@ -33,8 +33,16 @@ host_profiles() {
         sort -u | awk '{p[$1] = p[$1] " --profile " $2} END {for (h in p) print h "|" p[h]}'
 }
 
-# The directory holding network/ and build/ on the hosts (REMOTE_DIR), or this one.
-base_dir() { if [ -z "$ORDERER_SSH" ]; then echo "$HERE"; else echo "$REMOTE_DIR"; fi; }
+# The directory holding network/ and build/ on the hosts (REMOTE_DIR), or this one. A relative
+# REMOTE_DIR is taken from the home directory on the hosts, which is asked for once, so that no
+# host path has to be written into the repository.
+base_dir() {
+    if [ -z "$ORDERER_SSH" ]; then echo "$HERE"; return; fi
+    case $REMOTE_DIR in
+        /*) echo "$REMOTE_DIR" ;;
+        *) echo "$(ssh -n -o BatchMode=yes -o LogLevel=ERROR "$ORDERER_SSH" 'echo "$HOME"')/$REMOTE_DIR" ;;
+    esac
+}
 
 # --user for containers that write into base_dir on the hosts: evaluated by the remote shell.
 host_docker_user() { if [ -z "$ORDERER_SSH" ]; then local_docker_user; else echo '--user $(id -u):$(id -g)'; fi; }

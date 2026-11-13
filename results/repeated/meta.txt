@@ -1,20 +1,20 @@
-2026-11-03T01:21:05Z /home/vero/anonymity-results-multi start/resume: host labrada, kernel 6.8.0-147-generic, 64 vCPUs, 125 GiB, commit a209ce7
-2026-11-03T01:21:05Z /home/vero/anonymity-results-multi no_stem N=50 start (64 vCPUs) flags: --message-spacing-secs 5
-2026-11-03T01:36:29Z /home/vero/anonymity-results-multi no_stem N=50 exit 0, 5 runs, below 100%: 0
-2026-11-03T01:36:29Z /home/vero/anonymity-results-multi no_stem N=100 start (64 vCPUs) flags: --message-spacing-secs 5
-2026-11-03T01:52:04Z /home/vero/anonymity-results-multi no_stem N=100 exit 0, 5 runs, below 100%: 0
-2026-11-03T01:52:04Z /home/vero/anonymity-results-multi no_stem N=200 start (64 vCPUs) flags: --message-spacing-secs 5
-2026-11-03T02:07:56Z /home/vero/anonymity-results-multi no_stem N=200 exit 0, 5 runs, below 100%: 0
-2026-11-03T02:07:56Z /home/vero/anonymity-results-multi stem_fixed N=50 start (64 vCPUs) flags: --stem-fluff-probability 0.2 --stem-epoch-secs 600 --message-spacing-secs 5
-2026-11-03T02:23:16Z /home/vero/anonymity-results-multi stem_fixed N=50 exit 0, 5 runs, below 100%: 0
-2026-11-03T02:23:16Z /home/vero/anonymity-results-multi stem_fixed N=100 start (64 vCPUs) flags: --stem-fluff-probability 0.2 --stem-epoch-secs 600 --message-spacing-secs 5
-2026-11-03T02:38:48Z /home/vero/anonymity-results-multi stem_fixed N=100 exit 0, 5 runs, below 100%: 0
-2026-11-03T02:38:48Z /home/vero/anonymity-results-multi stem_fixed N=200 start (64 vCPUs) flags: --stem-fluff-probability 0.2 --stem-epoch-secs 600 --message-spacing-secs 5
-2026-11-03T02:54:36Z /home/vero/anonymity-results-multi stem_fixed N=200 exit 0, 5 runs, below 100%: 0
-2026-11-03T02:54:36Z /home/vero/anonymity-results-multi stem_rotating N=50 start (64 vCPUs) flags: --stem-fluff-probability 0.2 --stem-epoch-secs 5 --message-spacing-secs 35
-2026-11-03T03:34:33Z /home/vero/anonymity-results-multi stem_rotating N=50 exit 0, 5 runs, below 100%: 0
-2026-11-03T03:34:33Z /home/vero/anonymity-results-multi stem_rotating N=100 start (64 vCPUs) flags: --stem-fluff-probability 0.2 --stem-epoch-secs 5 --message-spacing-secs 35
-2026-11-03T04:14:46Z /home/vero/anonymity-results-multi stem_rotating N=100 exit 0, 5 runs, below 100%: 0
-2026-11-03T04:14:46Z /home/vero/anonymity-results-multi stem_rotating N=200 start (64 vCPUs) flags: --stem-fluff-probability 0.2 --stem-epoch-secs 5 --message-spacing-secs 35
-2026-11-03T04:55:22Z /home/vero/anonymity-results-multi stem_rotating N=200 exit 0, 5 runs, below 100%: 0
-2026-11-03T04:55:22Z /home/vero/anonymity-results-multi MULTI-DONE
+2026-11-03T01:21:05Z ~/anonymity-results-multi start/resume: host labrada, kernel 6.8.0-147-generic, 64 vCPUs, 125 GiB, commit a209ce7
+2026-11-03T01:21:05Z ~/anonymity-results-multi no_stem N=50 start (64 vCPUs) flags: --message-spacing-secs 5
+2026-11-03T01:36:29Z ~/anonymity-results-multi no_stem N=50 exit 0, 5 runs, below 100%: 0
+2026-11-03T01:36:29Z ~/anonymity-results-multi no_stem N=100 start (64 vCPUs) flags: --message-spacing-secs 5
+2026-11-03T01:52:04Z ~/anonymity-results-multi no_stem N=100 exit 0, 5 runs, below 100%: 0
+2026-11-03T01:52:04Z ~/anonymity-results-multi no_stem N=200 start (64 vCPUs) flags: --message-spacing-secs 5
+2026-11-03T02:07:56Z ~/anonymity-results-multi no_stem N=200 exit 0, 5 runs, below 100%: 0
+2026-11-03T02:07:56Z ~/anonymity-results-multi stem_fixed N=50 start (64 vCPUs) flags: --stem-fluff-probability 0.2 --stem-epoch-secs 600 --message-spacing-secs 5
+2026-11-03T02:23:16Z ~/anonymity-results-multi stem_fixed N=50 exit 0, 5 runs, below 100%: 0
+2026-11-03T02:23:16Z ~/anonymity-results-multi stem_fixed N=100 start (64 vCPUs) flags: --stem-fluff-probability 0.2 --stem-epoch-secs 600 --message-spacing-secs 5
+2026-11-03T02:38:48Z ~/anonymity-results-multi stem_fixed N=100 exit 0, 5 runs, below 100%: 0
+2026-11-03T02:38:48Z ~/anonymity-results-multi stem_fixed N=200 start (64 vCPUs) flags: --stem-fluff-probability 0.2 --stem-epoch-secs 600 --message-spacing-secs 5
+2026-11-03T02:54:36Z ~/anonymity-results-multi stem_fixed N=200 exit 0, 5 runs, below 100%: 0
+2026-11-03T02:54:36Z ~/anonymity-results-multi stem_rotating N=50 start (64 vCPUs) flags: --stem-fluff-probability 0.2 --stem-epoch-secs 5 --message-spacing-secs 35
+2026-11-03T03:34:33Z ~/anonymity-results-multi stem_rotating N=50 exit 0, 5 runs, below 100%: 0
+2026-11-03T03:34:33Z ~/anonymity-results-multi stem_rotating N=100 start (64 vCPUs) flags: --stem-fluff-probability 0.2 --stem-epoch-secs 5 --message-spacing-secs 35
+2026-11-03T04:14:46Z ~/anonymity-results-multi stem_rotating N=100 exit 0, 5 runs, below 100%: 0
+2026-11-03T04:14:46Z ~/anonymity-results-multi stem_rotating N=200 start (64 vCPUs) flags: --stem-fluff-probability 0.2 --stem-epoch-secs 5 --message-spacing-secs 35
+2026-11-03T04:55:22Z ~/anonymity-results-multi stem_rotating N=200 exit 0, 5 runs, below 100%: 0
+2026-11-03T04:55:22Z ~/anonymity-results-multi MULTI-DONE

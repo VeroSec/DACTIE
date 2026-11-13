@@ -1,0 +1,24 @@
+#!/bin/sh
+# Checks rule 1 (CONTRIBUTING.md) before anything leaves this machine: on a public
+# repository, CI only finds a leak after it is published. Checks the messages and every
+# added line of the commits that the remote does not have yet, and ruff (rule 2) if it is
+# installed. Install once per clone:
+#   ln -s ../../scripts/hooks/pre-push .git/hooks/pre-push
+# Skip in an emergency with `git push --no-verify`.
+
+root=$(git rev-parse --show-toplevel) || exit 1
+zero=0000000000000000000000000000000000000000
+status=0
+while read -r local_ref local_sha remote_ref remote_sha; do
+    [ "$local_sha" = "$zero" ] && continue # deleting a branch
+    if [ "$remote_sha" = "$zero" ]; then
+        python3 "$root/scripts/check_public.py" commits "$local_sha" --not --remotes || status=1
+    else
+        python3 "$root/scripts/check_public.py" commits "$local_sha" --not "$remote_sha" || status=1
+    fi
+done
+if command -v ruff >/dev/null 2>&1; then
+    (cd "$root" && ruff check --quiet .) || status=1
+fi
+[ $status -eq 0 ] || echo "pre-push: fix the findings above, or push with --no-verify" >&2
+exit $status

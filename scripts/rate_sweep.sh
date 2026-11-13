@@ -6,8 +6,9 @@
 # Before each rate, both archives and all four peers are recreated (state kept), so that the
 # backlog of a saturated run does not leak into the next. Mid-run (t+40 s), docker stats on every
 # host shows which node saturates.
-# Usage: [RATES="25 50"] [DACTIE_DIR=/opt/vero/dactie] scripts/rate_sweep.sh [OUT_DIR]. DACTIE_DIR is the
-# checkout on the hosts that the network runs from; its directory name is the compose project and so the
+# Usage: [RATES="25 50"] [DACTIE_DIR=dactie] scripts/rate_sweep.sh [OUT_DIR]. DACTIE_DIR is the
+# checkout on the hosts that the network runs from, relative to the home directory there; its
+# directory name is the compose project and so the
 # prefix of the container names, which lets a sweep run from a second checkout beside another network.
 # BENCH_RX lines land in OUT_DIR/r<rate>.<receiver>;
 # scripts/rate_sweep_raw_csv.py turns them into OUT_DIR/raw.csv.gz (results/latency/rate-sweep-2026-11-08/
@@ -15,7 +16,7 @@
 D=${1:-rate-sweep}; mkdir -p "$D"
 S="ssh -q -o BatchMode=yes -o LogLevel=ERROR -o ConnectTimeout=10 -o ServerAliveInterval=10"
 r() { local h=$1; shift; for _ in 1 2 3 4 5; do $S "$h" "$@" && return 0; sleep 3; done; return 1; }
-DIR=${DACTIE_DIR:-/opt/vero/dactie}
+DIR=${DACTIE_DIR:-dactie}
 P=$(basename "$DIR")
 HP="cd $DIR; logs() { docker logs \"\$@\" 2>&1 | sed 's/\x1b\[[0-9;]*m//g'; }"
 FILE=/usr/src/dactie/workloads/misp/0dc6a09d-e8d7-48fd-a3f7-f554afb8d1b3.1KiB.json

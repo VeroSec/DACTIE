@@ -3,6 +3,7 @@ import os
 import re
 import sys
 
+
 def parse_file(input_path, output_path):
     starting_re = re.compile(r"^Starting Run .*?peer_n=(\d+),")
     received_re = re.compile(r"^Received\s+(\d+)\s+messages from\s+(\d+)\s+peers\.")

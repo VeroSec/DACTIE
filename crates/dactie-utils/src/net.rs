@@ -50,7 +50,7 @@ mod tests {
     fn keeps_the_deployment_network() {
         assert!(!is_unroutable_addr(&addr("/ip4/10.244.192.116/tcp/10001")));
         assert!(!is_unroutable_addr(&addr("/ip4/10.244.192.117/tcp/20011")));
-        assert!(!is_unroutable_addr(&addr("/ip4/172.15.0.1/tcp/20011")));
-        assert!(!is_unroutable_addr(&addr("/ip4/172.32.0.1/tcp/20011")));
+        assert!(!is_unroutable_addr(&addr("/ip4/172.15.0.1/tcp/20011"))); // public-ok: just outside 172.16.0.0/12
+        assert!(!is_unroutable_addr(&addr("/ip4/172.32.0.1/tcp/20011"))); // public-ok: just outside 172.16.0.0/12
     }
 }
