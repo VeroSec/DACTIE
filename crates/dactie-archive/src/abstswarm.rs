@@ -65,7 +65,6 @@ where
     }
 }
 
-
 #[derive(Debug, Error)]
 #[allow(clippy::enum_variant_names)]
 pub(crate) enum AbstSwarmError {

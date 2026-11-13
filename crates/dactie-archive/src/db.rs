@@ -66,14 +66,28 @@ impl Row {
     fn size(&self) -> usize {
         ROW_OVERHEAD
             + match self {
-                Row::Broadcast { id, channel, topic, data } => {
-                    id.len() + channel.len() + topic.len() + data.len()
-                }
-                Row::GroupEnc { id, group_id, data, nonce } => {
-                    id.len() + group_id.len() + data.len() + nonce.len()
-                }
-                Row::Proposal { id, group_id, data, .. } => id.len() + group_id.len() + data.len(),
-                Row::Commit { id, group_id, commit, welcome_option, .. } => {
+                Row::Broadcast {
+                    id,
+                    channel,
+                    topic,
+                    data,
+                } => id.len() + channel.len() + topic.len() + data.len(),
+                Row::GroupEnc {
+                    id,
+                    group_id,
+                    data,
+                    nonce,
+                } => id.len() + group_id.len() + data.len() + nonce.len(),
+                Row::Proposal {
+                    id, group_id, data, ..
+                } => id.len() + group_id.len() + data.len(),
+                Row::Commit {
+                    id,
+                    group_id,
+                    commit,
+                    welcome_option,
+                    ..
+                } => {
                     id.len()
                         + group_id.len()
                         + commit.len()
@@ -124,10 +138,20 @@ pub(crate) struct Db {
 
 impl Db {
     /// Starts the writer task. The event loop polls the returned receiver.
-    pub(crate) fn new(pool: PgPool, queue_budget: usize) -> (Db, mpsc::UnboundedReceiver<Deferred>) {
+    pub(crate) fn new(
+        pool: PgPool,
+        queue_budget: usize,
+    ) -> (Db, mpsc::UnboundedReceiver<Deferred>) {
         let (deferred_tx, deferred_rx) = mpsc::unbounded_channel();
         let writer = Writer::spawn(pool.clone(), queue_budget);
-        (Db { pool, writer, deferred_tx }, deferred_rx)
+        (
+            Db {
+                pool,
+                writer,
+                deferred_tx,
+            },
+            deferred_rx,
+        )
     }
 
     /// Runs `job` in its own task, so that the event loop does not wait for the database.
@@ -187,7 +211,10 @@ impl Writer {
         let queued = self.queued.load(Ordering::Relaxed);
         if !row.is_control() && queued + size > self.budget {
             let dropped = self.dropped.fetch_add(1, Ordering::Relaxed) + 1;
-            if self.last_warning.is_none_or(|at| at.elapsed() >= WARN_EVERY) {
+            if self
+                .last_warning
+                .is_none_or(|at| at.elapsed() >= WARN_EVERY)
+            {
                 log::warn!(
                     "Database queue full ({:.1} of {} MiB): not storing {} messages since the last \
                      warning, {} in total. PostgreSQL is slower than the gossip arriving; the \
@@ -248,7 +275,10 @@ async fn store_batch(pool: &PgPool, rows: &[Row]) {
     match retry(pool, rows).await {
         Ok(()) => {}
         Err(e) => {
-            log::warn!("Database rejected a batch of {} messages ({e}), storing them one by one", rows.len());
+            log::warn!(
+                "Database rejected a batch of {} messages ({e}), storing them one by one",
+                rows.len()
+            );
             for row in rows {
                 if let Err(e) = retry(pool, std::slice::from_ref(row)).await {
                     log::error!("Not storing message {}: {e}", hex::encode(row.id()));
@@ -264,7 +294,10 @@ async fn retry(pool: &PgPool, rows: &[Row]) -> Result<(), sqlx::Error> {
     loop {
         match write(pool, rows).await {
             Err(e) if is_unreachable(&e) => {
-                log::warn!("Database unreachable ({e}), retrying {} messages in {backoff:?}", rows.len());
+                log::warn!(
+                    "Database unreachable ({e}), retrying {} messages in {backoff:?}",
+                    rows.len()
+                );
                 tokio::time::sleep(backoff).await;
                 backoff = (backoff * 2).min(MAX_BACKOFF);
             }
@@ -336,14 +369,24 @@ fn insert<'a>(rows: Vec<&'a Row>) -> QueryBuilder<'a, Postgres> {
     };
     let mut query = QueryBuilder::new(head);
     query.push_values(rows, |mut values, row| match row {
-        Row::Broadcast { id, channel, topic, data } => {
+        Row::Broadcast {
+            id,
+            channel,
+            topic,
+            data,
+        } => {
             values
                 .push_bind(id.as_slice())
                 .push_bind(channel.as_str())
                 .push_bind(topic.as_str())
                 .push_bind(data.as_slice());
         }
-        Row::GroupEnc { id, group_id, data, nonce } => {
+        Row::GroupEnc {
+            id,
+            group_id,
+            data,
+            nonce,
+        } => {
             values
                 .push_bind(id.as_slice())
                 .push_bind(group_id.as_slice())
@@ -351,14 +394,25 @@ fn insert<'a>(rows: Vec<&'a Row>) -> QueryBuilder<'a, Postgres> {
                 .push_bind(nonce.as_slice());
         }
         // PostgreSQL has no unsigned 64-bit type; epochs are stored as BIGINT.
-        Row::Proposal { id, group_id, data, epoch } => {
+        Row::Proposal {
+            id,
+            group_id,
+            data,
+            epoch,
+        } => {
             values
                 .push_bind(id.as_slice())
                 .push_bind(group_id.as_slice())
                 .push_bind(data.as_slice())
                 .push_bind(*epoch as i64);
         }
-        Row::Commit { id, group_id, commit, welcome_option, epoch } => {
+        Row::Commit {
+            id,
+            group_id,
+            commit,
+            welcome_option,
+            epoch,
+        } => {
             values
                 .push_bind(id.as_slice())
                 .push_bind(group_id.as_slice())
@@ -391,14 +445,21 @@ mod tests {
         let statements = by_size(&refs);
         assert_eq!(statements.iter().map(Vec::len).sum::<usize>(), 40);
         for statement in &statements {
-            assert!(statement.len() == 1 || statement.iter().map(|r| r.size()).sum::<usize>() <= MAX_STATEMENT_BYTES);
+            assert!(
+                statement.len() == 1
+                    || statement.iter().map(|r| r.size()).sum::<usize>() <= MAX_STATEMENT_BYTES
+            );
         }
         assert_eq!(statements.len(), 6); // 7 rows of 1 MiB + overhead fit in 8 MiB
     }
 
     #[test]
     fn a_row_larger_than_the_limit_gets_its_own_statement() {
-        let rows = [broadcast(1), broadcast(MAX_STATEMENT_BYTES + 1), broadcast(1)];
+        let rows = [
+            broadcast(1),
+            broadcast(MAX_STATEMENT_BYTES + 1),
+            broadcast(1),
+        ];
         let refs: Vec<&Row> = rows.iter().collect();
         let sizes: Vec<usize> = by_size(&refs).iter().map(Vec::len).collect();
         assert_eq!(sizes, vec![1, 1, 1]);
@@ -426,7 +487,10 @@ mod tests {
             welcome_option: None,
             epoch: 7,
         };
-        assert!(writer.store(commit), "a commit is queued even over the budget");
+        assert!(
+            writer.store(commit),
+            "a commit is queued even over the budget"
+        );
         assert!(!writer.store(broadcast(1)));
     }
 }

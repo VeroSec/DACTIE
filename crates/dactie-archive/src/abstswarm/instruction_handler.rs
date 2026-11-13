@@ -8,5 +8,10 @@ pub(crate) trait InstructionHandler
 where
     Self: NetworkBehaviour,
 {
-    fn handle_instruction(&mut self, instruction: Instruction, db: &mut Db, my_open_mls: &MyOpenMls);
+    fn handle_instruction(
+        &mut self,
+        instruction: Instruction,
+        db: &mut Db,
+        my_open_mls: &MyOpenMls,
+    );
 }

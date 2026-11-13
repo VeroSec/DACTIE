@@ -16,8 +16,8 @@ use tokio::sync::mpsc;
 
 mod abstswarm;
 mod db;
-mod myclient;
 mod mybehaviour;
+mod myclient;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]

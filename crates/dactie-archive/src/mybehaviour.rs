@@ -1,9 +1,9 @@
 use crate::db::{Db, Deferred, Row};
 use crate::mybehaviour::MyBehaviourError::PubSubBehaviourError;
-use dactie_utils::net::{is_unroutable_addr, MESH_N, MESH_N_HIGH, MESH_N_LOW};
 use dactie_utils::admission;
-use dactie_utils::{dedup, stem};
+use dactie_utils::net::{is_unroutable_addr, MESH_N, MESH_N_HIGH, MESH_N_LOW};
 use dactie_utils::shared_structs::*;
+use dactie_utils::{dedup, stem};
 use libp2p::futures::TryStreamExt;
 use libp2p::gossipsub::{IdentTopic, MessageAcceptance};
 use libp2p::identity::{Keypair, ParseError};
@@ -43,7 +43,9 @@ fn open_request_id(signature: &[u8]) -> String {
 }
 
 /// Pending opening requests outlive restarts, so an operator can decide later.
-pub(crate) async fn ensure_pending_opens_table(pool: &sqlx::PgPool) -> Result<(), MyBehaviourError> {
+pub(crate) async fn ensure_pending_opens_table(
+    pool: &sqlx::PgPool,
+) -> Result<(), MyBehaviourError> {
     sqlx::query(
         "CREATE TABLE IF NOT EXISTS pending_opens (
             id TEXT PRIMARY KEY,
@@ -355,7 +357,10 @@ impl MyBehaviour {
 
     /// Operator command `approve <id>`. Runs as a database task; the event loop then computes
     /// and sends the partial opening.
-    async fn approve_open(pool: sqlx::PgPool, id: String) -> Result<Option<Deferred>, MyBehaviourError> {
+    async fn approve_open(
+        pool: sqlx::PgPool,
+        id: String,
+    ) -> Result<Option<Deferred>, MyBehaviourError> {
         match Self::take_pending_open(&pool, &id).await? {
             Some(signature) => {
                 let done = format!("Submitted this archive's partial opening for {id}");
@@ -369,7 +374,10 @@ impl MyBehaviour {
     }
 
     /// Operator command `deny <id>`. Runs as a database task.
-    async fn deny_open(pool: sqlx::PgPool, id: String) -> Result<Option<Deferred>, MyBehaviourError> {
+    async fn deny_open(
+        pool: sqlx::PgPool,
+        id: String,
+    ) -> Result<Option<Deferred>, MyBehaviourError> {
         match Self::take_pending_open(&pool, &id).await? {
             Some(_) => println!("Denied opening request {id}"),
             None => println!("No pending opening request {id}"),
@@ -421,13 +429,22 @@ impl MyBehaviour {
     }
 
     /// Finishes database work that ran in its own task.
-    fn run_deferred(&mut self, deferred: Deferred, my_open_mls: &MyOpenMls) -> Result<(), AbstSwarmError> {
+    fn run_deferred(
+        &mut self,
+        deferred: Deferred,
+        my_open_mls: &MyOpenMls,
+    ) -> Result<(), AbstSwarmError> {
         match deferred {
             Deferred::Respond { channel, response } => self
                 .request_response
                 .send_response(channel, *response)
                 .map_err(|_| SendResponseError),
-            Deferred::OpenPairings { signature, id_shares, peer_shares, done } => {
+            Deferred::OpenPairings {
+                signature,
+                id_shares,
+                peer_shares,
+                done,
+            } => {
                 self.submit_open_pairings(my_open_mls, signature, id_shares, peer_shares)?;
                 if let Some(done) = done {
                     println!("{done}");
@@ -527,7 +544,11 @@ impl MyBehaviour {
                     if IdentTopic::new(channel.clone()).hash() != arrived_on {
                         log::warn!("Rejecting a broadcast for {channel} that arrived on {arrived_on} from {peer_id}");
                         self.gossipsub
-                            .report_message_validation_result(&id, &peer_id, MessageAcceptance::Reject)
+                            .report_message_validation_result(
+                                &id,
+                                &peer_id,
+                                MessageAcceptance::Reject,
+                            )
                             .map_err(|_| MessageValidationError)?;
                         return Ok(());
                     }
@@ -565,17 +586,29 @@ impl MyBehaviour {
                 };
 
                 match message_body {
-                    MessageBody::BroadcastEnc { channel, data, nonce } => {
+                    MessageBody::BroadcastEnc {
+                        channel,
+                        data,
+                        nonce,
+                    } => {
                         // Archives are members of the common group, so they can
                         // read the topic; peers query them by channel only.
                         // An attribution inside is verified but not stored: archives keep
                         // CTI without the MemberID.
                         match my_open_mls.open_broadcast(&channel, data, nonce) {
                             Ok((topic, plaintext, _attributed_to)) => {
-                                db.writer.store(Row::Broadcast { id: id.0, channel, topic, data: plaintext });
+                                db.writer.store(Row::Broadcast {
+                                    id: id.0,
+                                    channel,
+                                    topic,
+                                    data: plaintext,
+                                });
                                 println!("Got a Broadcast");
                             }
-                            Err(e @ (MyOpenMLSError::ChannelMismatch { .. } | MyOpenMLSError::AttributionInvalid { .. })) => {
+                            Err(
+                                e @ (MyOpenMLSError::ChannelMismatch { .. }
+                                | MyOpenMLSError::AttributionInvalid { .. }),
+                            ) => {
                                 log::warn!("Not storing broadcast from {peer_id}: {e}")
                             }
                             Err(e) => return Err(MLSError(e)),
@@ -591,7 +624,12 @@ impl MyBehaviour {
                         // ciphertext (see MyOpenMls::seal_group).
                         match my_open_mls.unwrap_group(enc_data, nonce) {
                             Ok((data, nonce)) => {
-                                db.writer.store(Row::GroupEnc { id: id.0, group_id, data, nonce });
+                                db.writer.store(Row::GroupEnc {
+                                    id: id.0,
+                                    group_id,
+                                    data,
+                                    nonce,
+                                });
                                 println!("Got a Group_Enc");
                             }
                             Err(e @ MyOpenMLSError::CommonLayerError) => {
@@ -605,7 +643,12 @@ impl MyBehaviour {
                         data,
                         epoch,
                     } => {
-                        db.writer.store(Row::Proposal { id: id.0, group_id, data, epoch });
+                        db.writer.store(Row::Proposal {
+                            id: id.0,
+                            group_id,
+                            data,
+                            epoch,
+                        });
                         println!("Got a Proposal");
                     }
                     MessageBody::Commit {
@@ -657,7 +700,11 @@ impl MyBehaviour {
                 for addr in listen_addrs {
                     // Skip addresses no remote host can dial (loopback, Docker bridges).
                     if is_unroutable_addr(&addr) {
-                        log::debug!("Ignoring unroutable addr from identify for {}: {}", peer_id, addr);
+                        log::debug!(
+                            "Ignoring unroutable addr from identify for {}: {}",
+                            peer_id,
+                            addr
+                        );
                         continue;
                     }
                     log::debug!("Adding received IdentifyInfo matching protocol to the DHT. Peer: {}, addr: {}", peer_id, addr);
@@ -758,8 +805,12 @@ impl MyBehaviour {
                                 let enc_share = enc_share.to_bytes();
                                 let pool = db.pool.clone();
                                 db.spawn("Storing an ID share", async move {
-                                    Self::insert_id_enc_share(&pool, id, &enc_share, &commits).await?;
-                                    Ok::<_, MyBehaviourError>(Some(Deferred::Respond { channel, response: Box::new(response) }))
+                                    Self::insert_id_enc_share(&pool, id, &enc_share, &commits)
+                                        .await?;
+                                    Ok::<_, MyBehaviourError>(Some(Deferred::Respond {
+                                        channel,
+                                        response: Box::new(response),
+                                    }))
                                 });
                             } else {
                                 self.request_response
@@ -785,8 +836,14 @@ impl MyBehaviour {
                                 let peer_id = peer_id.to_bytes();
                                 let pool = db.pool.clone();
                                 db.spawn("Storing a peer share", async move {
-                                    Self::insert_peer_enc_share(&pool, &peer_id, &enc_share, &commits).await?;
-                                    Ok::<_, MyBehaviourError>(Some(Deferred::Respond { channel, response: Box::new(response) }))
+                                    Self::insert_peer_enc_share(
+                                        &pool, &peer_id, &enc_share, &commits,
+                                    )
+                                    .await?;
+                                    Ok::<_, MyBehaviourError>(Some(Deferred::Respond {
+                                        channel,
+                                        response: Box::new(response),
+                                    }))
                                 });
                             } else {
                                 self.request_response
@@ -824,33 +881,33 @@ impl MyBehaviour {
                         }
 
                         // The archive decides on every opening itself; the authority can only ask.
-                        RequestMessage::RequestOpen { signature } => {
-                            if my_open_mls.get_authorityid() == peer {
-                                let id = open_request_id(&signature);
-                                let pool = db.pool.clone();
-                                let response = Response {
-                                    body: ResponseMessage::OpenPending,
-                                    signature: None,
-                                };
-                                if *AUTO_APPROVE_OPEN.get().unwrap_or(&false) {
-                                    log::warn!(
-                                        "Auto-approving opening request {id} (--auto-approve-open)"
-                                    );
-                                    db.spawn("Reading the shares for an opening", async move {
-                                        Self::read_shares(&pool, signature, None).await.map(Some)
-                                    });
-                                    self.request_response
-                                        .send_response(channel, response)
-                                        .map_err(|_| SendResponseError)?;
-                                } else {
-                                    db.spawn("Queueing an opening request", async move {
+                        RequestMessage::RequestOpen { signature }
+                            if my_open_mls.get_authorityid() == peer =>
+                        {
+                            let id = open_request_id(&signature);
+                            let pool = db.pool.clone();
+                            let response = Response {
+                                body: ResponseMessage::OpenPending,
+                                signature: None,
+                            };
+                            if *AUTO_APPROVE_OPEN.get().unwrap_or(&false) {
+                                log::warn!(
+                                    "Auto-approving opening request {id} (--auto-approve-open)"
+                                );
+                                db.spawn("Reading the shares for an opening", async move {
+                                    Self::read_shares(&pool, signature, None).await.map(Some)
+                                });
+                                self.request_response
+                                    .send_response(channel, response)
+                                    .map_err(|_| SendResponseError)?;
+                            } else {
+                                db.spawn("Queueing an opening request", async move {
                                         Self::queue_open(&pool, &id, &signature).await?;
                                         println!(
                                             "Opening request {id} from the authority is pending. Check the evidence, then run `approve {id}` or `deny {id}`."
                                         );
                                         Ok::<_, MyBehaviourError>(Some(Deferred::Respond { channel, response: Box::new(response) }))
                                     });
-                                }
                             }
                         }
 
@@ -918,11 +975,7 @@ impl MyBehaviour {
                 None => log::warn!("Outgoing connection error (no peer id): {}", error),
                 Some(peer_id) => log::error!("Could not connect to peer '{}': {}", peer_id, error),
             },
-            SwarmEvent::ConnectionClosed {
-                peer_id,
-                cause,
-                ..
-            } => {
+            SwarmEvent::ConnectionClosed { peer_id, cause, .. } => {
                 if let Some(connerror) = cause {
                     log::error!(
                         "Connection to peer {} closed because of an error: {}",
@@ -975,7 +1028,12 @@ impl EventHandler for MyBehaviour {
 }
 
 impl InstructionHandler for MyBehaviour {
-    fn handle_instruction(&mut self, instruction: Instruction, db: &mut Db, _my_open_mls: &MyOpenMls) {
+    fn handle_instruction(
+        &mut self,
+        instruction: Instruction,
+        db: &mut Db,
+        _my_open_mls: &MyOpenMls,
+    ) {
         match instruction {
             Instruction::RegisterIdentity { peer_id, identity } => {
                 self.register_identity(&peer_id, identity)
@@ -984,9 +1042,10 @@ impl InstructionHandler for MyBehaviour {
                 "Listing opening requests",
                 Self::print_pending_opens(db.pool.clone()),
             ),
-            Instruction::ApproveOpen { id } => {
-                db.spawn("Approving an opening", Self::approve_open(db.pool.clone(), id))
-            }
+            Instruction::ApproveOpen { id } => db.spawn(
+                "Approving an opening",
+                Self::approve_open(db.pool.clone(), id),
+            ),
             Instruction::DenyOpen { id } => {
                 db.spawn("Denying an opening", Self::deny_open(db.pool.clone(), id))
             }

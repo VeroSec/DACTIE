@@ -25,7 +25,6 @@ pub(crate) struct AbstSwarmBuilder<TBehaviour> {
     my_open_mls: MyOpenMls,
     // Addresses to advertise to remote peers as dialable
     external_addresses: Vec<Multiaddr>,
-
 }
 
 impl<TBehaviour> AbstSwarmBuilder<TBehaviour>
@@ -63,7 +62,6 @@ where
         self.external_addresses.push(address);
         self
     }
-
 
     /// Listen on all interfaces, on a random port
     fn default_listen_address() -> Result<Multiaddr, AbstSwarmBuilderError> {
