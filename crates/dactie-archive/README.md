@@ -20,3 +20,4 @@ peers that were offline. Its operator approves or denies every request to open a
 | `src/main.rs` | Command-line options, start-up, database connection |
 | `src/myclient.rs` | Operator console |
 | `src/mybehaviour.rs` | Network behaviour: registration, storage, key shares, partial openings |
+| `src/db.rs` | Database work off the network loop: batched writer for gossip messages, tasks for requests |
