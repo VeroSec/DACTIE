@@ -36,7 +36,10 @@ pub(crate) struct LatencyRange {
 }
 
 impl LatencyRange {
-    pub(crate) const OFF: LatencyRange = LatencyRange { min_ms: 0, max_ms: 0 };
+    pub(crate) const OFF: LatencyRange = LatencyRange {
+        min_ms: 0,
+        max_ms: 0,
+    };
 
     pub(crate) fn is_off(&self) -> bool {
         self.max_ms == 0
@@ -177,7 +180,11 @@ impl<S: AsyncRead + Unpin> AsyncRead for Delayed<S> {
 }
 
 impl<S: AsyncWrite + Unpin> AsyncWrite for Delayed<S> {
-    fn poll_write(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &[u8]) -> Poll<io::Result<usize>> {
+    fn poll_write(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &[u8],
+    ) -> Poll<io::Result<usize>> {
         Pin::new(&mut self.get_mut().inner).poll_write(cx, buf)
     }
 
@@ -201,11 +208,17 @@ mod tests {
         assert!(LatencyRange::OFF.is_off());
         assert_eq!(
             "25".parse::<LatencyRange>().unwrap(),
-            LatencyRange { min_ms: 25, max_ms: 25 }
+            LatencyRange {
+                min_ms: 25,
+                max_ms: 25
+            }
         );
         assert_eq!(
             "10, 100".parse::<LatencyRange>().unwrap(),
-            LatencyRange { min_ms: 10, max_ms: 100 }
+            LatencyRange {
+                min_ms: 10,
+                max_ms: 100
+            }
         );
         assert!("100,10".parse::<LatencyRange>().is_err());
         assert!("fast".parse::<LatencyRange>().is_err());
@@ -214,7 +227,10 @@ mod tests {
     /// Both ends of a link get the same delay, always within the range.
     #[test]
     fn delays_are_symmetric_and_in_range() {
-        let range = LatencyRange { min_ms: 10, max_ms: 100 };
+        let range = LatencyRange {
+            min_ms: 10,
+            max_ms: 100,
+        };
         for (a, b) in [(40000u16, 51234u16), (1, 2), (65535, 10001)] {
             let d = range.for_ports(a, b);
             assert_eq!(d, range.for_ports(b, a));
@@ -226,7 +242,10 @@ mod tests {
     /// No detour via a third peer is faster than the direct link.
     #[test]
     fn detours_are_never_faster() {
-        let range = LatencyRange { min_ms: 10, max_ms: 100 };
+        let range = LatencyRange {
+            min_ms: 10,
+            max_ms: 100,
+        };
         let ports: Vec<u16> = (0..40).map(|i| 20000 + i * 977).collect();
         for &a in &ports {
             for &b in &ports {

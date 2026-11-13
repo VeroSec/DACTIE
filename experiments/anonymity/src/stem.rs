@@ -124,9 +124,14 @@ impl StemState {
     /// for the rest of the epoch (15 of the 240 runs in the first stem grid).
     fn top_up<R: Rng>(&mut self, connected: &[PeerId], rng: &mut R) {
         while self.successors.len() < 2 {
-            let spare: Vec<PeerId> =
-                connected.iter().copied().filter(|p| !self.successors.contains(p)).collect();
-            let Some(p) = spare.choose(rng).copied() else { break };
+            let spare: Vec<PeerId> = connected
+                .iter()
+                .copied()
+                .filter(|p| !self.successors.contains(p))
+                .collect();
+            let Some(p) = spare.choose(rng).copied() else {
+                break;
+            };
             self.successors.push(p);
         }
         if self.own.is_none() {
@@ -135,7 +140,12 @@ impl StemState {
     }
 
     /// Replace a successor that is no longer connected.
-    fn repair<R: Rng>(&mut self, gone: PeerId, connected: &[PeerId], rng: &mut R) -> Option<PeerId> {
+    fn repair<R: Rng>(
+        &mut self,
+        gone: PeerId,
+        connected: &[PeerId],
+        rng: &mut R,
+    ) -> Option<PeerId> {
         let spare = connected
             .iter()
             .copied()
@@ -172,8 +182,12 @@ impl StemState {
                 None => {
                     // Prefer a successor other than the predecessor, so the
                     // message does not bounce straight back.
-                    let options: Vec<PeerId> =
-                        self.successors.iter().copied().filter(|s| *s != p).collect();
+                    let options: Vec<PeerId> = self
+                        .successors
+                        .iter()
+                        .copied()
+                        .filter(|s| *s != p)
+                        .collect();
                     let s = options.choose(rng).copied();
                     if let Some(s) = s {
                         self.routes.insert(p, s);
@@ -226,7 +240,12 @@ impl StemState {
         *used += 1;
         self.refresh(now, connected, rng);
         let usable = |p: &PeerId| !avoid.contains(p) && connected.contains(p);
-        let preferred: Vec<PeerId> = self.successors.iter().copied().filter(|p| usable(p)).collect();
+        let preferred: Vec<PeerId> = self
+            .successors
+            .iter()
+            .copied()
+            .filter(|p| usable(p))
+            .collect();
         if let Some(p) = preferred.choose(rng) {
             return Some(*p);
         }
@@ -247,7 +266,13 @@ impl StemState {
     }
 
     /// Start the fail-safe for a message this peer forwarded on the stem.
-    pub(crate) fn arm_embargo<R: Rng>(&mut self, id: u64, data: Vec<u8>, now: Instant, rng: &mut R) {
+    pub(crate) fn arm_embargo<R: Rng>(
+        &mut self,
+        id: u64,
+        data: Vec<u8>,
+        now: Instant,
+        rng: &mut R,
+    ) {
         // Exponential with the configured mean.
         let u: f64 = rng.gen_range(f64::EPSILON..1.0);
         let wait = self.config.embargo_mean.mul_f64(-u.ln());
@@ -280,7 +305,10 @@ mod tests {
     use rand::SeedableRng;
 
     fn config(q: f64) -> StemConfig {
-        StemConfig { q, ..StemConfig::OFF }
+        StemConfig {
+            q,
+            ..StemConfig::OFF
+        }
     }
 
     fn peers(n: usize) -> Vec<PeerId> {
@@ -296,7 +324,10 @@ mod tests {
         let now = Instant::now();
         assert_eq!(stem.route(None, &[], now, &mut rng), Route::Fluff);
         let connected = peers(5);
-        assert!(matches!(stem.route(None, &connected, now, &mut rng), Route::Forward(_)));
+        assert!(matches!(
+            stem.route(None, &connected, now, &mut rng),
+            Route::Forward(_)
+        ));
     }
 
     /// Within an epoch, each predecessor always gets the same successor, and
@@ -324,8 +355,14 @@ mod tests {
         let connected = peers(10);
         let mut stem = StemState::new(config(1.0));
         let now = Instant::now();
-        assert_eq!(stem.route(Some(connected[3]), &connected, now, &mut rng), Route::Fluff);
-        assert!(matches!(stem.route(None, &connected, now, &mut rng), Route::Forward(_)));
+        assert_eq!(
+            stem.route(Some(connected[3]), &connected, now, &mut rng),
+            Route::Fluff
+        );
+        assert!(matches!(
+            stem.route(None, &connected, now, &mut rng),
+            Route::Forward(_)
+        ));
     }
 
     /// Over many epochs, the share of diffusers matches q.
@@ -337,7 +374,8 @@ mod tests {
         let trials = 4000;
         for _ in 0..trials {
             let mut stem = StemState::new(config(0.2));
-            if stem.route(Some(connected[0]), &connected, Instant::now(), &mut rng) == Route::Fluff {
+            if stem.route(Some(connected[0]), &connected, Instant::now(), &mut rng) == Route::Fluff
+            {
                 fluffs += 1;
             }
         }
@@ -376,11 +414,19 @@ mod tests {
         };
         stem.mark_own(42);
         for _ in 0..OWN_RETRIES {
-            let next = stem.retry_own(42, &[first], &connected, now, &mut rng).expect("a spare peer");
+            let next = stem
+                .retry_own(42, &[first], &connected, now, &mut rng)
+                .expect("a spare peer");
             assert_ne!(next, first);
         }
-        assert_eq!(stem.retry_own(42, &[first], &connected, now, &mut rng), None);
-        assert_eq!(stem.retry_own(43, &[first], &connected, now, &mut rng), None);
+        assert_eq!(
+            stem.retry_own(42, &[first], &connected, now, &mut rng),
+            None
+        );
+        assert_eq!(
+            stem.retry_own(43, &[first], &connected, now, &mut rng),
+            None
+        );
     }
 
     /// The embargo releases messages not seen in gossip, and only those.

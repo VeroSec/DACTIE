@@ -119,6 +119,8 @@ impl NetworkBehaviour for ConnCap {
         Ok(dummy::ConnectionHandler)
     }
 
+    // remove() changes state, so it stays in the arm instead of becoming a match guard.
+    #[allow(clippy::collapsible_match)]
     fn on_swarm_event(&mut self, event: FromSwarm) {
         match event {
             FromSwarm::ConnectionEstablished(ConnectionEstablished {
@@ -193,14 +195,24 @@ mod tests {
         established(&mut cap, a, ConnectionId::new_unchecked(1));
         // A second connection to the same peer is refused even with room left.
         assert!(cap
-            .handle_pending_outbound_connection(ConnectionId::new_unchecked(9), Some(a), &[], Endpoint::Dialer)
+            .handle_pending_outbound_connection(
+                ConnectionId::new_unchecked(9),
+                Some(a),
+                &[],
+                Endpoint::Dialer
+            )
             .is_err());
         established(&mut cap, b, ConnectionId::new_unchecked(2));
         assert!(cap
             .handle_pending_inbound_connection(ConnectionId::new_unchecked(3), &addr, &addr)
             .is_err());
         assert!(cap
-            .handle_pending_outbound_connection(ConnectionId::new_unchecked(4), None, &[], Endpoint::Dialer)
+            .handle_pending_outbound_connection(
+                ConnectionId::new_unchecked(4),
+                None,
+                &[],
+                Endpoint::Dialer
+            )
             .is_err());
         cap.on_swarm_event(FromSwarm::ConnectionClosed(ConnectionClosed {
             peer_id: a,

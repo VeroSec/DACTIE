@@ -46,7 +46,11 @@ pub(crate) trait ProtectedPeers {
 
 /// Periodic work of the stem phase (the fail-safe embargo).
 pub(crate) trait StemTick {
-    fn stem_tick(&mut self, notification_tx: &mpsc::UnboundedSender<Notification>, my_open_mls: &MyOpenMls);
+    fn stem_tick(
+        &mut self,
+        notification_tx: &mpsc::UnboundedSender<Notification>,
+        my_open_mls: &MyOpenMls,
+    );
 }
 
 /// New connections are not trimmed during their first seconds (go-libp2p's
@@ -188,7 +192,6 @@ pub(crate) enum Notification {
     },
     Err(AbstSwarmError),
 }
-
 
 #[derive(Debug, Error)]
 #[allow(clippy::enum_variant_names)]

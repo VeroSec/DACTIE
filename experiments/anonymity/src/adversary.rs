@@ -112,7 +112,11 @@ pub(crate) fn guess<R: Rng>(
             // A colluder on the stem names its stem predecessor; gossip
             // observations only count when no colluder sat on the stem.
             let on_stem: Vec<&Observation> = seen.iter().copied().filter(|o| o.stem).collect();
-            let seen: Vec<&Observation> = if on_stem.is_empty() { seen.to_vec() } else { on_stem };
+            let seen: Vec<&Observation> = if on_stem.is_empty() {
+                seen.to_vec()
+            } else {
+                on_stem
+            };
             let earliest = seen.iter().map(|o| o.at).min()?;
             // Ties break uniformly, as they do for plurality. Observations
             // arrive over an unordered channel, so picking the first minimum
@@ -214,13 +218,47 @@ mod tests {
     fn first_spy_prefers_the_stem() {
         let mut rng = StdRng::seed_from_u64(9);
         let (source, relay, b, c) = (pid(1), pid(2), pid(3), pid(4));
-        let on_stem = Observation { observer: b, prop_id: relay, at: Duration::from_millis(20), stem: true };
-        let gossip = Observation { observer: c, prop_id: source, at: Duration::from_millis(5), stem: false };
+        let on_stem = Observation {
+            observer: b,
+            prop_id: relay,
+            at: Duration::from_millis(20),
+            stem: true,
+        };
+        let gossip = Observation {
+            observer: c,
+            prop_id: source,
+            at: Duration::from_millis(5),
+            stem: false,
+        };
         let candidates = [source, relay];
-        assert_eq!(guess(Estimator::FirstSpy, &[&on_stem, &gossip], &candidates, &mut rng), Some(relay));
-        let first_hop = Observation { observer: b, prop_id: source, at: Duration::from_millis(30), stem: true };
-        assert_eq!(guess(Estimator::FirstSpy, &[&first_hop, &gossip], &candidates, &mut rng), Some(source));
-        assert_eq!(guess(Estimator::FirstSpy, &[&gossip], &candidates, &mut rng), Some(source));
+        assert_eq!(
+            guess(
+                Estimator::FirstSpy,
+                &[&on_stem, &gossip],
+                &candidates,
+                &mut rng
+            ),
+            Some(relay)
+        );
+        let first_hop = Observation {
+            observer: b,
+            prop_id: source,
+            at: Duration::from_millis(30),
+            stem: true,
+        };
+        assert_eq!(
+            guess(
+                Estimator::FirstSpy,
+                &[&first_hop, &gossip],
+                &candidates,
+                &mut rng
+            ),
+            Some(source)
+        );
+        assert_eq!(
+            guess(Estimator::FirstSpy, &[&gossip], &candidates, &mut rng),
+            Some(source)
+        );
     }
 
     #[test]

@@ -105,7 +105,6 @@ pub(crate) enum Notification {
     Err(AbstSwarmError),
 }
 
-
 #[derive(Debug, Error)]
 #[allow(clippy::enum_variant_names)]
 pub(crate) enum AbstSwarmError {

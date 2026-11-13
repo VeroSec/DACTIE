@@ -73,7 +73,10 @@ impl Group {
         n_openers: usize,
         threshold: usize,
     ) -> Self {
-        assert!(threshold <= n_openers, "threshold must not exceed the number of archives");
+        assert!(
+            threshold <= n_openers,
+            "threshold must not exceed the number of archives"
+        );
         let (grpkey, mgrkey) = thressig::setup();
         let (opener_sec_keys, opener_pub_keys): (Vec<_>, Vec<_>) = (0..n_openers)
             .map(|_| thressig::elgamal_keygen(&grpkey.g_tilde))
@@ -126,7 +129,10 @@ impl Group {
                 .enumerate()
                 .map(|(i, s)| {
                     let share = s[archive].clone();
-                    (i, thressig::create_open_pairing(sig, share, &self.opener_sec_keys[archive]))
+                    (
+                        i,
+                        thressig::create_open_pairing(sig, share, &self.opener_sec_keys[archive]),
+                    )
                 })
                 .collect()
         };
@@ -193,7 +199,12 @@ mod tests {
         let msg = vec![7u8; 1024];
         let sig = group.sign(3, &msg);
         thressig::verify(&sig, &group.grpkey, &msg.as_slice()).expect("verify failed");
-        let opened = thressig::open(&sig, &group.grpkey, &group.member_ids(), &group.collect_pairings(&sig).0);
+        let opened = thressig::open(
+            &sig,
+            &group.grpkey,
+            &group.member_ids(),
+            &group.collect_pairings(&sig).0,
+        );
         assert_eq!(opened, vec![3]);
     }
 

@@ -289,8 +289,14 @@ impl Storage {
             self.open_peers(&signature, my_open_mls)?,
         );
         if !res.0.is_empty() {
-            self.signature_enc_id_pairing_map.lock().unwrap().remove(&signature);
-            self.signature_enc_peer_pairing_map.lock().unwrap().remove(&signature);
+            self.signature_enc_id_pairing_map
+                .lock()
+                .unwrap()
+                .remove(&signature);
+            self.signature_enc_peer_pairing_map
+                .lock()
+                .unwrap()
+                .remove(&signature);
         }
         self.to_file()?;
         Ok(res)
@@ -320,10 +326,16 @@ impl Storage {
         let current = self.current_epoch();
         let per_member = self.epoch_policy.lock().unwrap().1;
         if !epochs.contains(&tag.epoch) {
-            return Err(format!("slot tag of epoch {} is not valid in epoch {current}", tag.epoch));
+            return Err(format!(
+                "slot tag of epoch {} is not valid in epoch {current}",
+                tag.epoch
+            ));
         }
         if tag.slot == 0 || tag.slot as usize > per_member {
-            return Err(format!("slot {} is not one of the {per_member} slots", tag.slot));
+            return Err(format!(
+                "slot {} is not one of the {per_member} slots",
+                tag.slot
+            ));
         }
         {
             let mut used = self.used_tags.lock().unwrap();
@@ -348,7 +360,11 @@ impl Storage {
     }
 
     /// Records that a sharing peer's registration covers `epoch`.
-    pub(crate) fn register_peer_epoch(&self, peer: PeerId, epoch: u64) -> Result<(), MyStorageError> {
+    pub(crate) fn register_peer_epoch(
+        &self,
+        peer: PeerId,
+        epoch: u64,
+    ) -> Result<(), MyStorageError> {
         self.peer_epochs.lock().unwrap().insert(peer, epoch);
         self.to_file()
     }
@@ -545,7 +561,10 @@ mod tests {
         storage.register_peer_epoch(stays, epoch).unwrap();
         storage.register_peer_epoch(leaves, epoch - 1).unwrap();
         assert!(storage.renew_peer(&stranger, &tag(epoch + 1, 1)).is_err());
-        assert_eq!(storage.renew_peer(&stays, &tag(epoch + 1, 1)).unwrap(), epoch + 1);
+        assert_eq!(
+            storage.renew_peer(&stays, &tag(epoch + 1, 1)).unwrap(),
+            epoch + 1
+        );
         assert!(storage.renew_peer(&stays, &tag(epoch + 1, 1)).is_err());
         assert!(storage.renew_peer(&stays, &tag(epoch + 2, 1)).is_err());
 

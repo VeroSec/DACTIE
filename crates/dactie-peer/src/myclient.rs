@@ -2,9 +2,9 @@ use std::str::FromStr;
 
 use crate::abstswarm::Notification;
 use dactie_utils::mls_wrapper::MyOpenMls;
-use std::sync::Arc;
 use dactie_utils::shared_structs::{Instruction, MessageBody};
 use libp2p::PeerId;
+use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::io::{self, AsyncBufReadExt, BufReader, Lines, Stdin};
 use tokio::sync::mpsc;
@@ -69,15 +69,13 @@ impl MyClient {
             let topic: String = std::env::var("BENCH_TOPIC").unwrap_or_else(|_| "Test".to_string());
             // Read once, not per message: re-reading at 40 msg/s would measure
             // the filesystem rather than the network.
-            let payload_file = std::env::var("BENCH_PAYLOAD_FILE").ok().filter(|p| !p.is_empty());
+            let payload_file = std::env::var("BENCH_PAYLOAD_FILE")
+                .ok()
+                .filter(|p| !p.is_empty());
             let file_body: Option<Vec<u8>> = match &payload_file {
                 Some(path) => match std::fs::read(path) {
                     Ok(bytes) => {
-                        log::info!(
-                            "BENCH_PAYLOAD_FILE {} loaded: {} bytes",
-                            path,
-                            bytes.len()
-                        );
+                        log::info!("BENCH_PAYLOAD_FILE {} loaded: {} bytes", path, bytes.len());
                         Some(bytes)
                     }
                     Err(e) => {
@@ -440,64 +438,71 @@ impl MyClient {
                 message_body,
                 signature,
                 attributed_to,
-            } => match message_body {
-                MessageBody::Broadcast { topic, data } => {
-                    let s = String::from_utf8_lossy(&data);
-                    if s.starts_with("B|") {
-                        // Parse B|<epoch_ms>|<seq>|...
-                        let mut parts = s.split('|');
-                        let _ = parts.next();
-                        let ts_ms = parts
-                            .next()
-                            .and_then(|v| v.parse::<u128>().ok())
-                            .unwrap_or(0);
-                        let seq = parts
-                            .next()
-                            .and_then(|v| v.parse::<u64>().ok())
-                            .unwrap_or(0);
-                        let now = SystemTime::now()
-                            .duration_since(UNIX_EPOCH)
-                            .unwrap_or(Duration::from_millis(0))
-                            .as_millis();
-                        let latency_ms = now.saturating_sub(ts_ms);
-                        println!("BENCH_RX topic={topic} via={peer_id} seq={seq} latency_ms={} sig={}", latency_ms, hex::encode(&signature));
-                    } else {
-                        println!("Got Broadcastmessage: \n'{}'\nTopic: '{topic}'\nPropagating Peer: {peer_id}\n{}\nSignature:\n{}", s, sender(attributed_to), hex::encode(&signature));
+            } => {
+                match message_body {
+                    MessageBody::Broadcast { topic, data } => {
+                        let s = String::from_utf8_lossy(&data);
+                        if s.starts_with("B|") {
+                            // Parse B|<epoch_ms>|<seq>|...
+                            let mut parts = s.split('|');
+                            let _ = parts.next();
+                            let ts_ms = parts
+                                .next()
+                                .and_then(|v| v.parse::<u128>().ok())
+                                .unwrap_or(0);
+                            let seq = parts
+                                .next()
+                                .and_then(|v| v.parse::<u64>().ok())
+                                .unwrap_or(0);
+                            let now = SystemTime::now()
+                                .duration_since(UNIX_EPOCH)
+                                .unwrap_or(Duration::from_millis(0))
+                                .as_millis();
+                            let latency_ms = now.saturating_sub(ts_ms);
+                            println!("BENCH_RX topic={topic} via={peer_id} seq={seq} latency_ms={} sig={}", latency_ms, hex::encode(&signature));
+                        } else {
+                            println!("Got Broadcastmessage: \n'{}'\nTopic: '{topic}'\nPropagating Peer: {peer_id}\n{}\nSignature:\n{}", s, sender(attributed_to), hex::encode(&signature));
+                        }
+                    }
+                    MessageBody::Group { group_number, data } => {
+                        let s = String::from_utf8_lossy(&data);
+                        if s.starts_with("B|") {
+                            let mut parts = s.split('|');
+                            let _ = parts.next();
+                            let ts_ms = parts
+                                .next()
+                                .and_then(|v| v.parse::<u128>().ok())
+                                .unwrap_or(0);
+                            let seq = parts
+                                .next()
+                                .and_then(|v| v.parse::<u64>().ok())
+                                .unwrap_or(0);
+                            let now = SystemTime::now()
+                                .duration_since(UNIX_EPOCH)
+                                .unwrap_or(Duration::from_millis(0))
+                                .as_millis();
+                            let latency_ms = now.saturating_sub(ts_ms);
+                            println!(
+                                "BENCH_RX group={} via={peer_id} seq={seq} latency_ms={} sig={}",
+                                group_number,
+                                latency_ms,
+                                hex::encode(&signature)
+                            );
+                        } else {
+                            println!("Got Groupmessage: \n'{}'\nGroup number: '{group_number}'\nPropagating Peer: {peer_id}\n{}\nSignature:\n{}", s, sender(attributed_to), hex::encode(&signature));
+                        }
+                    }
+                    MessageBody::GroupEnc { .. } | MessageBody::BroadcastEnc { .. } => {
+                        log::error!("Client received notification with Encrypted Messages")
+                    }
+                    MessageBody::Proposal { .. } => {
+                        log::debug!("Received Add Group Member Proposal")
+                    }
+                    MessageBody::Commit { group_id, .. } => {
+                        log::debug!("Received Commit for Groupid {group_id:?}")
                     }
                 }
-                MessageBody::Group { group_number, data } => {
-                    let s = String::from_utf8_lossy(&data);
-                    if s.starts_with("B|") {
-                        let mut parts = s.split('|');
-                        let _ = parts.next();
-                        let ts_ms = parts
-                            .next()
-                            .and_then(|v| v.parse::<u128>().ok())
-                            .unwrap_or(0);
-                        let seq = parts
-                            .next()
-                            .and_then(|v| v.parse::<u64>().ok())
-                            .unwrap_or(0);
-                        let now = SystemTime::now()
-                            .duration_since(UNIX_EPOCH)
-                            .unwrap_or(Duration::from_millis(0))
-                            .as_millis();
-                        let latency_ms = now.saturating_sub(ts_ms);
-                        println!("BENCH_RX group={} via={peer_id} seq={seq} latency_ms={} sig={}", group_number, latency_ms, hex::encode(&signature));
-                    } else {
-                        println!("Got Groupmessage: \n'{}'\nGroup number: '{group_number}'\nPropagating Peer: {peer_id}\n{}\nSignature:\n{}", s, sender(attributed_to), hex::encode(&signature));
-                    }
-                }
-                MessageBody::GroupEnc { .. } | MessageBody::BroadcastEnc { .. } => {
-                    log::error!("Client received notification with Encrypted Messages")
-                }
-                MessageBody::Proposal { .. } => {
-                    log::debug!("Received Add Group Member Proposal")
-                }
-                MessageBody::Commit { group_id, .. } => {
-                    log::debug!("Received Commit for Groupid {group_id:?}")
-                }
-            },
+            }
             Notification::Err(error) => {
                 log::error!("Received error from network: {error}")
             }

@@ -79,7 +79,11 @@ impl Topology {
     }
 
     fn delay(&self, from: &PeerId, to: &PeerId) -> Option<Duration> {
-        self.links.get(from)?.iter().find(|(p, _)| p == to).map(|(_, d)| *d)
+        self.links
+            .get(from)?
+            .iter()
+            .find(|(p, _)| p == to)
+            .map(|(_, d)| *d)
     }
 }
 
@@ -183,7 +187,8 @@ impl TimingModel {
         hop_us: f64,
     ) -> Self {
         let n = peers.len();
-        let index: HashMap<PeerId, usize> = peers.iter().enumerate().map(|(i, p)| (*p, i)).collect();
+        let index: HashMap<PeerId, usize> =
+            peers.iter().enumerate().map(|(i, p)| (*p, i)).collect();
         let step = processing_us.round() as u64;
         let adjacency: Vec<Vec<(usize, u64)>> = peers
             .iter()
@@ -277,12 +282,18 @@ impl TimingModel {
             .filter_map(|&j| self.first_gossip[j].map(|t| (j, t)))
             .collect();
         let best = match estimator {
-            TimingEstimator::Delay | TimingEstimator::DelayStem => {
-                best_fit(&receipts, &candidates, |s, j| self.predicted_delay(s, j), rng)
-            }
-            TimingEstimator::Hops => {
-                best_fit(&receipts, &candidates, |s, j| self.predicted_hops(s, j), rng)
-            }
+            TimingEstimator::Delay | TimingEstimator::DelayStem => best_fit(
+                &receipts,
+                &candidates,
+                |s, j| self.predicted_delay(s, j),
+                rng,
+            ),
+            TimingEstimator::Hops => best_fit(
+                &receipts,
+                &candidates,
+                |s, j| self.predicted_hops(s, j),
+                rng,
+            ),
         };
         best.map(|s| self.peers[s])
     }
@@ -308,7 +319,9 @@ fn best_fit<R: Rng>(
     'candidates: for &s in candidates {
         residuals.clear();
         for &(j, t) in receipts {
-            let Some(p) = predict(s, j) else { continue 'candidates };
+            let Some(p) = predict(s, j) else {
+                continue 'candidates;
+            };
             residuals.push(t - p);
         }
         let t0 = residuals.iter().sum::<f64>() / residuals.len() as f64;
@@ -335,7 +348,9 @@ pub(crate) fn run_attack<R: Rng>(
     trials: usize,
     rng: &mut R,
 ) -> HashMap<TimingEstimator, f64> {
-    let pool: Vec<usize> = (0..model.peers.len()).filter(|i| model.peers[*i] != source).collect();
+    let pool: Vec<usize> = (0..model.peers.len())
+        .filter(|i| model.peers[*i] != source)
+        .collect();
     let coalition_size = coalition_size.clamp(1, pool.len().max(1));
 
     let mut hits: HashMap<TimingEstimator, usize> =
@@ -457,7 +472,11 @@ mod tests {
         let peers: Vec<PeerId> = (0..n).map(pid).collect();
         let mut links: HashMap<PeerId, Vec<(PeerId, Duration)>> = HashMap::new();
         for &(a, b, ms) in edges {
-            let (a, b, d) = (peers[a as usize], peers[b as usize], Duration::from_millis(ms));
+            let (a, b, d) = (
+                peers[a as usize],
+                peers[b as usize],
+                Duration::from_millis(ms),
+            );
             links.entry(a).or_default().push((b, d));
             links.entry(b).or_default().push((a, d));
         }
@@ -467,7 +486,13 @@ mod tests {
     /// The trace a flood from `source` leaves: every other peer gets its first
     /// copy over the fastest path, `processing_us` per hop on top of the link
     /// delays, from the neighbour on that path, `t0_us` after the publish.
-    fn flood(peers: &[PeerId], topology: &Topology, source: usize, processing_us: u64, t0_us: u64) -> Vec<Observation> {
+    fn flood(
+        peers: &[PeerId],
+        topology: &Topology,
+        source: usize,
+        processing_us: u64,
+        t0_us: u64,
+    ) -> Vec<Observation> {
         let model = TimingModel::new(topology, peers, &[], processing_us as f64, 1.0);
         let n = peers.len();
         let dist = |j: usize| model.delay_us[source * n + j];
@@ -478,7 +503,9 @@ mod tests {
                     .find(|i| {
                         let w = topology.delay(&peers[*i], &peers[j]);
                         dist(*i) != u64::MAX
-                            && w.is_some_and(|w| dist(*i) + w.as_micros() as u64 + processing_us == dist(j))
+                            && w.is_some_and(|w| {
+                                dist(*i) + w.as_micros() as u64 + processing_us == dist(j)
+                            })
                     })
                     .unwrap();
                 Observation {
@@ -491,16 +518,26 @@ mod tests {
             .collect()
     }
 
-    fn seen_by<'a>(observations: &'a [Observation], peers: &[PeerId], coalition: &[usize]) -> Vec<&'a Observation> {
+    fn seen_by<'a>(
+        observations: &'a [Observation],
+        peers: &[PeerId],
+        coalition: &[usize],
+    ) -> Vec<&'a Observation> {
         let members: HashSet<PeerId> = coalition.iter().map(|i| peers[*i]).collect();
-        observations.iter().filter(|o| members.contains(&o.observer)).collect()
+        observations
+            .iter()
+            .filter(|o| members.contains(&o.observer))
+            .collect()
     }
 
     /// The relay steps of a flood give back the processing constant it was
     /// made with, and the hop time of a line with equal links.
     #[test]
     fn calibration_recovers_the_per_hop_constants() {
-        let (peers, topology) = graph(6, &[(0, 1, 20), (1, 2, 20), (2, 3, 20), (3, 4, 20), (4, 5, 20)]);
+        let (peers, topology) = graph(
+            6,
+            &[(0, 1, 20), (1, 2, 20), (2, 3, 20), (3, 4, 20), (4, 5, 20)],
+        );
         let observations = flood(&peers, &topology, 2, 1500, 400);
         let model = TimingModel::calibrated(&topology, &peers, &observations);
         // Steps out of the source do not count: it has no receipt of its own.
@@ -513,8 +550,17 @@ mod tests {
     /// of their receipt times changes with every step along the line.
     #[test]
     fn delays_name_the_source_on_a_line() {
-        let (peers, topology) =
-            graph(7, &[(0, 1, 10), (1, 2, 30), (2, 3, 20), (3, 4, 50), (4, 5, 40), (5, 6, 60)]);
+        let (peers, topology) = graph(
+            7,
+            &[
+                (0, 1, 10),
+                (1, 2, 30),
+                (2, 3, 20),
+                (3, 4, 50),
+                (4, 5, 40),
+                (5, 6, 60),
+            ],
+        );
         let mut rng = StdRng::seed_from_u64(1);
         for source in 1..=5 {
             let observations = flood(&peers, &topology, source, 2000, 300_000);
@@ -528,7 +574,17 @@ mod tests {
     /// With equal links, hop counts carry the same information as delays.
     #[test]
     fn hops_name_the_source_on_a_line_with_equal_links() {
-        let (peers, topology) = graph(7, &[(0, 1, 20), (1, 2, 20), (2, 3, 20), (3, 4, 20), (4, 5, 20), (5, 6, 20)]);
+        let (peers, topology) = graph(
+            7,
+            &[
+                (0, 1, 20),
+                (1, 2, 20),
+                (2, 3, 20),
+                (3, 4, 20),
+                (4, 5, 20),
+                (5, 6, 20),
+            ],
+        );
         let mut rng = StdRng::seed_from_u64(2);
         for source in 1..=5 {
             let observations = flood(&peers, &topology, source, 1000, 50_000);
@@ -547,11 +603,29 @@ mod tests {
         // Hub 0, middles 1..=4, tips 5..=8.
         let (peers, topology) = graph(
             9,
-            &[(0, 1, 15), (0, 2, 35), (0, 3, 55), (0, 4, 25), (1, 5, 45), (2, 6, 10), (3, 7, 30), (4, 8, 70)],
+            &[
+                (0, 1, 15),
+                (0, 2, 35),
+                (0, 3, 55),
+                (0, 4, 25),
+                (1, 5, 45),
+                (2, 6, 10),
+                (3, 7, 30),
+                (4, 8, 70),
+            ],
         );
         let (uniform_peers, uniform) = graph(
             9,
-            &[(0, 1, 20), (0, 2, 20), (0, 3, 20), (0, 4, 20), (1, 5, 20), (2, 6, 20), (3, 7, 20), (4, 8, 20)],
+            &[
+                (0, 1, 20),
+                (0, 2, 20),
+                (0, 3, 20),
+                (0, 4, 20),
+                (1, 5, 20),
+                (2, 6, 20),
+                (3, 7, 20),
+                (4, 8, 20),
+            ],
         );
         let tips = [5, 6, 7, 8];
         let mut rng = StdRng::seed_from_u64(3);
@@ -559,7 +633,10 @@ mod tests {
             let observations = flood(&peers, &topology, source, 1000, 10_000);
             let model = TimingModel::calibrated(&topology, &peers, &observations);
             let seen = seen_by(&observations, &peers, &tips);
-            assert_eq!(model.guess(TimingEstimator::Delay, &tips, &seen, &mut rng), Some(peers[source]));
+            assert_eq!(
+                model.guess(TimingEstimator::Delay, &tips, &seen, &mut rng),
+                Some(peers[source])
+            );
 
             let observations = flood(&uniform_peers, &uniform, source, 1000, 10_000);
             let model = TimingModel::calibrated(&uniform, &uniform_peers, &observations);
@@ -577,8 +654,17 @@ mod tests {
     /// leaves collude is the hub named for sure.
     #[test]
     fn a_star_hub_ties_with_the_leaves_that_do_not_collude() {
-        let (peers, topology) =
-            graph(7, &[(0, 1, 10), (0, 2, 20), (0, 3, 30), (0, 4, 40), (0, 5, 50), (0, 6, 60)]);
+        let (peers, topology) = graph(
+            7,
+            &[
+                (0, 1, 10),
+                (0, 2, 20),
+                (0, 3, 30),
+                (0, 4, 40),
+                (0, 5, 50),
+                (0, 6, 60),
+            ],
+        );
         let observations = flood(&peers, &topology, 0, 1000, 0);
         let model = TimingModel::new(&topology, &peers, &observations, 1000.0, 20_000.0);
         let mut rng = StdRng::seed_from_u64(4);
@@ -586,17 +672,25 @@ mod tests {
         let leaves = [1, 2, 3, 4, 5, 6];
         let seen = seen_by(&observations, &peers, &leaves);
         for _ in 0..100 {
-            assert_eq!(model.guess(TimingEstimator::Delay, &leaves, &seen, &mut rng), Some(peers[0]));
+            assert_eq!(
+                model.guess(TimingEstimator::Delay, &leaves, &seen, &mut rng),
+                Some(peers[0])
+            );
         }
 
         let some = [1, 2, 3];
         let seen = seen_by(&observations, &peers, &some);
         let trials = 20_000;
         let hub = (0..trials)
-            .filter(|_| model.guess(TimingEstimator::Delay, &some, &seen, &mut rng) == Some(peers[0]))
+            .filter(|_| {
+                model.guess(TimingEstimator::Delay, &some, &seen, &mut rng) == Some(peers[0])
+            })
             .count();
         let rate = hub as f64 / trials as f64;
-        assert!((rate - 0.25).abs() < 0.02, "hub named in {rate}, not about 1/4");
+        assert!(
+            (rate - 0.25).abs() < 0.02,
+            "hub named in {rate}, not about 1/4"
+        );
     }
 
     /// A candidate that cannot reach a colluder over the mesh is never named,
@@ -613,22 +707,37 @@ mod tests {
             .map(|_| model.guess(TimingEstimator::Delay, &[2], &seen, &mut rng))
             .collect();
         assert_eq!(guesses, HashSet::from([Some(peers[0]), Some(peers[1])]));
-        assert_eq!(model.guess(TimingEstimator::Delay, &[3], &[], &mut rng), None);
+        assert_eq!(
+            model.guess(TimingEstimator::Delay, &[3], &[], &mut rng),
+            None
+        );
     }
 
     /// With a colluder on the stem, the combined estimator names its stem
     /// predecessor, as stem-aware first-spy does; otherwise it is `timing_delay`.
     #[test]
     fn the_stem_rule_comes_first_in_the_combined_estimator() {
-        let (peers, topology) =
-            graph(7, &[(0, 1, 10), (1, 2, 30), (2, 3, 20), (3, 4, 50), (4, 5, 40), (5, 6, 60)]);
+        let (peers, topology) = graph(
+            7,
+            &[
+                (0, 1, 10),
+                (1, 2, 30),
+                (2, 3, 20),
+                (3, 4, 50),
+                (4, 5, 40),
+                (5, 6, 60),
+            ],
+        );
         let mut observations = flood(&peers, &topology, 2, 1000, 0);
         let model = TimingModel::calibrated(&topology, &peers, &observations);
         let mut rng = StdRng::seed_from_u64(6);
         let coalition = [0, 6];
 
         let seen = seen_by(&observations, &peers, &coalition);
-        assert_eq!(model.guess(TimingEstimator::DelayStem, &coalition, &seen, &mut rng), Some(peers[2]));
+        assert_eq!(
+            model.guess(TimingEstimator::DelayStem, &coalition, &seen, &mut rng),
+            Some(peers[2])
+        );
 
         observations.push(Observation {
             observer: peers[6],
@@ -638,17 +747,22 @@ mod tests {
         });
         let model = TimingModel::calibrated(&topology, &peers, &observations);
         let seen = seen_by(&observations, &peers, &coalition);
-        assert_eq!(model.guess(TimingEstimator::DelayStem, &coalition, &seen, &mut rng), Some(peers[4]));
+        assert_eq!(
+            model.guess(TimingEstimator::DelayStem, &coalition, &seen, &mut rng),
+            Some(peers[4])
+        );
         // The stem receipt, earlier than any gossip, does not enter the fit.
-        assert_eq!(model.guess(TimingEstimator::Delay, &coalition, &seen, &mut rng), Some(peers[2]));
+        assert_eq!(
+            model.guess(TimingEstimator::Delay, &coalition, &seen, &mut rng),
+            Some(peers[2])
+        );
     }
 
     /// End to end through the sampler: a coalition of everyone but the source
     /// leaves one candidate, and the source is the only peer not drawn.
     #[test]
     fn run_attack_scores_every_estimator() {
-        let (peers, topology) =
-            graph(5, &[(0, 1, 10), (1, 2, 30), (2, 3, 20), (3, 4, 50)]);
+        let (peers, topology) = graph(5, &[(0, 1, 10), (1, 2, 30), (2, 3, 20), (3, 4, 50)]);
         let observations = flood(&peers, &topology, 1, 1000, 0);
         let model = TimingModel::calibrated(&topology, &peers, &observations);
         let mut rng = StdRng::seed_from_u64(7);
@@ -663,7 +777,10 @@ mod tests {
     /// Link delays come from the listening ports, as in the transport.
     #[test]
     fn topology_takes_delays_from_the_ports() {
-        let latency = LatencyRange { min_ms: 10, max_ms: 100 };
+        let latency = LatencyRange {
+            min_ms: 10,
+            max_ms: 100,
+        };
         let (a, b) = (pid(1), pid(2));
         let addrs = vec![
             (a, "/ip4/127.0.0.1/tcp/40001".parse().unwrap()),
@@ -671,7 +788,10 @@ mod tests {
         ];
         let meshes = HashMap::from([(a, vec![b]), (b, vec![a, pid(3)])]);
         let topology = Topology::from_meshes(&addrs, &meshes, latency);
-        assert_eq!(topology.delay(&a, &b), Some(latency.for_ports(40001, 40002)));
+        assert_eq!(
+            topology.delay(&a, &b),
+            Some(latency.for_ports(40001, 40002))
+        );
         assert_eq!(topology.delay(&b, &a), topology.delay(&a, &b));
         // Peer 3 never registered an address, so the link to it is unknown.
         assert_eq!(topology.links[&b].len(), 1);

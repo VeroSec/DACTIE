@@ -63,11 +63,7 @@ impl RunOutcome {
         if self.observations.is_empty() {
             return (0, 0, 0);
         }
-        let mut ms: Vec<u128> = self
-            .observations
-            .iter()
-            .map(|o| o.at.as_micros())
-            .collect();
+        let mut ms: Vec<u128> = self.observations.iter().map(|o| o.at.as_micros()).collect();
         ms.sort_unstable();
         let pick = |q: f64| ms[(((ms.len() - 1) as f64) * q).round() as usize];
         (pick(0.5), pick(0.95), ms[ms.len() - 1])
@@ -138,7 +134,12 @@ pub(crate) async fn start_network(
         }
     }
 
-    let mut stop_peer = Peer::new(control_tx.subscribe(), response_tx.clone(), mesh, directory.clone())?;
+    let mut stop_peer = Peer::new(
+        control_tx.subscribe(),
+        response_tx.clone(),
+        mesh,
+        directory.clone(),
+    )?;
 
     let stop_peer_addr = stop_peer.get_peer_id();
     all_peers.push(stop_peer_addr);
@@ -215,7 +216,9 @@ pub(crate) async fn experiment_prop_peer_id(
         // saturating: an observation cannot predate the publish, but the peers
         // stamp their own arrivals and we do not want a panic if one races.
         let at = val.at.saturating_duration_since(published_at);
-        let entry = first_receipt.entry(val.observer).or_insert((at, val.prop_id));
+        let entry = first_receipt
+            .entry(val.observer)
+            .or_insert((at, val.prop_id));
         if at < entry.0 {
             *entry = (at, val.prop_id);
         }

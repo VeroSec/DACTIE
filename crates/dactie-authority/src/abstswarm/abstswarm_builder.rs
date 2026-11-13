@@ -65,7 +65,6 @@ where
         self
     }
 
-
     /// Listen on all interfaces, on a random port
     fn default_listen_address() -> Result<Multiaddr, AbstSwarmBuilderError> {
         Ok("/ip4/0.0.0.0/tcp/0".parse()?)

@@ -3,13 +3,15 @@ use crate::link_latency::{Delayed, LatencyRange};
 use crate::stem::{message_id, Route, StemAck, StemConfig, StemMessage, StemState};
 use crate::timing::Topology;
 use futures::StreamExt;
+use libp2p::core::muxing::StreamMuxerBox;
+use libp2p::core::transport::{upgrade, Boxed};
 use libp2p::gossipsub::IdentTopic;
 use libp2p::request_response::{self, OutboundRequestId, ProtocolSupport};
 use libp2p::swarm::dial_opts::{DialOpts, PeerCondition};
 use libp2p::swarm::{NetworkBehaviour, SwarmEvent};
-use libp2p::core::muxing::StreamMuxerBox;
-use libp2p::core::transport::{upgrade, Boxed};
-use libp2p::{gossipsub, noise, plaintext, tcp, yamux, Multiaddr, PeerId, StreamProtocol, Swarm, Transport};
+use libp2p::{
+    gossipsub, noise, plaintext, tcp, yamux, Multiaddr, PeerId, StreamProtocol, Swarm, Transport,
+};
 use rand::{distributions::Alphanumeric, seq::SliceRandom, Rng};
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
@@ -54,11 +56,17 @@ pub(crate) struct Directory {
 
 impl Directory {
     fn register(&self, peer: PeerId, addr: Multiaddr) {
-        self.addrs.write().expect("directory lock").push((peer, addr));
+        self.addrs
+            .write()
+            .expect("directory lock")
+            .push((peer, addr));
     }
 
     fn record_mesh(&self, peer: PeerId, mesh: Vec<PeerId>) {
-        self.meshes.write().expect("directory lock").insert(peer, mesh);
+        self.meshes
+            .write()
+            .expect("directory lock")
+            .insert(peer, mesh);
     }
 
     /// The propagation graph the peers reported at the measurement.
@@ -259,7 +267,9 @@ impl PubInterval {
     /// Resolve a network-wide rate into the per-peer period for `peer_n` peers.
     pub(crate) fn for_network(&self, peer_n: usize) -> PubInterval {
         match self {
-            PubInterval::Rate(rate) => PubInterval::Period(peer_n as f64 / rate.max(f64::MIN_POSITIVE)),
+            PubInterval::Rate(rate) => {
+                PubInterval::Period(peer_n as f64 / rate.max(f64::MIN_POSITIVE))
+            }
             other => other.clone(),
         }
     }
@@ -385,7 +395,11 @@ impl Peer {
                 .build()
         } else {
             builder
-                .with_tcp(tcp::Config::default(), noise::Config::new, yamux::Config::default)?
+                .with_tcp(
+                    tcp::Config::default(),
+                    noise::Config::new,
+                    yamux::Config::default,
+                )?
                 .with_behaviour(|_| Self::build_behaviour(mesh))?
                 .with_swarm_config(swarm_config)
                 .build()
@@ -413,9 +427,7 @@ impl Peer {
         // simulated delay, so Nagle's wait for acknowledgements held messages on busy
         // links for up to the 40 ms delayed-ACK timeout, which no simulated link
         // reflects, and relayed copies overtook the direct one.
-        let tcp = tcp::tokio::Transport::new(
-            tcp::Config::default().port_reuse(true).nodelay(true),
-        );
+        let tcp = tcp::tokio::Transport::new(tcp::Config::default().port_reuse(true).nodelay(true));
         let tcp = tcp.map(move |stream, _| {
             let ports = (stream.0.local_addr(), stream.0.peer_addr());
             let delay = match ports {
@@ -443,10 +455,8 @@ impl Peer {
     fn build_behaviour(mesh: MeshConfig) -> Result<MyBehaviour, Box<dyn Error + Send + Sync>> {
         let gossipsub_config = Self::gossipsub_config(mesh).map_err(io::Error::other)?;
 
-        let mut gossipsub = gossipsub::Behaviour::new(
-            gossipsub::MessageAuthenticity::Anonymous,
-            gossipsub_config,
-        )?;
+        let mut gossipsub =
+            gossipsub::Behaviour::new(gossipsub::MessageAuthenticity::Anonymous, gossipsub_config)?;
 
         gossipsub.subscribe(&IdentTopic::new("Test"))?;
 
@@ -546,8 +556,13 @@ impl Peer {
         if connected.len() < self.mesh.conn_high {
             return;
         }
-        let protected: HashSet<PeerId> =
-            self.swarm.behaviour().gossipsub.all_mesh_peers().copied().collect();
+        let protected: HashSet<PeerId> = self
+            .swarm
+            .behaviour()
+            .gossipsub
+            .all_mesh_peers()
+            .copied()
+            .collect();
         let now = Instant::now();
         let mut candidates: Vec<PeerId> = connected
             .iter()
@@ -575,9 +590,11 @@ impl Peer {
             return;
         }
         let me = *self.swarm.local_peer_id();
-        let sample = self.directory.sample(self.mesh.conn_low - connected, |peer| {
-            *peer == me || self.swarm.is_connected(peer)
-        });
+        let sample = self
+            .directory
+            .sample(self.mesh.conn_low - connected, |peer| {
+                *peer == me || self.swarm.is_connected(peer)
+            });
         for (peer, addr) in sample {
             let _ = self.swarm.dial(
                 DialOpts::peer_id(peer)
@@ -632,10 +649,13 @@ impl Peer {
             return false;
         }
         let connected: Vec<PeerId> = self.swarm.connected_peers().copied().collect();
-        if let Some(next) =
-            self.stem
-                .retry_own(id, avoid, &connected, Instant::now(), &mut rand::thread_rng())
-        {
+        if let Some(next) = self.stem.retry_own(
+            id,
+            avoid,
+            &connected,
+            Instant::now(),
+            &mut rand::thread_rng(),
+        ) {
             self.send_stem(next, id, data.to_vec());
         }
         true
@@ -648,7 +668,10 @@ impl Peer {
             // The stem looped back here. The source re-routes its own message;
             // a relay spreads it now instead of waiting for the embargo, which
             // reveals only the relay.
-            let avoid: Vec<PeerId> = [Some(from), self.stem.own_successor()].into_iter().flatten().collect();
+            let avoid: Vec<PeerId> = [Some(from), self.stem.own_successor()]
+                .into_iter()
+                .flatten()
+                .collect();
             if !self.retry_own(id, &data, &avoid) {
                 self.fluff(data);
             }
@@ -660,7 +683,12 @@ impl Peer {
 
     /// Publish into GossipSub. A duplicate means the message is already out.
     fn fluff(&mut self, data: Vec<u8>) -> String {
-        match self.swarm.behaviour_mut().gossipsub.publish(IdentTopic::new("Test"), data) {
+        match self
+            .swarm
+            .behaviour_mut()
+            .gossipsub
+            .publish(IdentTopic::new("Test"), data)
+        {
             Ok(_) => "ok".to_string(),
             Err(gossipsub::PublishError::Duplicate) => "duplicate".to_string(),
             Err(e) => format!("failed: {e:?}"),
@@ -712,19 +740,25 @@ impl Peer {
                 peer,
                 message,
             })) => match message {
-                request_response::Message::Request { request, channel, .. } => {
-                    let _ = self.swarm.behaviour_mut().stem.send_response(channel, StemAck);
+                request_response::Message::Request {
+                    request, channel, ..
+                } => {
+                    let _ = self
+                        .swarm
+                        .behaviour_mut()
+                        .stem
+                        .send_response(channel, StemAck);
                     self.on_stem(peer, request.data);
                 }
                 request_response::Message::Response { request_id, .. } => {
                     self.stem_pending.remove(&request_id);
                 }
             },
-            SwarmEvent::Behaviour(MyBehaviourEvent::Stem(request_response::Event::OutboundFailure {
-                peer,
-                request_id,
-                ..
-            })) => {
+            SwarmEvent::Behaviour(MyBehaviourEvent::Stem(
+                request_response::Event::OutboundFailure {
+                    peer, request_id, ..
+                },
+            )) => {
                 // The successor did not take it. The source tries another hop;
                 // a relay spreads it from here.
                 if let Some(data) = self.stem_pending.remove(&request_id) {
@@ -762,7 +796,10 @@ fn numbered_measurement(n: u32) -> Vec<u8> {
 fn payload(data: &[u8]) -> Payload {
     if let Some(rest) = data.strip_prefix(b"Stop#") {
         let digits = rest.iter().take_while(|b| b.is_ascii_digit()).count();
-        if let Some(n) = std::str::from_utf8(&rest[..digits]).ok().and_then(|d| d.parse().ok()) {
+        if let Some(n) = std::str::from_utf8(&rest[..digits])
+            .ok()
+            .and_then(|d| d.parse().ok())
+        {
             return Payload::Numbered(n);
         }
     }
@@ -828,7 +865,10 @@ mod tests {
         }
         assert_ne!(numbered_measurement(1), numbered_measurement(10));
         assert_eq!(payload("Stop".repeat(30).as_bytes()), Payload::Measurement);
-        assert_eq!(payload(generate_random_string(120).as_bytes()), Payload::Background);
+        assert_eq!(
+            payload(generate_random_string(120).as_bytes()),
+            Payload::Background
+        );
     }
 
     /// A pinned band, which is what a bound-validation run uses, must build too.
@@ -883,7 +923,10 @@ mod pub_interval_tests {
 
     #[test]
     fn fixed_intervals_are_left_alone_and_bad_rates_rejected() {
-        assert!(matches!(PubInterval::from_str("fix=3").unwrap().for_network(800), PubInterval::Fix(3)));
+        assert!(matches!(
+            PubInterval::from_str("fix=3").unwrap().for_network(800),
+            PubInterval::Fix(3)
+        ));
         assert!(PubInterval::from_str("rate=0").is_err());
         assert!(PubInterval::from_str("rate=abc").is_err());
     }

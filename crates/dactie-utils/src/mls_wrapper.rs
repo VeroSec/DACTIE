@@ -69,6 +69,10 @@ pub struct MyOpenMls {
     epoch_policy: Mutex<Option<(u64, usize)>>,
 }
 
+/// What `open_group` returns: the group number, the data and, for an attributed message, the
+/// verified MemberID.
+pub type OpenedGroupMessage = (Option<usize>, Vec<u8>, Option<usize>);
+
 impl MyOpenMls {
     pub fn new(
         key_store: StoredKeyMaterial,
@@ -166,9 +170,16 @@ impl MyOpenMls {
             &opener_pubkeys,
             threshold,
         );
-        let h_blind = enc_shares.first().ok_or(ElgamalUndefinedError)?.h_blind.clone();
+        let h_blind = enc_shares
+            .first()
+            .ok_or(ElgamalUndefinedError)?
+            .h_blind
+            .clone();
         let tag = thressig::tags::tag(&memkey.sk, epoch, slot);
-        let pairs = [(h_blind, commits[0].clone()), thressig::tags::statement(&tag)];
+        let pairs = [
+            (h_blind, commits[0].clone()),
+            thressig::tags::statement(&tag),
+        ];
         let proof = thressig::prove_member(&memkey, &grpkey, &pairs, context)?;
         Ok((enc_shares, commits, tag, proof))
     }
@@ -190,7 +201,10 @@ impl MyOpenMls {
         };
         match thressig::check_share_layout(enc_shares, commits, n_openers) {
             Ok(h_blind) => {
-                let pairs = [(h_blind, commits[0].clone()), thressig::tags::statement(tag)];
+                let pairs = [
+                    (h_blind, commits[0].clone()),
+                    thressig::tags::statement(tag),
+                ];
                 thressig::verify_member(proof, &grpkey, &pairs, context)
             }
             Err(_) => false,
@@ -208,8 +222,12 @@ impl MyOpenMls {
         let grpkey = key_store.get_grpkey().ok_or(GPKUndefinedError)?;
         let memkey = key_store.get_memkey().ok_or(GSKUndefinedError)?;
         let tag = thressig::tags::tag(&memkey.sk, epoch, slot);
-        let proof =
-            thressig::prove_member(&memkey, &grpkey, &[thressig::tags::statement(&tag)], context)?;
+        let proof = thressig::prove_member(
+            &memkey,
+            &grpkey,
+            &[thressig::tags::statement(&tag)],
+            context,
+        )?;
         Ok((tag, proof))
     }
 
@@ -1040,11 +1058,17 @@ impl MyOpenMls {
                 }
                 // Private groups only take members of the common group (see check_admitted).
                 if let Proposal::Add(add) = (*staged_proposal.clone()).proposal() {
-                    let content = add.key_package().leaf_node().credential().serialized_content();
+                    let content = add
+                        .key_package()
+                        .leaf_node()
+                        .credential()
+                        .serialized_content();
                     let peer = PeerId::from_bytes(content).ok();
                     let nested = common.as_ref().is_some_and(|c| *c != group_id);
                     if nested && !peer.is_some_and(|p| admitted.contains(&p)) {
-                        log::warn!("Ignoring a proposal to add {peer:?}, which is not in the common group");
+                        log::warn!(
+                            "Ignoring a proposal to add {peer:?}, which is not in the common group"
+                        );
                         return Ok(());
                     }
                 }
@@ -1329,7 +1353,10 @@ impl MyOpenMls {
             &grpkey,
             &attributed_content(context, topic, data, member_id),
         )?;
-        Ok(shared_structs::Attribution { member_id, signature })
+        Ok(shared_structs::Attribution {
+            member_id,
+            signature,
+        })
     }
 
     /// Checks an attribution found inside a decrypted message and returns its MemberID.
@@ -1342,10 +1369,19 @@ impl MyOpenMls {
         data: &[u8],
         attribution: Option<shared_structs::Attribution>,
     ) -> Result<Option<usize>, MyOpenMLSError> {
-        let Some(shared_structs::Attribution { member_id, signature }) = attribution else {
+        let Some(shared_structs::Attribution {
+            member_id,
+            signature,
+        }) = attribution
+        else {
             return Ok(None);
         };
-        let grpkey = self.key_store.lock().unwrap().get_grpkey().ok_or(GPKUndefinedError)?;
+        let grpkey = self
+            .key_store
+            .lock()
+            .unwrap()
+            .get_grpkey()
+            .ok_or(GPKUndefinedError)?;
         let content = attributed_content(context, topic, data, member_id);
         if thressig::verify(&signature, &grpkey, &content).is_ok()
             && thressig::signed_by(&signature, &grpkey, member_id)
@@ -1580,7 +1616,8 @@ impl MyOpenMls {
         let (group_id, inner, inner_nonce) = self.encrypt_with_group_key(group_id, plain)?;
         let layer = bincode::serialize(&(inner, inner_nonce))
             .map_err(|e| SerializationError(e.to_string()))?;
-        let (_, enc_data, nonce) = self.encrypt_with_group_key(self.get_common_group_id()?, layer)?;
+        let (_, enc_data, nonce) =
+            self.encrypt_with_group_key(self.get_common_group_id()?, layer)?;
         Ok(shared_structs::MessageBody::GroupEnc {
             group_id,
             enc_data,
@@ -1612,7 +1649,7 @@ impl MyOpenMls {
         group_id: Vec<u8>,
         enc_data: Vec<u8>,
         nonce: Vec<u8>,
-    ) -> Result<(Option<usize>, Vec<u8>, Option<usize>), MyOpenMLSError> {
+    ) -> Result<OpenedGroupMessage, MyOpenMLSError> {
         if !self
             .group_store
             .lock()
@@ -1622,7 +1659,8 @@ impl MyOpenMls {
             return Err(GroupNotAvailable(hex::encode(&group_id)));
         }
         let (inner, inner_nonce) = self.unwrap_group(enc_data, nonce)?;
-        let (group_number, plain) = self.decrypt_with_group_key(group_id.clone(), inner, inner_nonce)?;
+        let (group_number, plain) =
+            self.decrypt_with_group_key(group_id.clone(), inner, inner_nonce)?;
         let shared_structs::GroupPlain { data, attribution } =
             bincode::deserialize(&plain).map_err(|e| SerializationError(e.to_string()))?;
         let member = self.check_attribution(&group_id, "", &data, attribution)?;
@@ -1907,7 +1945,9 @@ pub enum MyOpenMLSError {
     ThressigError(#[from] thressig::ThressigError),
     #[error("CommonGroup Not Set")]
     CommonGroupUndefinedError,
-    #[error("Could not decrypt the group message (malformed, or encrypted under another epoch's key)")]
+    #[error(
+        "Could not decrypt the group message (malformed, or encrypted under another epoch's key)"
+    )]
     DecryptionError,
     #[error("The private-group message does not decrypt under the common group's current key: its sender is not admitted, or it was sent in another epoch")]
     CommonLayerError,
@@ -2117,9 +2157,15 @@ mod nested_group_tests {
 
     /// A group key and the member keys of members 1 and 2, issued by the AA as in a join
     /// with two archives and threshold 2.
-    fn member_keys() -> (thressig::structs::Grpkey, thressig::structs::Memkey, thressig::structs::Memkey) {
+    fn member_keys() -> (
+        thressig::structs::Grpkey,
+        thressig::structs::Memkey,
+        thressig::structs::Memkey,
+    ) {
         let (grpkey, mgrkey) = thressig::setup();
-        let pks: Vec<_> = (0..2).map(|_| thressig::elgamal_keygen(&grpkey.g_tilde).1).collect();
+        let pks: Vec<_> = (0..2)
+            .map(|_| thressig::elgamal_keygen(&grpkey.g_tilde).1)
+            .collect();
         let mut gml = HashMap::new();
         let mut issue = |id: usize| {
             let n = thressig::join_mgr1();
@@ -2155,7 +2201,8 @@ mod nested_group_tests {
         let _ = fs::remove_dir_all(&dir);
         let (commit_tx, commit_rx) = mpsc::unbounded_channel();
         let (instruction_tx, instruction_rx) = mpsc::unbounded_channel();
-        let mls = MyOpenMls::new(key_store, commit_tx, instruction_tx, dir, PeerId::random()).unwrap();
+        let mls =
+            MyOpenMls::new(key_store, commit_tx, instruction_tx, dir, PeerId::random()).unwrap();
         Node {
             mls,
             instructions: instruction_rx,
@@ -2179,9 +2226,22 @@ mod nested_group_tests {
         seal(n, group, text, false)
     }
 
-    fn seal(n: &Node, group: &GroupId, text: &[u8], attributed: bool) -> (Vec<u8>, Vec<u8>, Vec<u8>) {
-        match n.mls.seal_group(number(n, group), text.to_vec(), attributed).unwrap() {
-            MessageBody::GroupEnc { group_id, enc_data, nonce } => (group_id, enc_data, nonce),
+    fn seal(
+        n: &Node,
+        group: &GroupId,
+        text: &[u8],
+        attributed: bool,
+    ) -> (Vec<u8>, Vec<u8>, Vec<u8>) {
+        match n
+            .mls
+            .seal_group(number(n, group), text.to_vec(), attributed)
+            .unwrap()
+        {
+            MessageBody::GroupEnc {
+                group_id,
+                enc_data,
+                nonce,
+            } => (group_id, enc_data, nonce),
             _ => unreachable!(),
         }
     }
@@ -2190,9 +2250,18 @@ mod nested_group_tests {
     /// owns, with y. x and y hold member keys, so they can sign attributions.
     fn setup() -> (Node, Node, Node, GroupId, GroupId) {
         let (grpkey, x_key, y_key) = member_keys();
-        let aa = node_with("aa", StoredKeyMaterial::new(Some(grpkey.clone()), None, None, None));
-        let mut x = node_with("x", StoredKeyMaterial::new(Some(grpkey.clone()), Some(x_key), None, Some(1)));
-        let y = node_with("y", StoredKeyMaterial::new(Some(grpkey), Some(y_key), None, Some(2)));
+        let aa = node_with(
+            "aa",
+            StoredKeyMaterial::new(Some(grpkey.clone()), None, None, None),
+        );
+        let mut x = node_with(
+            "x",
+            StoredKeyMaterial::new(Some(grpkey.clone()), Some(x_key), None, Some(1)),
+        );
+        let y = node_with(
+            "y",
+            StoredKeyMaterial::new(Some(grpkey), Some(y_key), None, Some(2)),
+        );
         let number = aa.mls.create_empty_mls_group().unwrap();
         aa.mls.move_to_common(number);
         let common = aa.mls.get_common_group_id().unwrap();
@@ -2200,14 +2269,21 @@ mod nested_group_tests {
         let (_, _, welcome, _) = aa.mls.add_group_members(common.clone(), &members).unwrap();
         let tree = aa.mls.get_ratchet_tree(common.as_slice()).unwrap();
         for n in [&x, &y] {
-            let group = n.mls.add_group_from_welcome(welcome.clone().unwrap(), tree.clone()).unwrap();
+            let group = n
+                .mls
+                .add_group_from_welcome(welcome.clone().unwrap(), tree.clone())
+                .unwrap();
             n.mls.move_to_common_id(group).unwrap();
         }
 
-        x.mls.insert_foreign_kp(id(&y), key_package(&y));
+        x.mls.insert_foreign_kp(id(&y), key_package(&y)).unwrap();
         let number = x.mls.create_mls_group(&vec![id(&y)]).unwrap();
         let private = x.mls.get_group_id(number).unwrap();
-        let Ok(Instruction::Commit { welcome: Some(welcome), .. }) = x.instructions.try_recv() else {
+        let Ok(Instruction::Commit {
+            welcome: Some(welcome),
+            ..
+        }) = x.instructions.try_recv()
+        else {
             panic!("create_mls_group sends a commit with a welcome");
         };
         let tree = x.mls.get_ratchet_tree(private.as_slice()).unwrap();
@@ -2221,9 +2297,15 @@ mod nested_group_tests {
     fn private_group_messages_need_the_common_group_key() {
         let (aa, x, y, common, private) = setup();
         let (g, d, n) = send(&y, &private, b"ioc");
-        assert_eq!(x.mls.open_group(g, d, n).unwrap(), (Some(number(&x, &private)), b"ioc".to_vec(), None));
+        assert_eq!(
+            x.mls.open_group(g, d, n).unwrap(),
+            (Some(number(&x, &private)), b"ioc".to_vec(), None)
+        );
 
-        let (commit, _) = aa.mls.remove_group_members(common.clone(), &[id(&y)]).unwrap();
+        let (commit, _) = aa
+            .mls
+            .remove_group_members(common.clone(), &[id(&y)])
+            .unwrap();
         x.mls.handle_commit(common.to_vec(), commit).unwrap();
 
         let (g, d, n) = send(&y, &private, b"after removal");
@@ -2240,7 +2322,10 @@ mod nested_group_tests {
         let (g, d, n) = send(&x, &private, b"ioc");
         let (inner, _) = aa.mls.unwrap_group(d.clone(), n.clone()).unwrap();
         assert_ne!(inner, b"ioc".to_vec());
-        assert!(matches!(aa.mls.open_group(g, d, n), Err(GroupNotAvailable(_))));
+        assert!(matches!(
+            aa.mls.open_group(g, d, n),
+            Err(GroupNotAvailable(_))
+        ));
     }
 
     /// A peer outside the common group cannot be added to a private group.
@@ -2248,27 +2333,43 @@ mod nested_group_tests {
     fn only_admitted_peers_join_private_groups() {
         let (_aa, x, _y, _common, _private) = setup();
         let z = node("z");
-        x.mls.insert_foreign_kp(id(&z), key_package(&z));
+        x.mls.insert_foreign_kp(id(&z), key_package(&z)).unwrap();
         let groups = x.mls.get_groups().len();
         assert!(matches!(
             x.mls.create_mls_group(&vec![id(&z)]),
             Err(NotAdmittedError { peer_id }) if peer_id == id(&z)
         ));
-        assert_eq!(x.mls.get_groups().len(), groups, "no empty group is left behind");
+        assert_eq!(
+            x.mls.get_groups().len(),
+            groups,
+            "no empty group is left behind"
+        );
     }
 
     /// The owner removes a peer that left the common group from its private groups.
     #[test]
     fn owner_removes_peers_that_left_the_common_group() {
         let (aa, mut x, y, common, private) = setup();
-        let (commit, _) = aa.mls.remove_group_members(common.clone(), &[id(&y)]).unwrap();
+        let (commit, _) = aa
+            .mls
+            .remove_group_members(common.clone(), &[id(&y)])
+            .unwrap();
         x.mls.handle_commit(common.to_vec(), commit).unwrap();
 
-        let removed = x.mls.remove_from_owned_groups(&HashSet::from([id(&y)])).unwrap();
+        let removed = x
+            .mls
+            .remove_from_owned_groups(&HashSet::from([id(&y)]))
+            .unwrap();
         assert_eq!(removed, vec![(number(&x, &private), id(&y))]);
-        let members = x.mls.group_store.lock().unwrap()[&private].group.members().count();
+        let members = x.mls.group_store.lock().unwrap()[&private]
+            .group
+            .members()
+            .count();
         assert_eq!(members, 1);
-        let Ok(Instruction::Commit { group_id, commit, .. }) = x.instructions.try_recv() else {
+        let Ok(Instruction::Commit {
+            group_id, commit, ..
+        }) = x.instructions.try_recv()
+        else {
             panic!("the removal is published as a commit");
         };
         assert_eq!(group_id, private);
@@ -2281,17 +2382,36 @@ mod nested_group_tests {
     #[test]
     fn attributed_broadcast_names_member_inside_ciphertext() {
         let (aa, x, y, _common, _private) = setup();
-        let body = x.mls.seal_broadcast("firewall", b"ioc".to_vec(), true).unwrap();
+        let body = x
+            .mls
+            .seal_broadcast("firewall", b"ioc".to_vec(), true)
+            .unwrap();
         let message = x.mls.sign(body).unwrap();
         let grpkey = aa.mls.key_store.lock().unwrap().get_grpkey().unwrap();
-        assert!(!thressig::signed_by(&message.signature, &grpkey, 1), "outer signature is anonymous");
+        assert!(
+            !thressig::signed_by(&message.signature, &grpkey, 1),
+            "outer signature is anonymous"
+        );
         let (body, _) = y.mls.verify_message(message).unwrap();
-        let MessageBody::BroadcastEnc { channel, data, nonce } = body else { unreachable!() };
+        let MessageBody::BroadcastEnc {
+            channel,
+            data,
+            nonce,
+        } = body
+        else {
+            unreachable!()
+        };
         let opened = y.mls.open_broadcast(&channel, data, nonce).unwrap();
         assert_eq!(opened, ("firewall".to_string(), b"ioc".to_vec(), Some(1)));
 
-        let MessageBody::BroadcastEnc { channel, data, nonce } =
-            x.mls.seal_broadcast("firewall", b"ioc".to_vec(), false).unwrap()
+        let MessageBody::BroadcastEnc {
+            channel,
+            data,
+            nonce,
+        } = x
+            .mls
+            .seal_broadcast("firewall", b"ioc".to_vec(), false)
+            .unwrap()
         else {
             unreachable!()
         };
@@ -2303,16 +2423,29 @@ mod nested_group_tests {
     fn forged_attribution_is_rejected() {
         let (_aa, x, y, common, _private) = setup();
         let channel = channel_of(b"firewall");
-        let real = x.mls.attribute(channel.as_bytes(), "firewall", b"ioc").unwrap();
+        let real = x
+            .mls
+            .attribute(channel.as_bytes(), "firewall", b"ioc")
+            .unwrap();
         let open = |attribution: shared_structs::Attribution, data: &[u8]| {
             let plain = encode_broadcast("firewall", data.to_vec(), Some(attribution)).unwrap();
-            let (_, ciphertext, nonce) = x.mls.encrypt_with_group_key(common.clone(), plain).unwrap();
+            let (_, ciphertext, nonce) =
+                x.mls.encrypt_with_group_key(common.clone(), plain).unwrap();
             y.mls.open_broadcast(&channel, ciphertext, nonce)
         };
         assert_eq!(open(real.clone(), b"ioc").unwrap().2, Some(1));
-        assert!(matches!(open(real.clone(), b"other ioc"), Err(AttributionInvalid { member_id: 1 })));
-        let claimed = shared_structs::Attribution { member_id: 2, ..real };
-        assert!(matches!(open(claimed, b"ioc"), Err(AttributionInvalid { member_id: 2 })));
+        assert!(matches!(
+            open(real.clone(), b"other ioc"),
+            Err(AttributionInvalid { member_id: 1 })
+        ));
+        let claimed = shared_structs::Attribution {
+            member_id: 2,
+            ..real
+        };
+        assert!(matches!(
+            open(claimed, b"ioc"),
+            Err(AttributionInvalid { member_id: 2 })
+        ));
     }
 
     /// In a private group, the MemberID is inside both layers: group members read it, while
@@ -2321,7 +2454,13 @@ mod nested_group_tests {
     fn attributed_group_message_names_member_to_group_only() {
         let (aa, x, y, _common, private) = setup();
         let (g, d, n) = seal(&x, &private, b"ioc", true);
-        assert_eq!(y.mls.open_group(g.clone(), d.clone(), n.clone()).unwrap(), (Some(number(&y, &private)), b"ioc".to_vec(), Some(1)));
-        assert!(matches!(aa.mls.open_group(g, d, n), Err(GroupNotAvailable(_))));
+        assert_eq!(
+            y.mls.open_group(g.clone(), d.clone(), n.clone()).unwrap(),
+            (Some(number(&y, &private)), b"ioc".to_vec(), Some(1))
+        );
+        assert!(matches!(
+            aa.mls.open_group(g, d, n),
+            Err(GroupNotAvailable(_))
+        ));
     }
 }

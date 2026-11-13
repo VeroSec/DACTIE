@@ -88,7 +88,11 @@ pub fn message_id(payload: &Vec<u8>) -> u64 {
 /// connects to many peers does not become a successor candidate at each of
 /// them. With fewer than two dialled candidates (a tiny network), all of them.
 pub fn prefer_outbound(candidates: Vec<PeerId>, outbound: &HashSet<PeerId>) -> Vec<PeerId> {
-    let dialled: Vec<PeerId> = candidates.iter().copied().filter(|p| outbound.contains(p)).collect();
+    let dialled: Vec<PeerId> = candidates
+        .iter()
+        .copied()
+        .filter(|p| outbound.contains(p))
+        .collect();
     if dialled.len() >= 2 {
         dialled
     } else {
@@ -205,9 +209,14 @@ impl StemState {
     /// this, it would publish its own messages directly for the rest of the epoch.
     fn top_up<R: Rng>(&mut self, candidates: &[PeerId], rng: &mut R) {
         while self.successors.len() < 2 {
-            let spare: Vec<PeerId> =
-                candidates.iter().copied().filter(|p| !self.successors.contains(p)).collect();
-            let Some(p) = spare.choose(rng).copied() else { break };
+            let spare: Vec<PeerId> = candidates
+                .iter()
+                .copied()
+                .filter(|p| !self.successors.contains(p))
+                .collect();
+            let Some(p) = spare.choose(rng).copied() else {
+                break;
+            };
             self.successors.push(p);
         }
         if self.own.is_none() {
@@ -216,7 +225,12 @@ impl StemState {
     }
 
     /// Replace a successor that is no longer a candidate.
-    fn repair<R: Rng>(&mut self, gone: PeerId, candidates: &[PeerId], rng: &mut R) -> Option<PeerId> {
+    fn repair<R: Rng>(
+        &mut self,
+        gone: PeerId,
+        candidates: &[PeerId],
+        rng: &mut R,
+    ) -> Option<PeerId> {
         let spare = candidates
             .iter()
             .copied()
@@ -254,8 +268,12 @@ impl StemState {
                 None => {
                     // Prefer a successor other than the predecessor, so the
                     // message does not bounce straight back.
-                    let options: Vec<PeerId> =
-                        self.successors.iter().copied().filter(|s| *s != p).collect();
+                    let options: Vec<PeerId> = self
+                        .successors
+                        .iter()
+                        .copied()
+                        .filter(|s| *s != p)
+                        .collect();
                     let s = options.choose(rng).copied();
                     if let Some(s) = s {
                         self.routes.insert(p, s);
@@ -342,7 +360,12 @@ impl StemState {
                 && !sent_to.contains(p)
                 && candidates.contains(p)
         };
-        let preferred: Vec<PeerId> = self.successors.iter().copied().filter(|p| usable(p)).collect();
+        let preferred: Vec<PeerId> = self
+            .successors
+            .iter()
+            .copied()
+            .filter(|p| usable(p))
+            .collect();
         if let Some(p) = preferred.choose(rng) {
             return Some(Resend::Fresh(*p));
         }
@@ -387,7 +410,9 @@ impl StemState {
         // Exponential with the configured mean.
         let u: f64 = rng.gen_range(f64::EPSILON..1.0);
         let wait = self.config.embargo_mean.mul_f64(-u.ln());
-        self.embargo.entry(id).or_insert((now + wait, message, from));
+        self.embargo
+            .entry(id)
+            .or_insert((now + wait, message, from));
     }
 
     /// The message is in GossipSub, so the stem did its job: this peer saw it
@@ -415,7 +440,11 @@ impl StemState {
             .map(|(id, _)| *id)
             .collect();
         ids.into_iter()
-            .filter_map(|id| self.embargo.remove(&id).map(|(_, message, from)| (message, from)))
+            .filter_map(|id| {
+                self.embargo
+                    .remove(&id)
+                    .map(|(_, message, from)| (message, from))
+            })
             .collect()
     }
 }
@@ -430,7 +459,10 @@ async fn read_frame<T: AsyncRead + Unpin + Send>(io: &mut T) -> io::Result<Vec<u
     io.read_exact(&mut len).await?;
     let len = u32::from_be_bytes(len) as usize;
     if len > MAX_STEM_BYTES {
-        return Err(io::Error::new(io::ErrorKind::InvalidData, "stem message too large"));
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "stem message too large",
+        ));
     }
     let mut buf = vec![0u8; len];
     io.read_exact(&mut buf).await?;
@@ -439,7 +471,10 @@ async fn read_frame<T: AsyncRead + Unpin + Send>(io: &mut T) -> io::Result<Vec<u
 
 async fn write_frame<T: AsyncWrite + Unpin + Send>(io: &mut T, bytes: &[u8]) -> io::Result<()> {
     if bytes.len() > MAX_STEM_BYTES {
-        return Err(io::Error::new(io::ErrorKind::InvalidInput, "stem message too large"));
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "stem message too large",
+        ));
     }
     io.write_all(&(bytes.len() as u32).to_be_bytes()).await?;
     io.write_all(bytes).await?;
@@ -506,7 +541,10 @@ mod tests {
     use rand::SeedableRng;
 
     fn config(q: f64) -> StemConfig {
-        StemConfig { q, ..StemConfig::default() }
+        StemConfig {
+            q,
+            ..StemConfig::default()
+        }
     }
 
     fn peers(n: usize) -> Vec<PeerId> {
@@ -538,8 +576,14 @@ mod tests {
         let candidates = peers(10);
         let mut stem = StemState::new(config(1.0));
         let now = Instant::now();
-        assert_eq!(stem.route(Some(candidates[3]), &candidates, now, &mut rng), Route::Fluff);
-        assert!(matches!(stem.route(None, &candidates, now, &mut rng), Route::Forward(_)));
+        assert_eq!(
+            stem.route(Some(candidates[3]), &candidates, now, &mut rng),
+            Route::Fluff
+        );
+        assert!(matches!(
+            stem.route(None, &candidates, now, &mut rng),
+            Route::Forward(_)
+        ));
     }
 
     /// Without candidates, a message is published directly.
@@ -547,7 +591,10 @@ mod tests {
     fn no_candidates_means_fluff() {
         let mut rng = StdRng::seed_from_u64(3);
         let mut stem = StemState::new(config(0.2));
-        assert_eq!(stem.route(None, &[], Instant::now(), &mut rng), Route::Fluff);
+        assert_eq!(
+            stem.route(None, &[], Instant::now(), &mut rng),
+            Route::Fluff
+        );
     }
 
     /// An epoch that began without stem peers gets successors as soon as some
@@ -559,7 +606,10 @@ mod tests {
         let now = Instant::now();
         assert_eq!(stem.route(None, &[], now, &mut rng), Route::Fluff);
         let one = peers(1);
-        assert_eq!(stem.route(None, &one, now, &mut rng), Route::Forward(one[0]));
+        assert_eq!(
+            stem.route(None, &one, now, &mut rng),
+            Route::Forward(one[0])
+        );
         let more = [one.clone(), peers(3)].concat();
         stem.route(None, &more, now, &mut rng);
         assert_eq!(stem.successors.len(), 2);
@@ -587,10 +637,16 @@ mod tests {
             panic!("own messages enter the stem")
         };
         let other = *stem.successors.iter().find(|p| **p != own).unwrap();
-        let from = *candidates.iter().find(|p| !stem.successors.contains(p)).unwrap();
+        let from = *candidates
+            .iter()
+            .find(|p| !stem.successors.contains(p))
+            .unwrap();
         stem.mark_own(7);
         stem.sent_own(7, own);
-        assert_eq!(stem.retry_own(7, Some(from), None, &candidates, now, &mut rng), Some(Resend::Fresh(other)));
+        assert_eq!(
+            stem.retry_own(7, Some(from), None, &candidates, now, &mut rng),
+            Some(Resend::Fresh(other))
+        );
     }
 
     /// When every connected stem peer has the message, it goes back to the first
@@ -607,8 +663,14 @@ mod tests {
         let other = *candidates.iter().find(|p| **p != own).unwrap();
         stem.mark_own(5);
         stem.sent_own(5, own);
-        assert_eq!(stem.retry_own(5, Some(other), None, &candidates, now, &mut rng), Some(Resend::FirstHop(own)));
-        assert_eq!(stem.retry_own(5, None, Some(own), &[own], now, &mut rng), None);
+        assert_eq!(
+            stem.retry_own(5, Some(other), None, &candidates, now, &mut rng),
+            Some(Resend::FirstHop(own))
+        );
+        assert_eq!(
+            stem.retry_own(5, None, Some(own), &[own], now, &mut rng),
+            None
+        );
     }
 
     /// The source re-routes its own message a bounded number of times, never to
@@ -627,21 +689,32 @@ mod tests {
         let mut sent = vec![first];
         for _ in 0..OWN_RETRIES {
             // After a loop: it came back from `first` each time.
-            let Some(Resend::Fresh(next)) = stem.retry_own(42, Some(first), None, &candidates, now, &mut rng) else {
+            let Some(Resend::Fresh(next)) =
+                stem.retry_own(42, Some(first), None, &candidates, now, &mut rng)
+            else {
                 panic!("a peer without the message")
             };
             assert!(!sent.contains(&next), "sent to {next} twice");
             stem.sent_own(42, next);
             sent.push(next);
         }
-        assert_eq!(stem.retry_own(42, Some(first), None, &candidates, now, &mut rng), None);
-        assert_eq!(stem.retry_own(43, Some(first), None, &candidates, now, &mut rng), None);
+        assert_eq!(
+            stem.retry_own(42, Some(first), None, &candidates, now, &mut rng),
+            None
+        );
+        assert_eq!(
+            stem.retry_own(43, Some(first), None, &candidates, now, &mut rng),
+            None
+        );
     }
 
     /// Each predecessor gets `rate_per_sec` stem messages per second.
     #[test]
     fn predecessors_are_rate_limited() {
-        let mut stem = StemState::new(StemConfig { rate_per_sec: 2, ..config(0.2) });
+        let mut stem = StemState::new(StemConfig {
+            rate_per_sec: 2,
+            ..config(0.2)
+        });
         let (a, b) = (PeerId::random(), PeerId::random());
         let now = Instant::now();
         assert!(stem.allow(a, now) && stem.allow(a, now));
@@ -658,7 +731,10 @@ mod tests {
         let mut stem = StemState::new(config(0.2));
         let now = Instant::now();
         let from = PeerId::random();
-        let m = |p: &[u8]| StemMessage { channel: "channel_1".into(), payload: p.to_vec() };
+        let m = |p: &[u8]| StemMessage {
+            channel: "channel_1".into(),
+            payload: p.to_vec(),
+        };
         stem.arm_embargo(1, m(b"a"), Some(from), now, &mut rng);
         stem.arm_embargo(2, m(b"b"), Some(from), now, &mut rng);
         stem.arm_embargo(3, m(b"c"), None, now, &mut rng);
@@ -695,12 +771,22 @@ mod tests {
         use request_response::Codec;
         futures::executor::block_on(async {
             let mut codec = StemCodec;
-            let msg = StemMessage { channel: "channel_9".into(), payload: vec![7; 1000] };
+            let msg = StemMessage {
+                channel: "channel_9".into(),
+                payload: vec![7; 1000],
+            };
             let mut buf = futures::io::Cursor::new(Vec::new());
-            codec.write_request(&STEM_PROTOCOL, &mut buf, msg.clone()).await.unwrap();
+            codec
+                .write_request(&STEM_PROTOCOL, &mut buf, msg.clone())
+                .await
+                .unwrap();
             let mut read = futures::io::Cursor::new(buf.into_inner());
-            assert_eq!(codec.read_request(&STEM_PROTOCOL, &mut read).await.unwrap(), msg);
-            let mut huge = futures::io::Cursor::new(((MAX_STEM_BYTES + 1) as u32).to_be_bytes().to_vec());
+            assert_eq!(
+                codec.read_request(&STEM_PROTOCOL, &mut read).await.unwrap(),
+                msg
+            );
+            let mut huge =
+                futures::io::Cursor::new(((MAX_STEM_BYTES + 1) as u32).to_be_bytes().to_vec());
             assert!(codec.read_request(&STEM_PROTOCOL, &mut huge).await.is_err());
         });
     }

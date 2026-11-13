@@ -5,13 +5,13 @@ use crate::storage::Storage;
 use clap::Parser;
 use dactie_utils::key_store::StoredKeyMaterial;
 use dactie_utils::mls_wrapper::MyOpenMls;
+use libp2p::Multiaddr;
 use std::error::Error;
 use std::path::PathBuf;
 use std::process::exit;
 use std::str::FromStr;
 use tokio::signal::unix::{signal, SignalKind};
 use tokio::sync::mpsc;
-use libp2p::Multiaddr;
 
 mod abstswarm;
 mod mybehaviour;
