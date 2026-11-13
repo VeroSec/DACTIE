@@ -23,7 +23,6 @@ use libp2p::swarm::{
 };
 use libp2p::{Multiaddr, PeerId};
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::convert::Infallible;
 use std::sync::Mutex;
 use std::task::{Context, Poll};
 use std::time::{Duration, Instant};
@@ -153,7 +152,7 @@ impl Gate {
 
 impl NetworkBehaviour for Gate {
     type ConnectionHandler = dummy::ConnectionHandler;
-    type ToSwarm = Infallible;
+    type ToSwarm = crate::NoEvent;
 
     fn handle_established_inbound_connection(
         &mut self,

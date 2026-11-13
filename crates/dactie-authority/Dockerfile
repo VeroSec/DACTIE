@@ -1,6 +1,6 @@
 # Use the official Rust image as the base image
 # Pinned like rust-toolchain.toml (see the reason there). Upgrade both together.
-FROM rust:1.99
+FROM rust:1.100
 
 # Set the working directory inside the container
 WORKDIR /usr/src/dactie

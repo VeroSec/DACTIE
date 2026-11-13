@@ -962,8 +962,8 @@ pub(crate) enum MyBehaviourEvent {
     RequestResponseEvent(Box<request_response::Event<Request, Response>>),
 }
 
-impl From<std::convert::Infallible> for MyBehaviourEvent {
-    fn from(event: std::convert::Infallible) -> Self {
+impl From<dactie_utils::NoEvent> for MyBehaviourEvent {
+    fn from(event: dactie_utils::NoEvent) -> Self {
         match event {}
     }
 }

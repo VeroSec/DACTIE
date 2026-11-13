@@ -516,7 +516,7 @@ fn sign_with<T: Serialize>(
 
 /**
  * Verifier checks signature and ZKP of sk.
-**/
+ **/
 pub fn verify<T: Serialize + ?Sized>(
     sig: &Signature,
     grpkey: &Grpkey,
@@ -694,7 +694,7 @@ pub fn compute_lagrange_coefficients_at_zero(shares: &[usize]) -> Vec<FieldEleme
 
 /**
  * Manager opens signature by comparing signature with stored gml values.
-**/
+ **/
 pub fn open<K>(
     sig: &Signature,
     grpkey: &Grpkey,
