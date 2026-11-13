@@ -7,24 +7,24 @@ use thiserror::Error;
 use crate::abstswarm::event_handler::EventHandler;
 use crate::abstswarm::instruction_handler::InstructionHandler;
 use crate::abstswarm::AbstSwarm;
+use crate::db::{Db, Deferred};
 use dactie_utils::mls_wrapper::MyOpenMls;
 use dactie_utils::shared_structs::Instruction;
 use identity::Keypair;
 use libp2p::swarm::NetworkBehaviour;
 use libp2p::{identity, multiaddr, noise, tcp, yamux, Multiaddr, TransportError};
-use sqlx::{Pool, Postgres};
 use tokio::sync::mpsc;
 
 pub(crate) struct AbstSwarmBuilder<TBehaviour> {
     keypair: Keypair,
     instruction_rx: mpsc::UnboundedReceiver<Instruction>,
     listen_address: Multiaddr,
-    pool: Pool<Postgres>,
+    db: Db,
+    deferred_rx: mpsc::UnboundedReceiver<Deferred>,
     behaviour: TBehaviour,
     my_open_mls: MyOpenMls,
     // Addresses to advertise to remote peers as dialable
     external_addresses: Vec<Multiaddr>,
-
 }
 
 impl<TBehaviour> AbstSwarmBuilder<TBehaviour>
@@ -34,7 +34,8 @@ where
     pub(crate) fn new(
         keypair: Keypair,
         instruction_rx: mpsc::UnboundedReceiver<Instruction>,
-        pool: Pool<Postgres>,
+        db: Db,
+        deferred_rx: mpsc::UnboundedReceiver<Deferred>,
         behaviour: TBehaviour,
 
         my_open_mls: MyOpenMls,
@@ -43,7 +44,8 @@ where
             listen_address: Self::default_listen_address()?,
             instruction_rx,
             keypair,
-            pool,
+            db,
+            deferred_rx,
             behaviour,
             my_open_mls,
             external_addresses: Vec::new(),
@@ -60,7 +62,6 @@ where
         self.external_addresses.push(address);
         self
     }
-
 
     /// Listen on all interfaces, on a random port
     fn default_listen_address() -> Result<Multiaddr, AbstSwarmBuilderError> {
@@ -92,7 +93,8 @@ where
         log::info!("Local PeerId: {}", swarm.local_peer_id());
 
         Ok(AbstSwarm::new(
-            self.pool,
+            self.db,
+            self.deferred_rx,
             self.instruction_rx,
             swarm,
             self.my_open_mls,
