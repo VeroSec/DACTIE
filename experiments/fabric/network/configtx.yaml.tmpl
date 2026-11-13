@@ -61,6 +61,28 @@ Organizations:
       - Host: ${P0ORG2_IP}
         Port: 8051
 
+  # Anonymous clients (generate.sh with IDEMIX=1): an Idemix organisation without peers whose
+  # members may submit transactions. Its MSP holds only the issuer's and revocation public
+  # keys; every member proves membership anew with each pseudonym.
+  - &Org1Idemix
+    Name: Org1IdemixMSP
+    ID: Org1IdemixMSP
+    MSPType: idemix
+    MSPDir: idemix-verify
+    Policies:
+      Readers:
+        Type: Signature
+        Rule: "OR('Org1IdemixMSP.member')"
+      Writers:
+        Type: Signature
+        Rule: "OR('Org1IdemixMSP.member')"
+      Admins:
+        Type: Signature
+        Rule: "OR('Org1IdemixMSP.admin')"
+      Endorsement:
+        Type: Signature
+        Rule: "OR('Org1IdemixMSP.member')"
+
 Capabilities:
   Channel: &ChannelCapabilities
     V2_0: true
@@ -145,4 +167,28 @@ Profiles:
       Organizations:
         - *Org1
         - *Org2
+      Capabilities: *ApplicationCapabilities
+
+  # ChannelUsingRaft plus the Idemix organisation. MAJORITY policies now need 2 of 3
+  # organisations, which Org1 and Org2 still give (chaincode approval and commit in cli.sh).
+  ChannelUsingRaftIdemix:
+    <<: *ChannelDefaults
+    Orderer:
+      <<: *OrdererDefaults
+      OrdererType: etcdraft
+      EtcdRaft:
+        Consenters:
+          - Host: ${ORDERER_IP}
+            Port: 7050
+            ClientTLSCert: crypto/ordererOrganizations/example.com/orderers/orderer.example.com/tls/server.crt
+            ServerTLSCert: crypto/ordererOrganizations/example.com/orderers/orderer.example.com/tls/server.crt
+      Organizations:
+        - *OrdererOrg
+      Capabilities: *OrdererCapabilities
+    Application:
+      <<: *ApplicationDefaults
+      Organizations:
+        - *Org1
+        - *Org2
+        - *Org1Idemix
       Capabilities: *ApplicationCapabilities
