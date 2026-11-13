@@ -1,6 +1,7 @@
 # The Rust version for local builds, CI and the Docker images (FROM rust:1.99 in crates/*/Dockerfile).
-# Rust 1.100 no longer compiles sqlx 0.7 (never-type fallback, rust-lang/rust#148922); move all
-# three together, after upgrading sqlx to 0.8.
+# Rust 1.100 builds the code, but warns about unreachable code that thiserror (#[from] Infallible)
+# and libp2p's NetworkBehaviour derive generate, and CI's clippy -D warnings rejects that. Move
+# both together, after fixing those warnings.
 [toolchain]
 channel = "1.99"
 components = ["clippy", "rustfmt"]

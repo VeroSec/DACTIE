@@ -360,7 +360,7 @@ fn by_size<'a>(rows: &[&'a Row]) -> Vec<Vec<&'a Row>> {
 }
 
 /// The INSERT for rows of one table.
-fn insert<'a>(rows: Vec<&'a Row>) -> QueryBuilder<'a, Postgres> {
+fn insert(rows: Vec<&Row>) -> QueryBuilder<Postgres> {
     let head = match rows[0] {
         Row::Broadcast { .. } => "INSERT INTO broadcast (id, channel, topic, data) ",
         Row::GroupEnc { .. } => "INSERT INTO group_enc (id, group_id, data, nonce) ",
