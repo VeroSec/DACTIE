@@ -1,0 +1,4 @@
+2026/11/13 00:55:14 derived 2000 single-use Idemix identities of Org1IdemixMSP in 8.1 s (16.14 ms of CPU each)
+2026/11/13 00:55:16 submitting 2000 transactions at 20/s, 854-byte records, a fresh Idemix pseudonym of Org1IdemixMSP per transaction, run 20261113T005506-r20
+2026/11/13 00:56:58 idemix signatures during the run: 4000, 1.764 ms each on average
+2026/11/13 00:56:58 offered 2000 in 100.0 s (20.0/s): committed 2000, invalid 0, failed 0, not committed after 1m0s 0

@@ -1,0 +1,1 @@
+idemix cost on one core, mean of 200: client: fresh identity 19.07 ms, signature over 854 bytes 2.182 ms; verifier: identity proof 34.98 ms, signature 3.603 ms; serialized identity 1019 bytes

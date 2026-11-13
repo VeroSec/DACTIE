@@ -1,0 +1,12 @@
+== minerva1
+fabric-orderer 29.21% 114.1MiB / 15.62GiB
+== minerva2
+fabric-peer0org1 21.87% 124.3MiB / 15.62GiB
+fabric-cc 0.00% 4.789MiB / 15.62GiB
+== minerva3
+fabric-peer0org2 16.96% 133.1MiB / 15.62GiB
+fabric-cc 0.00% 6.793MiB / 15.62GiB
+== minerva4
+fabric-peer1org2 9.54% 136.1MiB / 15.62GiB
+fabric-peer1org1 65.02% 122.4MiB / 15.62GiB
+fabric-cc 8.73% 11.05MiB / 15.62GiB

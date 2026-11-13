@@ -274,11 +274,72 @@ each receiving peer (93–95 % in `results/latency/rate-sweep-2026-11-11/cpu/r15
 close to the rate that verifying the group signatures one after another allows; verifying them
 in parallel would raise it. Fabric committed every transaction at every rate up to 1,000 per
 second, with no node above 1.7 cores. Its peers check ECDSA signatures, and its clients are not
-anonymous in this setup.
+anonymous in this setup; with anonymous clients, see below.
 
 **Thakkar et al.'s workload.** Their 20-byte value
 (`results/fabric/rate-sweep-2026-11-11/thakkar-20B/`) changes Fabric's numbers by less than
 4 ms. Their Fabric 1.0 took 421 to 820 ms and saturated at about 140 per second.
+
+**Anonymous Fabric clients (Idemix).** In the runs above, Fabric's client signs with an X.509
+certificate, so every transaction names its submitter. Fabric's counterpart of DACTIE's
+anonymous senders is its Idemix MSP.
+- **Setup:** on 2026-11-13 we added an Idemix organisation to the channel. Every transaction
+  carries a fresh pseudonym with a fresh proof of membership (`CLIENT=idemix`, setup in
+  `experiments/fabric/README.md`), so transactions are as unlinkable as DACTIE's messages.
+  Fabric's own Idemix client reuses one pseudonym, which makes its transactions linkable.
+- **Baseline:** the X.509 client ran again on the same deployment in the same session, and
+  reproduced the 2026-11-11 numbers within 3 ms.
+
+| Arrival rate (per s) | Fabric, X.509 client (rerun): throughput, mean / p95 | Fabric, Idemix client: throughput, mean / p95 |
+| --- | --- | --- |
+| 5 | – | 5.0, 937 / 1,445 ms |
+| 10 | – | 10.0, 942 / 1,421 ms |
+| 15 | – | 15.0, 920 / 1,395 ms |
+| 20 | – | 20.1, 2,515 / 3,764 ms |
+| 25 | 25.0, 564 / 1,016 ms | 21.1, 7,438 / 14,639 ms |
+| 50 | – | 13.6, 23.2 / 39.8 s, 57 % lost |
+| 75 | – | 7.3, 26.2 / 47.0 s, 79 % lost |
+| 100 | 100.2, 199 / 334 ms | 3.5, 35.6 / 44.8 s, 84 % lost |
+| 110 | – | 20.8, 22.4 / 33.9 s, 77 % lost |
+| 125 | – | 3.6, 22.4 / 37.5 s, 88 % lost |
+| 150 | – | 20.8, 17.2 / 29.6 s, 80 % lost |
+| 175 | 174.6, 128 / 205 ms | 3.5, 41.5 / 59.8 s, 94 % lost |
+| 500 | 500.4, 72 / 99 ms | – |
+
+- **Cost per transaction**, on one core of minerva4
+  (`results/fabric/rate-sweep-2026-11-13-idemix/idemix-cost-minerva4.txt`):
+  - the client needs 19.1 ms for a fresh pseudonym with its proof, derived before the run, and
+    2.2 ms per signature, two per transaction during the run;
+  - every node that checks the transaction needs 35.0 ms for the proof (a pairing check) and
+    3.6 ms for the signature;
+  - a DACTIE receiver spends about 7 ms per message.
+- **Saturation:**
+  - Fabric with anonymous clients keeps up to about 20 transactions per second.
+  - Up to 15 per second, every transaction commits within 0.92 to 0.94 s on average, against
+    564 ms with the X.509 client at 25 per second. Below 30 per second, both wait for the 1 s
+    block timeout.
+  - At 20 per second, latency rises to 2.5 s. At 25 per second, Fabric commits 21 per second
+    after 7.4 s on average.
+  - From 50 per second on, the gateways reject most transactions ("too many requests"; a peer
+    takes 500 requests at once by default). 57 to 94 % are lost, and the rest take 17 to 42 s.
+- **Why throughput is so low:**
+  - Every proof is checked by the endorsing peer, the orderer and all four committing peers.
+  - Fabric 2.5 checks it again for every principal it tests while evaluating the `Writers`
+    policies. The Idemix MSP's `SatisfiesPrincipal` validates the identity first, its cache
+    is keyed by identity and principal, and `ImplicitMeta` policies try their organisations
+    in random order.
+  - From CPU use at 5 per second, the orderer checked each proof about four times and the
+    gateway peer about six times, a committing peer once.
+  - Above saturation, the limiting node varies between rates, because the nodes restart for
+    every rate and draw a new order. The orderer limited at 25, 50, 75, 110 and 150 per second,
+    the endorsing peers at 100, 125 and 175 (`cpu/`).
+  - Even with one check per node, 38.6 ms per transaction caps every node with four vCPUs at
+    about 100 transactions per second.
+
+Anonymity thus costs Fabric far more than it costs DACTIE. On the same hosts and with the same
+record, Fabric with anonymous clients keeps up to about 20 transactions per second, against
+DACTIE's 141 messages per second. Below saturation, its latency is 0.9 s, against DACTIE's 16
+to 24 ms.
 
 **The sweep of 2026-11-08.** It ran the released build `bec9c1c` and gave the same DACTIE
 numbers within a few milliseconds, with 13.7 % lost at 175 per second. From 100 messages per
@@ -300,12 +361,18 @@ cd experiments/fabric
 ./generate.sh hosts/minervas.env && ./deploy.sh    # Fabric network on the four hosts
 ./sweep.sh misp FABRIC_OUT_DIR                     # FABRIC_OUT_DIR/raw.csv.gz and summary.csv
 python3 compare.py OUT_DIR FABRIC_OUT_DIR > comparison.csv
+# anonymous clients: a channel with the Idemix organisation, in ~/fabric-idemix on the hosts
+IDEMIX=1 ./generate.sh hosts/minervas-idemix.env && ./deploy.sh
+RATES="5 10 15 20 25 50 75 100 110 125 150 175" CLIENT=idemix ./sweep.sh misp IDEMIX_OUT_DIR
+python3 compare.py OUT_DIR FABRIC_OUT_DIR fabricidemix=IDEMIX_OUT_DIR > comparison.csv
 ```
 
 `scripts/rate_sweep_raw_csv.py` and `scripts/rate_sweep_summary.py` regenerate
 `results/latency/rate-sweep-2026-11-08/summary.csv` byte for byte from the sweep's raw lines.
 Stop the DACTIE network before running Fabric, and the other way round: they would share the
-hosts' CPUs.
+hosts' CPUs. During the Idemix sweep, the DACTIE demo network stayed up but idle (load average
+0.00). The X.509 rerun in the same session matched the 2026-11-11 sweep, for which it was
+stopped.
 
 ## Scope
 

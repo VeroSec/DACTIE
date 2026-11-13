@@ -17,7 +17,7 @@ harness output of one cell.
 | Early single-attacker series (not in the paper) | `anonymity-early/` |
 | Eclipse attacks (847 runs) | `eclipse/eclipse_parsed.csv`, raw runs in `eclipse/output/`, `eclipse/old_output/` |
 | Latency table | `latency/rerun-2026-10-26.csv` (runs `off-*`, receiver `peer_1`), every receipt in `latency/raw-2026-10-26.csv` |
-| Comparison with Hyperledger Fabric (arrival rates 25 to 175 msg/s) | DACTIE `latency/rate-sweep-2026-11-08/`, `latency/rate-sweep-2026-11-11/`; Fabric `fabric/rate-sweep-2026-11-11/`; side by side `fabric/rate-sweep-2026-11-11/comparison.csv` |
+| Comparison with Hyperledger Fabric (arrival rates 25 to 175 msg/s) | DACTIE `latency/rate-sweep-2026-11-08/`, `latency/rate-sweep-2026-11-11/`; Fabric `fabric/rate-sweep-2026-11-11/`; side by side `fabric/rate-sweep-2026-11-11/comparison.csv`; Fabric with anonymous Idemix clients `fabric/rate-sweep-2026-11-13-idemix/` |
 | Soak test (33.4 hours) | `latency/soak/` |
 | Microbenchmark | `benchmark/README.md` |
 
@@ -239,6 +239,25 @@ The DACTIE directories hold:
 `fabric/rate-sweep-2026-11-11/comparison.csv` puts DACTIE (2026-11-11) and both Fabric series
 side by side, per arrival rate:
 `python3 experiments/fabric/compare.py results/latency/rate-sweep-2026-11-11 results/fabric/rate-sweep-2026-11-11/misp-1KiB results/fabric/rate-sweep-2026-11-11/thakkar-20B`.
+
+`fabric/rate-sweep-2026-11-13-idemix/` is Fabric 2.5.16 with anonymous clients. The
+deployment has an Idemix organisation in the channel (`IDEMIX=1`, `experiments/fabric/README.md`),
+on the same hosts, with the same record and the same measurement:
+- `idemix-misp-1KiB/`: every transaction from a fresh Idemix pseudonym (`CLIENT=idemix`), at 5,
+  10, 15, 20, 25, 50, 75, 100, 110, 125, 150 and 175 per second. `r<rate>.log` gives the time to
+  derive the pseudonyms before the run and the mean signing time during it.
+  `r<rate>.failures.csv.gz` lists the rejected transactions, almost all "too many requests"
+  from the gateways from 50 per second on.
+- `x509-misp-1KiB/`: the X.509 client of the 2026-11-11 sweep on the same deployment and in the
+  same session, at 25, 100, 175 and 500 per second, as the baseline. It matches the 2026-11-11
+  numbers within 3 ms.
+- `idemix-cost-minerva4.txt`: on one core of minerva4, a fresh pseudonym, a signature, and a
+  verifier's check of the proof and of the signature (`loadgen -idemix-bench 200`).
+- `comparison.csv`: DACTIE (2026-11-11), Fabric with the X.509 client (2026-11-11, 1 KiB and
+  20 bytes), Fabric with Idemix clients and the X.509 rerun, per arrival rate:
+  `python3 experiments/fabric/compare.py results/latency/rate-sweep-2026-11-11 results/fabric/rate-sweep-2026-11-11/misp-1KiB results/fabric/rate-sweep-2026-11-11/thakkar-20B fabricidemix=results/fabric/rate-sweep-2026-11-13-idemix/idemix-misp-1KiB fabricx509rerun=results/fabric/rate-sweep-2026-11-13-idemix/x509-misp-1KiB`.
+
+The DACTIE demo network was up but idle on the hosts during these runs.
 
 ## Earlier re-measurement: `latency/rerun-2026-10-22.csv`
 
