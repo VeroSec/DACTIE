@@ -5,9 +5,12 @@
 # DACTIE's benchmark publisher runs), uses peer1.org1 as its gateway, submits at the rate for
 # DURATION seconds and timestamps each transaction when its block reaches peer0.org1 (the host
 # of DACTIE's receiver peer_1). Mid-run (t+40 s), docker stats on every host.
-# Usage: [RATES="25 50"] [DURATION=100] ./sweep.sh misp|thakkar OUT_DIR
+# Usage: [RATES="25 50"] [DURATION=100] [CLIENT=x509|idemix] ./sweep.sh misp|thakkar OUT_DIR
 #   misp:    the DACTIE sweep's 1 KiB MISP record in every transaction
 #   thakkar: Thakkar et al.'s workload, a 20-byte value
+#   CLIENT=idemix: anonymous submission, a fresh Idemix pseudonym per transaction (needs a
+#   build from IDEMIX=1 ./generate.sh); the load generator derives them all before it starts
+#   submitting, so the CPU snapshot is taken 40 s after its "submitting" line.
 # OUT_DIR gets r<rate>.receipts.csv, r<rate>.failures.csv, r<rate>.log, cpu/r<rate>.cpu and
 # raw.csv.gz (all receipts), then the summary of scripts/rate_sweep_summary.py.
 set -euo pipefail
@@ -18,6 +21,11 @@ case $WORKLOAD in
     misp) PAYLOAD="-payload-file /work/misp-1KiB.json" ;;
     thakkar) PAYLOAD="-payload-bytes 20" ;;
     *) echo "unknown workload $WORKLOAD" >&2; exit 2 ;;
+esac
+case ${CLIENT:-x509} in
+    x509) ANON="" ;;
+    idemix) ANON="-idemix-dir /work/idemix/org1idemix -idemix-msp Org1IdemixMSP" ;;
+    *) echo "unknown client $CLIENT" >&2; exit 2 ;;
 esac
 cd "$HERE"
 load_env build/hosts.env
@@ -38,14 +46,17 @@ for rate in ${RATES:-25 50 75 100 110 125 150 175}; do
     sleep 20 # Raft leader, peers back on the channel
 
     on "$P1ORG1_SSH" "docker run --rm --network host $DUSER -v $BASE/build:/work:ro -v $RUN_DIR:/out \
-        dactie-fabric-loadgen:1 -rate $rate -duration ${DURATION:-100}s $PAYLOAD \
+        dactie-fabric-loadgen:2 -rate $rate -duration ${DURATION:-100}s $PAYLOAD \
         -gateway $P1ORG1_IP:9051 -gateway-tls-ca $O1/tlsca/tlsca.org1.example.com-cert.pem \
         -events $P0ORG1_IP:7051 -events-tls-ca $O1/tlsca/tlsca.org1.example.com-cert.pem -receiver peer0.org1 \
         -msp Org1MSP -cert $O1/users/User1@org1.example.com/msp/signcerts/User1@org1.example.com-cert.pem \
         -key $O1/users/User1@org1.example.com/msp/keystore/priv_sk \
-        -out /out/r$rate.receipts.csv -failures /out/r$rate.failures.csv" > "$OUT/r$rate.log" 2>&1 &
+        -out /out/r$rate.receipts.csv -failures /out/r$rate.failures.csv $ANON" > "$OUT/r$rate.log" 2>&1 &
     loadgen=$!
-    sleep 42 # 2 s until the load generator submits, then 40 s into the run
+    # 40 s into the run: the load generator logs "submitting" when it starts (after 2 s, or
+    # after deriving the Idemix pseudonyms).
+    until grep -q submitting "$OUT/r$rate.log" 2>/dev/null || ! kill -0 $loadgen 2>/dev/null; do sleep 0.5; done
+    sleep 40
     while IFS='|' read -r host profiles; do
         echo "== ${host:-local}"
         on "$host" "docker stats --no-stream --format '{{.Name}} {{.CPUPerc}} {{.MemUsage}}' | grep fabric"

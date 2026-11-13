@@ -1,0 +1,5 @@
+rate,receiver,throughput,mean_ms,p95_ms,loss,receipts,duplicates
+25,peer0.org1,25.04,563.9,1016,0,2500,0
+100,peer0.org1,100.2,199.2,334,0,10000,0
+175,peer0.org1,174.6,127.8,205,0,17500,0
+500,peer0.org1,500.4,71.81,99,0,50000,0

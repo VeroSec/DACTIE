@@ -9,6 +9,10 @@
 // latency_ms) plus the block number, so scripts/rate_sweep_summary.py summarises both
 // systems the same way. Transactions that fail or never commit go to the failures file and
 // count as loss.
+//
+// With -idemix-dir, transactions are submitted anonymously: each carries a fresh Idemix
+// pseudonym, derived before the timed run (idemix.go). The block listener keeps the X.509
+// identity of -cert and -key.
 package main
 
 import (
@@ -25,6 +29,7 @@ import (
 	"time"
 
 	"github.com/hyperledger/fabric-gateway/pkg/client"
+	"github.com/hyperledger/fabric-gateway/pkg/hash"
 	"github.com/hyperledger/fabric-gateway/pkg/identity"
 	"github.com/hyperledger/fabric-protos-go-apiv2/peer"
 	"google.golang.org/grpc"
@@ -110,7 +115,26 @@ func main() {
 	chaincode := flag.String("chaincode", "dactiebench", "chaincode name")
 	receiptsPath := flag.String("out", "receipts.csv", "receipts file")
 	failuresPath := flag.String("failures", "failures.csv", "failures file")
+	idemixDir := flag.String("idemix-dir", "", "submit anonymously with a fresh Idemix pseudonym per transaction, from this idemixgen directory (msp/, user/SignerConfig)")
+	idemixMSP := flag.String("idemix-msp", "Org1IdemixMSP", "MSP ID of the Idemix organisation")
+	idemixBench := flag.Int("idemix-bench", 0, "only measure the Idemix cost of client and verifier on one core over this many runs, then exit")
 	flag.Parse()
+	if *idemixBench > 0 {
+		member, err := loadIdemixMember(*idemixDir, *idemixMSP)
+		if err != nil {
+			log.Fatalf("idemix: %v", err)
+		}
+		size := *payloadBytes
+		if *payloadFile != "" {
+			if b, err := os.ReadFile(*payloadFile); err == nil {
+				size = len(b)
+			}
+		}
+		if err := benchIdemix(member, *idemixBench, size); err != nil {
+			log.Fatalf("idemix bench: %v", err)
+		}
+		return
+	}
 	if *rate <= 0 || *gatewayAddr == "" || *eventsAddr == "" || *certPath == "" || *keyPath == "" {
 		flag.Usage()
 		os.Exit(2)
@@ -158,7 +182,25 @@ func main() {
 		log.Fatalf("signer: %v", err)
 	}
 
-	gw, err := client.Connect(id, client.WithSign(sign), client.WithClientConnection(dial(*gatewayAddr, *gatewayCA)),
+	n := int(duration.Seconds() * *rate)
+	var pool []*idemixIdentity
+	if *idemixDir != "" {
+		member, err := loadIdemixMember(*idemixDir, *idemixMSP)
+		if err != nil {
+			log.Fatalf("idemix: %v", err)
+		}
+		t0 := time.Now()
+		var perIdentity time.Duration
+		if pool, perIdentity, err = member.identityPool(n); err != nil {
+			log.Fatalf("idemix identities: %v", err)
+		}
+		log.Printf("derived %d single-use Idemix identities of %s in %.1f s (%.2f ms of CPU each)",
+			n, *idemixMSP, time.Since(t0).Seconds(), float64(perIdentity.Microseconds())/1000)
+	}
+	var signNanos, signatures atomic.Int64 // Idemix signatures made during the run
+
+	gatewayConn := dial(*gatewayAddr, *gatewayCA)
+	gw, err := client.Connect(id, client.WithSign(sign), client.WithClientConnection(gatewayConn),
 		client.WithEndorseTimeout(60*time.Second), client.WithSubmitTimeout(60*time.Second))
 	if err != nil {
 		log.Fatalf("gateway: %v", err)
@@ -210,11 +252,37 @@ func main() {
 	time.Sleep(2 * time.Second) // the block stream is open before the first transaction
 
 	contract := gw.GetNetwork(*channel).GetContract(*chaincode)
+	// contractFor gives the contract a transaction is submitted through: the X.509 client's,
+	// or, anonymously, one of a gateway that signs with the transaction's own pseudonym.
+	contractFor := func(seq int) (*client.Contract, func(), error) {
+		if pool == nil {
+			return contract, func() {}, nil
+		}
+		anon := pool[seq]
+		pool[seq] = nil
+		timedSign := func(message []byte) ([]byte, error) {
+			t := time.Now()
+			sig, err := anon.sign(message)
+			signNanos.Add(int64(time.Since(t)))
+			signatures.Add(1)
+			return sig, err
+		}
+		g, err := client.Connect(anon, client.WithSign(timedSign), client.WithHash(hash.NONE),
+			client.WithClientConnection(gatewayConn),
+			client.WithEndorseTimeout(60*time.Second), client.WithSubmitTimeout(60*time.Second))
+		if err != nil {
+			return nil, nil, err
+		}
+		return g.GetNetwork(*channel).GetContract(*chaincode), func() { g.Close() }, nil
+	}
 	interval := time.Duration(float64(time.Second) / *rate)
-	n := int(duration.Seconds() * *rate)
 	var submitters sync.WaitGroup
 	start := time.Now()
-	log.Printf("submitting %d transactions at %g/s, %d-byte records, run %s", n, *rate, len(payload), runID)
+	clientKind := "X.509 client " + *mspID
+	if pool != nil {
+		clientKind = "a fresh Idemix pseudonym of " + *idemixMSP + " per transaction"
+	}
+	log.Printf("submitting %d transactions at %g/s, %d-byte records, %s, run %s", n, *rate, len(payload), clientKind, runID)
 	for seq := 0; seq < n; seq++ {
 		if d := time.Until(start.Add(time.Duration(seq) * interval)); d > 0 {
 			time.Sleep(d)
@@ -223,6 +291,13 @@ func main() {
 		go func(seq int) {
 			defer submitters.Done()
 			t0 := time.Now()
+			contract, done, err := contractFor(seq)
+			if err != nil {
+				failed.Add(1)
+				out.failure(seq, "gateway", err.Error())
+				return
+			}
+			defer done()
 			proposal, err := contract.NewProposal("put",
 				client.WithBytesArguments([]byte(fmt.Sprintf("%s-%d", runID, seq)), payload))
 			if err != nil {
@@ -263,6 +338,9 @@ func main() {
 		return true
 	})
 	out.flush()
+	if c := signatures.Load(); c > 0 {
+		log.Printf("idemix signatures during the run: %d, %.3f ms each on average", c, float64(signNanos.Load())/float64(c)/1e6)
+	}
 	log.Printf("offered %d in %.1f s (%.1f/s): committed %d, invalid %d, failed %d, not committed after %s %d",
 		n, offered.Seconds(), float64(n)/offered.Seconds(), committed.Load(), invalid.Load(), failed.Load(), *drain, lost)
 }
