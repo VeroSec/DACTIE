@@ -27,12 +27,13 @@ def main(out_dir):
         w.writerow(["rate", "receiver", "received_at", "via", "seq", "latency_ms"])
         for f in files:
             rate, receiver = NAME.match(f).groups()
-            for line in open(os.path.join(out_dir, f), errors="replace"):
-                m = LINE.search(line)
-                if m:
-                    received_at, via, seq, latency = m.groups()
-                    w.writerow([rate, receiver, received_at, via, seq, latency])
-                    n += 1
+            with open(os.path.join(out_dir, f), errors="replace") as src:
+                for line in src:
+                    m = LINE.search(line)
+                    if m:
+                        received_at, via, seq, latency = m.groups()
+                        w.writerow([rate, receiver, received_at, via, seq, latency])
+                        n += 1
     print(f"{n} receipts from {len(files)} files written to {out_dir}/raw.csv.gz")
 
 

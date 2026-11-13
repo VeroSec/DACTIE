@@ -10,16 +10,15 @@ runs; the experiment_avg_*.csv files next to them hold per-setting averages and 
 import csv
 import glob
 import os
-from typing import List
 
 BASE_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "results", "eclipse")
 SERIES = ["output", "old_output"]
 OUTPUT_CSV = os.path.join(BASE_DIR, "eclipse_parsed.csv")
 
 
-def collect_rows() -> List[List[object]]:
+def collect_rows() -> list[list[object]]:
     """Collect one row per run, with the attacker share and the share of honest receivers."""
-    rows: List[List[object]] = []
+    rows: list[list[object]] = []
 
     for series in SERIES:
         pattern = os.path.join(BASE_DIR, series, "*", "experiment_*.csv")

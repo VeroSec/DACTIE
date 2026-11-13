@@ -1,68 +1,68 @@
-2026-11-03T04:55:22Z /home/vero/anonymity-results-timing/coalition start/resume: host labrada, kernel 6.8.0-147-generic, 64 vCPUs, 125 GiB, commit 2a85af2
-2026-11-03T04:55:22Z /home/vero/anonymity-results-timing/coalition q=0 D=12 N=50 start (64 vCPUs)
-2026-11-03T05:06:30Z /home/vero/anonymity-results-timing/coalition q=0 D=12 N=50 exit 0, 5 runs, below 100%: 0
-2026-11-03T05:06:30Z /home/vero/anonymity-results-timing/coalition q=0 D=12 N=100 start (64 vCPUs)
-2026-11-03T05:17:45Z /home/vero/anonymity-results-timing/coalition q=0 D=12 N=100 exit 0, 5 runs, below 100%: 0
-2026-11-03T05:17:45Z /home/vero/anonymity-results-timing/coalition q=0 D=12 N=150 start (64 vCPUs)
-2026-11-03T05:29:11Z /home/vero/anonymity-results-timing/coalition q=0 D=12 N=150 exit 0, 5 runs, below 100%: 0
-2026-11-03T05:29:11Z /home/vero/anonymity-results-timing/coalition q=0 D=12 N=200 start (64 vCPUs)
-2026-11-03T05:40:46Z /home/vero/anonymity-results-timing/coalition q=0 D=12 N=200 exit 0, 5 runs, below 100%: 0
-2026-11-03T05:40:46Z /home/vero/anonymity-results-timing/coalition q=0 D=10 N=50 start (64 vCPUs)
-2026-11-03T05:51:53Z /home/vero/anonymity-results-timing/coalition q=0 D=10 N=50 exit 0, 5 runs, below 100%: 0
-2026-11-03T05:51:53Z /home/vero/anonymity-results-timing/coalition q=0 D=10 N=100 start (64 vCPUs)
-2026-11-03T06:03:08Z /home/vero/anonymity-results-timing/coalition q=0 D=10 N=100 exit 0, 5 runs, below 100%: 0
-2026-11-03T06:03:08Z /home/vero/anonymity-results-timing/coalition q=0 D=10 N=150 start (64 vCPUs)
-2026-11-03T06:14:34Z /home/vero/anonymity-results-timing/coalition q=0 D=10 N=150 exit 0, 5 runs, below 100%: 0
-2026-11-03T06:14:34Z /home/vero/anonymity-results-timing/coalition q=0 D=10 N=200 start (64 vCPUs)
-2026-11-03T06:26:09Z /home/vero/anonymity-results-timing/coalition q=0 D=10 N=200 exit 0, 5 runs, below 100%: 0
-2026-11-03T06:26:09Z /home/vero/anonymity-results-timing/coalition q=0 D=8 N=50 start (64 vCPUs)
-2026-11-03T06:37:16Z /home/vero/anonymity-results-timing/coalition q=0 D=8 N=50 exit 0, 5 runs, below 100%: 0
-2026-11-03T06:37:16Z /home/vero/anonymity-results-timing/coalition q=0 D=8 N=100 start (64 vCPUs)
-2026-11-03T06:48:31Z /home/vero/anonymity-results-timing/coalition q=0 D=8 N=100 exit 0, 5 runs, below 100%: 0
-2026-11-03T06:48:31Z /home/vero/anonymity-results-timing/coalition q=0 D=8 N=150 start (64 vCPUs)
-2026-11-03T06:59:57Z /home/vero/anonymity-results-timing/coalition q=0 D=8 N=150 exit 0, 5 runs, below 100%: 0
-2026-11-03T06:59:57Z /home/vero/anonymity-results-timing/coalition q=0 D=8 N=200 start (64 vCPUs)
-2026-11-03T07:11:31Z /home/vero/anonymity-results-timing/coalition q=0 D=8 N=200 exit 0, 5 runs, below 100%: 0
-2026-11-03T07:11:31Z /home/vero/anonymity-results-timing/coalition q=0 D=6 N=50 start (64 vCPUs)
-2026-11-03T07:22:39Z /home/vero/anonymity-results-timing/coalition q=0 D=6 N=50 exit 0, 5 runs, below 100%: 0
-2026-11-03T07:22:39Z /home/vero/anonymity-results-timing/coalition q=0 D=6 N=100 start (64 vCPUs)
-2026-11-03T07:33:54Z /home/vero/anonymity-results-timing/coalition q=0 D=6 N=100 exit 0, 5 runs, below 100%: 0
-2026-11-03T07:33:54Z /home/vero/anonymity-results-timing/coalition q=0 D=6 N=150 start (64 vCPUs)
-2026-11-03T07:45:20Z /home/vero/anonymity-results-timing/coalition q=0 D=6 N=150 exit 0, 5 runs, below 100%: 0
-2026-11-03T07:45:20Z /home/vero/anonymity-results-timing/coalition q=0 D=6 N=200 start (64 vCPUs)
-2026-11-03T07:56:55Z /home/vero/anonymity-results-timing/coalition q=0 D=6 N=200 exit 0, 5 runs, below 100%: 0
-2026-11-03T07:56:55Z /home/vero/anonymity-results-timing/coalition q=0 DONE
-2026-11-03T07:56:55Z /home/vero/anonymity-results-timing/coalition q=0.2 D=12 N=50 start (64 vCPUs)
-2026-11-03T08:08:02Z /home/vero/anonymity-results-timing/coalition q=0.2 D=12 N=50 exit 0, 5 runs, below 100%: 0
-2026-11-03T08:08:02Z /home/vero/anonymity-results-timing/coalition q=0.2 D=12 N=100 start (64 vCPUs)
-2026-11-03T08:19:17Z /home/vero/anonymity-results-timing/coalition q=0.2 D=12 N=100 exit 0, 5 runs, below 100%: 0
-2026-11-03T08:19:17Z /home/vero/anonymity-results-timing/coalition q=0.2 D=12 N=150 start (64 vCPUs)
-2026-11-03T08:30:42Z /home/vero/anonymity-results-timing/coalition q=0.2 D=12 N=150 exit 0, 5 runs, below 100%: 0
-2026-11-03T08:30:42Z /home/vero/anonymity-results-timing/coalition q=0.2 D=12 N=200 start (64 vCPUs)
-2026-11-03T08:42:15Z /home/vero/anonymity-results-timing/coalition q=0.2 D=12 N=200 exit 0, 5 runs, below 100%: 0
-2026-11-03T08:42:15Z /home/vero/anonymity-results-timing/coalition q=0.2 D=10 N=50 start (64 vCPUs)
-2026-11-03T08:53:22Z /home/vero/anonymity-results-timing/coalition q=0.2 D=10 N=50 exit 0, 5 runs, below 100%: 0
-2026-11-03T08:53:22Z /home/vero/anonymity-results-timing/coalition q=0.2 D=10 N=100 start (64 vCPUs)
-2026-11-03T09:04:37Z /home/vero/anonymity-results-timing/coalition q=0.2 D=10 N=100 exit 0, 5 runs, below 100%: 0
-2026-11-03T09:04:37Z /home/vero/anonymity-results-timing/coalition q=0.2 D=10 N=150 start (64 vCPUs)
-2026-11-03T09:16:03Z /home/vero/anonymity-results-timing/coalition q=0.2 D=10 N=150 exit 0, 5 runs, below 100%: 0
-2026-11-03T09:16:03Z /home/vero/anonymity-results-timing/coalition q=0.2 D=10 N=200 start (64 vCPUs)
-2026-11-03T09:27:36Z /home/vero/anonymity-results-timing/coalition q=0.2 D=10 N=200 exit 0, 5 runs, below 100%: 0
-2026-11-03T09:27:36Z /home/vero/anonymity-results-timing/coalition q=0.2 D=8 N=50 start (64 vCPUs)
-2026-11-03T09:38:44Z /home/vero/anonymity-results-timing/coalition q=0.2 D=8 N=50 exit 0, 5 runs, below 100%: 0
-2026-11-03T09:38:44Z /home/vero/anonymity-results-timing/coalition q=0.2 D=8 N=100 start (64 vCPUs)
-2026-11-03T09:49:59Z /home/vero/anonymity-results-timing/coalition q=0.2 D=8 N=100 exit 0, 5 runs, below 100%: 0
-2026-11-03T09:49:59Z /home/vero/anonymity-results-timing/coalition q=0.2 D=8 N=150 start (64 vCPUs)
-2026-11-03T10:01:24Z /home/vero/anonymity-results-timing/coalition q=0.2 D=8 N=150 exit 0, 5 runs, below 100%: 0
-2026-11-03T10:01:24Z /home/vero/anonymity-results-timing/coalition q=0.2 D=8 N=200 start (64 vCPUs)
-2026-11-03T10:12:57Z /home/vero/anonymity-results-timing/coalition q=0.2 D=8 N=200 exit 0, 5 runs, below 100%: 0
-2026-11-03T10:12:57Z /home/vero/anonymity-results-timing/coalition q=0.2 D=6 N=50 start (64 vCPUs)
-2026-11-03T10:24:05Z /home/vero/anonymity-results-timing/coalition q=0.2 D=6 N=50 exit 0, 5 runs, below 100%: 0
-2026-11-03T10:24:05Z /home/vero/anonymity-results-timing/coalition q=0.2 D=6 N=100 start (64 vCPUs)
-2026-11-03T10:35:20Z /home/vero/anonymity-results-timing/coalition q=0.2 D=6 N=100 exit 0, 5 runs, below 100%: 0
-2026-11-03T10:35:20Z /home/vero/anonymity-results-timing/coalition q=0.2 D=6 N=150 start (64 vCPUs)
-2026-11-03T10:46:45Z /home/vero/anonymity-results-timing/coalition q=0.2 D=6 N=150 exit 0, 5 runs, below 100%: 0
-2026-11-03T10:46:45Z /home/vero/anonymity-results-timing/coalition q=0.2 D=6 N=200 start (64 vCPUs)
-2026-11-03T10:58:19Z /home/vero/anonymity-results-timing/coalition q=0.2 D=6 N=200 exit 0, 5 runs, below 100%: 0
-2026-11-03T10:58:19Z /home/vero/anonymity-results-timing/coalition q=0.2 DONE
-2026-11-03T10:58:19Z /home/vero/anonymity-results-timing/coalition TIMING-DONE
+2026-11-03T04:55:22Z ~/anonymity-results-timing/coalition start/resume: host labrada, kernel 6.8.0-147-generic, 64 vCPUs, 125 GiB, commit 2a85af2
+2026-11-03T04:55:22Z ~/anonymity-results-timing/coalition q=0 D=12 N=50 start (64 vCPUs)
+2026-11-03T05:06:30Z ~/anonymity-results-timing/coalition q=0 D=12 N=50 exit 0, 5 runs, below 100%: 0
+2026-11-03T05:06:30Z ~/anonymity-results-timing/coalition q=0 D=12 N=100 start (64 vCPUs)
+2026-11-03T05:17:45Z ~/anonymity-results-timing/coalition q=0 D=12 N=100 exit 0, 5 runs, below 100%: 0
+2026-11-03T05:17:45Z ~/anonymity-results-timing/coalition q=0 D=12 N=150 start (64 vCPUs)
+2026-11-03T05:29:11Z ~/anonymity-results-timing/coalition q=0 D=12 N=150 exit 0, 5 runs, below 100%: 0
+2026-11-03T05:29:11Z ~/anonymity-results-timing/coalition q=0 D=12 N=200 start (64 vCPUs)
+2026-11-03T05:40:46Z ~/anonymity-results-timing/coalition q=0 D=12 N=200 exit 0, 5 runs, below 100%: 0
+2026-11-03T05:40:46Z ~/anonymity-results-timing/coalition q=0 D=10 N=50 start (64 vCPUs)
+2026-11-03T05:51:53Z ~/anonymity-results-timing/coalition q=0 D=10 N=50 exit 0, 5 runs, below 100%: 0
+2026-11-03T05:51:53Z ~/anonymity-results-timing/coalition q=0 D=10 N=100 start (64 vCPUs)
+2026-11-03T06:03:08Z ~/anonymity-results-timing/coalition q=0 D=10 N=100 exit 0, 5 runs, below 100%: 0
+2026-11-03T06:03:08Z ~/anonymity-results-timing/coalition q=0 D=10 N=150 start (64 vCPUs)
+2026-11-03T06:14:34Z ~/anonymity-results-timing/coalition q=0 D=10 N=150 exit 0, 5 runs, below 100%: 0
+2026-11-03T06:14:34Z ~/anonymity-results-timing/coalition q=0 D=10 N=200 start (64 vCPUs)
+2026-11-03T06:26:09Z ~/anonymity-results-timing/coalition q=0 D=10 N=200 exit 0, 5 runs, below 100%: 0
+2026-11-03T06:26:09Z ~/anonymity-results-timing/coalition q=0 D=8 N=50 start (64 vCPUs)
+2026-11-03T06:37:16Z ~/anonymity-results-timing/coalition q=0 D=8 N=50 exit 0, 5 runs, below 100%: 0
+2026-11-03T06:37:16Z ~/anonymity-results-timing/coalition q=0 D=8 N=100 start (64 vCPUs)
+2026-11-03T06:48:31Z ~/anonymity-results-timing/coalition q=0 D=8 N=100 exit 0, 5 runs, below 100%: 0
+2026-11-03T06:48:31Z ~/anonymity-results-timing/coalition q=0 D=8 N=150 start (64 vCPUs)
+2026-11-03T06:59:57Z ~/anonymity-results-timing/coalition q=0 D=8 N=150 exit 0, 5 runs, below 100%: 0
+2026-11-03T06:59:57Z ~/anonymity-results-timing/coalition q=0 D=8 N=200 start (64 vCPUs)
+2026-11-03T07:11:31Z ~/anonymity-results-timing/coalition q=0 D=8 N=200 exit 0, 5 runs, below 100%: 0
+2026-11-03T07:11:31Z ~/anonymity-results-timing/coalition q=0 D=6 N=50 start (64 vCPUs)
+2026-11-03T07:22:39Z ~/anonymity-results-timing/coalition q=0 D=6 N=50 exit 0, 5 runs, below 100%: 0
+2026-11-03T07:22:39Z ~/anonymity-results-timing/coalition q=0 D=6 N=100 start (64 vCPUs)
+2026-11-03T07:33:54Z ~/anonymity-results-timing/coalition q=0 D=6 N=100 exit 0, 5 runs, below 100%: 0
+2026-11-03T07:33:54Z ~/anonymity-results-timing/coalition q=0 D=6 N=150 start (64 vCPUs)
+2026-11-03T07:45:20Z ~/anonymity-results-timing/coalition q=0 D=6 N=150 exit 0, 5 runs, below 100%: 0
+2026-11-03T07:45:20Z ~/anonymity-results-timing/coalition q=0 D=6 N=200 start (64 vCPUs)
+2026-11-03T07:56:55Z ~/anonymity-results-timing/coalition q=0 D=6 N=200 exit 0, 5 runs, below 100%: 0
+2026-11-03T07:56:55Z ~/anonymity-results-timing/coalition q=0 DONE
+2026-11-03T07:56:55Z ~/anonymity-results-timing/coalition q=0.2 D=12 N=50 start (64 vCPUs)
+2026-11-03T08:08:02Z ~/anonymity-results-timing/coalition q=0.2 D=12 N=50 exit 0, 5 runs, below 100%: 0
+2026-11-03T08:08:02Z ~/anonymity-results-timing/coalition q=0.2 D=12 N=100 start (64 vCPUs)
+2026-11-03T08:19:17Z ~/anonymity-results-timing/coalition q=0.2 D=12 N=100 exit 0, 5 runs, below 100%: 0
+2026-11-03T08:19:17Z ~/anonymity-results-timing/coalition q=0.2 D=12 N=150 start (64 vCPUs)
+2026-11-03T08:30:42Z ~/anonymity-results-timing/coalition q=0.2 D=12 N=150 exit 0, 5 runs, below 100%: 0
+2026-11-03T08:30:42Z ~/anonymity-results-timing/coalition q=0.2 D=12 N=200 start (64 vCPUs)
+2026-11-03T08:42:15Z ~/anonymity-results-timing/coalition q=0.2 D=12 N=200 exit 0, 5 runs, below 100%: 0
+2026-11-03T08:42:15Z ~/anonymity-results-timing/coalition q=0.2 D=10 N=50 start (64 vCPUs)
+2026-11-03T08:53:22Z ~/anonymity-results-timing/coalition q=0.2 D=10 N=50 exit 0, 5 runs, below 100%: 0
+2026-11-03T08:53:22Z ~/anonymity-results-timing/coalition q=0.2 D=10 N=100 start (64 vCPUs)
+2026-11-03T09:04:37Z ~/anonymity-results-timing/coalition q=0.2 D=10 N=100 exit 0, 5 runs, below 100%: 0
+2026-11-03T09:04:37Z ~/anonymity-results-timing/coalition q=0.2 D=10 N=150 start (64 vCPUs)
+2026-11-03T09:16:03Z ~/anonymity-results-timing/coalition q=0.2 D=10 N=150 exit 0, 5 runs, below 100%: 0
+2026-11-03T09:16:03Z ~/anonymity-results-timing/coalition q=0.2 D=10 N=200 start (64 vCPUs)
+2026-11-03T09:27:36Z ~/anonymity-results-timing/coalition q=0.2 D=10 N=200 exit 0, 5 runs, below 100%: 0
+2026-11-03T09:27:36Z ~/anonymity-results-timing/coalition q=0.2 D=8 N=50 start (64 vCPUs)
+2026-11-03T09:38:44Z ~/anonymity-results-timing/coalition q=0.2 D=8 N=50 exit 0, 5 runs, below 100%: 0
+2026-11-03T09:38:44Z ~/anonymity-results-timing/coalition q=0.2 D=8 N=100 start (64 vCPUs)
+2026-11-03T09:49:59Z ~/anonymity-results-timing/coalition q=0.2 D=8 N=100 exit 0, 5 runs, below 100%: 0
+2026-11-03T09:49:59Z ~/anonymity-results-timing/coalition q=0.2 D=8 N=150 start (64 vCPUs)
+2026-11-03T10:01:24Z ~/anonymity-results-timing/coalition q=0.2 D=8 N=150 exit 0, 5 runs, below 100%: 0
+2026-11-03T10:01:24Z ~/anonymity-results-timing/coalition q=0.2 D=8 N=200 start (64 vCPUs)
+2026-11-03T10:12:57Z ~/anonymity-results-timing/coalition q=0.2 D=8 N=200 exit 0, 5 runs, below 100%: 0
+2026-11-03T10:12:57Z ~/anonymity-results-timing/coalition q=0.2 D=6 N=50 start (64 vCPUs)
+2026-11-03T10:24:05Z ~/anonymity-results-timing/coalition q=0.2 D=6 N=50 exit 0, 5 runs, below 100%: 0
+2026-11-03T10:24:05Z ~/anonymity-results-timing/coalition q=0.2 D=6 N=100 start (64 vCPUs)
+2026-11-03T10:35:20Z ~/anonymity-results-timing/coalition q=0.2 D=6 N=100 exit 0, 5 runs, below 100%: 0
+2026-11-03T10:35:20Z ~/anonymity-results-timing/coalition q=0.2 D=6 N=150 start (64 vCPUs)
+2026-11-03T10:46:45Z ~/anonymity-results-timing/coalition q=0.2 D=6 N=150 exit 0, 5 runs, below 100%: 0
+2026-11-03T10:46:45Z ~/anonymity-results-timing/coalition q=0.2 D=6 N=200 start (64 vCPUs)
+2026-11-03T10:58:19Z ~/anonymity-results-timing/coalition q=0.2 D=6 N=200 exit 0, 5 runs, below 100%: 0
+2026-11-03T10:58:19Z ~/anonymity-results-timing/coalition q=0.2 DONE
+2026-11-03T10:58:19Z ~/anonymity-results-timing/coalition TIMING-DONE

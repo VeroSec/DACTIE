@@ -3,8 +3,13 @@ throughput, mean and p95 latency, loss and duplicates. Only the first receipt of
 counts; later copies are duplicates. Throughput and latency use the steady window
 [first receipt + 5 s, + 55 s).
 Usage: python3 scripts/rate_sweep_summary.py results/latency/rate-sweep-2026-11-08"""
-import csv, gzip, sys, statistics, datetime as dt
+import csv
+import datetime as dt
+import gzip
+import statistics
+import sys
 from collections import defaultdict
+
 D = sys.argv[1]
 runs = defaultdict(list)
 with gzip.open(f'{D}/raw.csv.gz', 'rt') as f:

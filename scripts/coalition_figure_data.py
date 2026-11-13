@@ -29,14 +29,15 @@ def main(out, dirs):
     cell = collections.defaultdict(list)
     for d in dirs:
         for f in sorted(glob.glob(f"{d}/adversary_*.csv")):
-            for r in csv.DictReader(open(f)):
-                if int(r["total_peers"]) > 200:
-                    continue
-                if r.get("delivery_ratio") and float(r["delivery_ratio"]) < 1:
-                    continue
-                key = (int(r["total_peers"]), int(r["mesh_n"]), int(r["mesh_n_high"]),
-                       int(r["coalition_size"]), r["estimator"])
-                cell[key].append(float(r["success_rate"]))
+            with open(f) as src:
+                for r in csv.DictReader(src):
+                    if int(r["total_peers"]) > 200:
+                        continue
+                    if r.get("delivery_ratio") and float(r["delivery_ratio"]) < 1:
+                        continue
+                    key = (int(r["total_peers"]), int(r["mesh_n"]), int(r["mesh_n_high"]),
+                           int(r["coalition_size"]), r["estimator"])
+                    cell[key].append(float(r["success_rate"]))
     configs = sorted({k[:4] for k in cell})
     with open(out, "w", newline="") as fh:
         w = csv.writer(fh)

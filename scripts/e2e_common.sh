@@ -29,10 +29,12 @@ peer_id() { grep -o 'Local PeerId: [A-Za-z0-9]*' "$W/$1.log" | head -1 | awk '{p
 # Starts PostgreSQL, the AA (with extra arguments), two archives, and ends the init phase.
 start_network() {
     rm -rf "$W"; mkdir -p "$W"
+    # A fresh database password per run, so that none is written into the repository.
+    PG_PASS=$(od -An -tx1 -N12 /dev/urandom | tr -d ' \n')
     tmux kill-session -t $S 2>/dev/null
     docker rm -f $S-pg1 $S-pg2 >/dev/null 2>&1
     for i in 1 2; do
-        docker run -d --rm --name $S-pg$i -e POSTGRES_USER=archive -e POSTGRES_PASSWORD=archivepw \
+        docker run -d --rm --name $S-pg$i -e POSTGRES_USER=archive -e POSTGRES_PASSWORD="$PG_PASS" \
             -e POSTGRES_DB=archivedb -v "$REPO/init.sql:/docker-entrypoint-initdb.d/init.sql:ro" \
             -p 127.0.0.1:$((PG_PORT + i)):5432 postgres:16 >/dev/null || fail "postgres $i"
     done
@@ -48,7 +50,7 @@ start_network() {
     AA=$(peer_id aa)
     echo "AA $AA"
     for i in 1 2; do
-        run arc$i "PGPASSWORD=archivepw $BIN/dactie-archive -K $W/arc$i -u postgres://archive@127.0.0.1:$((PG_PORT + i))/archivedb -i archive$i -a $AA -B /ip4/127.0.0.1/tcp/$AA_PORT"
+        run arc$i "PGPASSWORD=$PG_PASS $BIN/dactie-archive -K $W/arc$i -u postgres://archive@127.0.0.1:$((PG_PORT + i))/archivedb -i archive$i -a $AA -B /ip4/127.0.0.1/tcp/$AA_PORT"
     done
     sleep 8
     send aa end_init_archive

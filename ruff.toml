@@ -1,0 +1,3 @@
+# Rule 2 in CONTRIBUTING.md: every Python file passes `ruff check`, with ruff's default
+# rules. CI runs ruff 0.17.5; older versions have a different default rule set.
+required-version = ">=0.17.5"

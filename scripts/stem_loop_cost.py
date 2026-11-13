@@ -12,8 +12,10 @@ predecessor of the earliest colluding receiver; it succeeds iff that predecessor
 The success probability over a uniformly random coalition of size c (source excluded) is computed
 exactly per path (hypergeometric), so only the paths are sampled.
 """
-import random, sys
+import random
+import sys
 from math import comb
+
 
 def graph(n, rng, low=50, high=100):
     nb = [set() for _ in range(n)]
@@ -30,7 +32,7 @@ def path(src, nb, q, rule, rng, state):
     def st(v):
         if v not in state:
             succ = rng.sample(nb[v], min(2, len(nb[v])))
-            state[v] = dict(diff=rng.random() < q, succ=succ, own=rng.choice(succ) if succ else None, routes={})
+            state[v] = {'diff': rng.random() < q, 'succ': succ, 'own': rng.choice(succ) if succ else None, 'routes': {}}
         return state[v]
     seen = {src}; receipts = []; retries = 0
     s = st(src); hop = (s['own'], src)       # (next receiver, its predecessor)
