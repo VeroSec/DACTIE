@@ -15,8 +15,9 @@ use tokio::signal::unix::{signal, SignalKind};
 use tokio::sync::mpsc;
 
 mod abstswarm;
-mod myclient;
+mod db;
 mod mybehaviour;
+mod myclient;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -54,6 +55,13 @@ struct Args {
     /// could then open any signature on its own)
     #[arg(long, default_value_t = false)]
     auto_approve_open: bool,
+
+    /// Memory for gossip messages waiting to be stored, in MiB. While PostgreSQL is slower than
+    /// the gossip arriving, messages wait here instead of stalling the archive. Beyond it,
+    /// broadcasts and group messages are still forwarded but not stored; commits and proposals
+    /// always are. 64 MiB holds about 20 minutes of 1 KiB messages at 40 per second
+    #[arg(long, default_value_t = 64)]
+    db_queue_mib: usize,
 }
 
 #[tokio::main]
@@ -150,10 +158,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let behaviour = MyBehaviour::new(&key_material.get_keypair(), args.aa_id, args.aa_addr)?;
 
+    // The event loop never waits for the database: see db.rs.
+    let (db, deferred_rx) = db::Db::new(pool, args.db_queue_mib << 20);
     let mut abstswarm_builder = AbstSwarmBuilder::new(
         key_material.get_keypair(),
         instruction_rx,
-        pool,
+        db,
+        deferred_rx,
         behaviour,
         myopenmls,
     )?;

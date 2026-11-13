@@ -1,9 +1,9 @@
+use crate::db::{Db, Deferred, Row};
 use crate::mybehaviour::MyBehaviourError::PubSubBehaviourError;
-use async_trait::async_trait;
-use dactie_utils::net::{is_unroutable_addr, MESH_N, MESH_N_HIGH, MESH_N_LOW};
 use dactie_utils::admission;
-use dactie_utils::{dedup, stem};
+use dactie_utils::net::{is_unroutable_addr, MESH_N, MESH_N_HIGH, MESH_N_LOW};
 use dactie_utils::shared_structs::*;
+use dactie_utils::{dedup, stem};
 use libp2p::futures::TryStreamExt;
 use libp2p::gossipsub::{IdentTopic, MessageAcceptance};
 use libp2p::identity::{Keypair, ParseError};
@@ -43,7 +43,9 @@ fn open_request_id(signature: &[u8]) -> String {
 }
 
 /// Pending opening requests outlive restarts, so an operator can decide later.
-pub(crate) async fn ensure_pending_opens_table(pool: &sqlx::PgPool) -> Result<(), MyBehaviourError> {
+pub(crate) async fn ensure_pending_opens_table(
+    pool: &sqlx::PgPool,
+) -> Result<(), MyBehaviourError> {
     sqlx::query(
         "CREATE TABLE IF NOT EXISTS pending_opens (
             id TEXT PRIMARY KEY,
@@ -181,88 +183,8 @@ impl MyBehaviour {
     }
 
     /**
-    Function used to insert messages into the DB
+    Share inserts. Gossip messages are stored by db::Writer, off the event loop.
      **/
-    async fn insert_broadcast(
-        pool: &sqlx::PgPool,
-        id: &[u8],
-        channel: &str,
-        topic: &str,
-        data: &[u8],
-    ) -> Result<(), MyBehaviourError> {
-        let result = sqlx::query(
-            "INSERT INTO broadcast (id, channel, topic, data) VALUES ($1, $2, $3, $4)",
-        )
-            .bind(id)
-            .bind(channel.to_string())
-            .bind(topic.to_string())
-            .bind(data)
-            .execute(pool)
-            .await?;
-        log::debug!("{result:?}");
-
-        Ok(())
-    }
-
-    async fn insert_group_enc(
-        pool: &sqlx::PgPool,
-        id: &[u8],
-        group_id: &[u8],
-        data: &[u8],
-        nonce: &[u8],
-    ) -> Result<(), MyBehaviourError> {
-        let result = sqlx::query(
-            "INSERT INTO group_enc (id, group_id, data, nonce) VALUES ($1, $2, $3, $4)",
-        )
-        .bind(id)
-        .bind(group_id)
-        .bind(data)
-        .bind(nonce)
-        .execute(pool)
-        .await?;
-        log::debug!("{result:?}");
-        Ok(())
-    }
-
-    async fn insert_proposal(
-        pool: &sqlx::PgPool,
-        id: &[u8],
-        group_id: &[u8],
-        data: &[u8],
-        epoch: u64,
-    ) -> Result<(), MyBehaviourError> {
-        let result =
-            sqlx::query("INSERT INTO proposal (id, group_id, data, epoch) VALUES ($1, $2, $3, $4)")
-                .bind(id)
-                .bind(group_id)
-                .bind(data)
-                .bind(epoch as i64) //SQLX and probably Postgres do not support u64. Care has to be taken, when retrieving this value from the database
-                .execute(pool)
-                .await?;
-        log::debug!("{result:?}");
-        Ok(())
-    }
-
-    async fn insert_commit(
-        pool: &sqlx::PgPool,
-        id: &[u8],
-        group_id: &[u8],
-        commit: &[u8],
-        welcome_option: Option<&[u8]>,
-        epoch: u64,
-    ) -> Result<(), MyBehaviourError> {
-        let result = sqlx::query(
-            "INSERT INTO commit (id, group_id, commit, welcome_option, epoch) VALUES ($1, $2, $3, $4, $5)")
-            .bind(id)
-            .bind(group_id)
-            .bind(commit)
-            .bind(welcome_option)
-            .bind(epoch as i64)         //SQLX and probably Postgres do not support u64. Care has to be taken, when retrieving this value from the database
-            .execute(pool).await?;
-        log::debug!("{result:?}");
-        Ok(())
-    }
-
     async fn insert_id_enc_share(
         pool: &sqlx::PgPool,
         id: usize,
@@ -417,56 +339,75 @@ impl MyBehaviour {
         Ok(row.map(|(signature,)| signature))
     }
 
-    async fn print_pending_opens(&self, pool: &sqlx::PgPool) -> Result<(), AbstSwarmError> {
+    /// Operator command `pending`. Runs as a database task.
+    async fn print_pending_opens(pool: sqlx::PgPool) -> Result<Option<Deferred>, MyBehaviourError> {
         let rows: Vec<(String, String)> = sqlx::query_as(
             "SELECT id, to_char(received_at, 'YYYY-MM-DD HH24:MI:SS') FROM pending_opens ORDER BY received_at",
         )
-        .fetch_all(pool)
-        .await
-        .map_err(MyBehaviourError::from)?;
+        .fetch_all(&pool)
+        .await?;
         if rows.is_empty() {
             println!("No pending opening requests");
         }
         for (id, received_at) in rows {
             println!("{id}  received {received_at}");
         }
-        Ok(())
+        Ok(None)
     }
 
+    /// Operator command `approve <id>`. Runs as a database task; the event loop then computes
+    /// and sends the partial opening.
     async fn approve_open(
-        &mut self,
-        pool: &sqlx::PgPool,
-        my_open_mls: &MyOpenMls,
-        id: &str,
-    ) -> Result<(), AbstSwarmError> {
-        match Self::take_pending_open(pool, id).await? {
+        pool: sqlx::PgPool,
+        id: String,
+    ) -> Result<Option<Deferred>, MyBehaviourError> {
+        match Self::take_pending_open(&pool, &id).await? {
             Some(signature) => {
-                self.submit_open_pairings(pool, my_open_mls, signature).await?;
-                println!("Submitted this archive's partial opening for {id}");
+                let done = format!("Submitted this archive's partial opening for {id}");
+                Ok(Some(Self::read_shares(&pool, signature, Some(done)).await?))
             }
-            None => println!("No pending opening request {id}"),
+            None => {
+                println!("No pending opening request {id}");
+                Ok(None)
+            }
         }
-        Ok(())
     }
 
-    async fn deny_open(&self, pool: &sqlx::PgPool, id: &str) -> Result<(), AbstSwarmError> {
-        match Self::take_pending_open(pool, id).await? {
+    /// Operator command `deny <id>`. Runs as a database task.
+    async fn deny_open(
+        pool: sqlx::PgPool,
+        id: String,
+    ) -> Result<Option<Deferred>, MyBehaviourError> {
+        match Self::take_pending_open(&pool, &id).await? {
             Some(_) => println!("Denied opening request {id}"),
             None => println!("No pending opening request {id}"),
         }
-        Ok(())
+        Ok(None)
     }
 
-    /// Computes this archive's partial opening over every stored share, since the signer is
-    /// unknown, and hands it to the authority, which combines the partial openings.
-    async fn submit_open_pairings(
-        &mut self,
+    /// Reads every stored share for a partial opening, since the signer is unknown.
+    async fn read_shares(
         pool: &sqlx::PgPool,
+        signature: Vec<u8>,
+        done: Option<String>,
+    ) -> Result<Deferred, MyBehaviourError> {
+        Ok(Deferred::OpenPairings {
+            signature,
+            id_shares: Self::get_all_id_enc_shares(pool).await?,
+            peer_shares: Self::get_all_peer_enc_shares(pool).await?,
+            done,
+        })
+    }
+
+    /// Computes this archive's partial opening over the shares from `read_shares` and hands it
+    /// to the authority, which combines the partial openings.
+    fn submit_open_pairings(
+        &mut self,
         my_open_mls: &MyOpenMls,
         signature: Vec<u8>,
+        id_enc_shares: Vec<(usize, Vec<u8>)>,
+        peer_enc_shares: Vec<(Vec<u8>, Vec<u8>)>,
     ) -> Result<(), AbstSwarmError> {
-        let id_enc_shares = Self::get_all_id_enc_shares(pool).await?;
-        let peer_enc_shares = Self::get_all_peer_enc_shares(pool).await?;
         let enc_share_id_pairings =
             bincode::serialize(&my_open_mls.get_enc_share_pairings(id_enc_shares, &signature)?)
                 .map_err(|e| SerializationError(e.to_string()))?;
@@ -485,6 +426,32 @@ impl MyBehaviour {
             },
         );
         Ok(())
+    }
+
+    /// Finishes database work that ran in its own task.
+    fn run_deferred(
+        &mut self,
+        deferred: Deferred,
+        my_open_mls: &MyOpenMls,
+    ) -> Result<(), AbstSwarmError> {
+        match deferred {
+            Deferred::Respond { channel, response } => self
+                .request_response
+                .send_response(channel, *response)
+                .map_err(|_| SendResponseError),
+            Deferred::OpenPairings {
+                signature,
+                id_shares,
+                peer_shares,
+                done,
+            } => {
+                self.submit_open_pairings(my_open_mls, signature, id_shares, peer_shares)?;
+                if let Some(done) = done {
+                    println!("{done}");
+                }
+                Ok(())
+            }
+        }
     }
 
     fn register_identity(&mut self, peer_id: &PeerId, identity: String) {
@@ -547,10 +514,10 @@ impl MyBehaviour {
         Ok(())
     }
 
-    async fn handle_pubsub_event(
+    fn handle_pubsub_event(
         &mut self,
         event: gossipsub::Event,
-        pool: &sqlx::PgPool,
+        db: &mut Db,
         my_open_mls: &MyOpenMls,
     ) -> Result<(), AbstSwarmError> {
         match event {
@@ -577,7 +544,11 @@ impl MyBehaviour {
                     if IdentTopic::new(channel.clone()).hash() != arrived_on {
                         log::warn!("Rejecting a broadcast for {channel} that arrived on {arrived_on} from {peer_id}");
                         self.gossipsub
-                            .report_message_validation_result(&id, &peer_id, MessageAcceptance::Reject)
+                            .report_message_validation_result(
+                                &id,
+                                &peer_id,
+                                MessageAcceptance::Reject,
+                            )
                             .map_err(|_| MessageValidationError)?;
                         return Ok(());
                     }
@@ -615,17 +586,29 @@ impl MyBehaviour {
                 };
 
                 match message_body {
-                    MessageBody::BroadcastEnc { channel, data, nonce } => {
+                    MessageBody::BroadcastEnc {
+                        channel,
+                        data,
+                        nonce,
+                    } => {
                         // Archives are members of the common group, so they can
                         // read the topic; peers query them by channel only.
                         // An attribution inside is verified but not stored: archives keep
                         // CTI without the MemberID.
                         match my_open_mls.open_broadcast(&channel, data, nonce) {
                             Ok((topic, plaintext, _attributed_to)) => {
-                                Self::insert_broadcast(pool, &id.0, &channel, &topic, &plaintext).await?;
+                                db.writer.store(Row::Broadcast {
+                                    id: id.0,
+                                    channel,
+                                    topic,
+                                    data: plaintext,
+                                });
                                 println!("Got a Broadcast");
                             }
-                            Err(e @ (MyOpenMLSError::ChannelMismatch { .. } | MyOpenMLSError::AttributionInvalid { .. })) => {
+                            Err(
+                                e @ (MyOpenMLSError::ChannelMismatch { .. }
+                                | MyOpenMLSError::AttributionInvalid { .. }),
+                            ) => {
                                 log::warn!("Not storing broadcast from {peer_id}: {e}")
                             }
                             Err(e) => return Err(MLSError(e)),
@@ -641,7 +624,12 @@ impl MyBehaviour {
                         // ciphertext (see MyOpenMls::seal_group).
                         match my_open_mls.unwrap_group(enc_data, nonce) {
                             Ok((data, nonce)) => {
-                                Self::insert_group_enc(pool, &id.0, &group_id, &data, &nonce).await?;
+                                db.writer.store(Row::GroupEnc {
+                                    id: id.0,
+                                    group_id,
+                                    data,
+                                    nonce,
+                                });
                                 println!("Got a Group_Enc");
                             }
                             Err(e @ MyOpenMLSError::CommonLayerError) => {
@@ -655,7 +643,12 @@ impl MyBehaviour {
                         data,
                         epoch,
                     } => {
-                        Self::insert_proposal(pool, &id.0, &group_id, &data, epoch).await?;
+                        db.writer.store(Row::Proposal {
+                            id: id.0,
+                            group_id,
+                            data,
+                            epoch,
+                        });
                         println!("Got a Proposal");
                     }
                     MessageBody::Commit {
@@ -664,15 +657,13 @@ impl MyBehaviour {
                         welcome_option,
                         epoch,
                     } => {
-                        Self::insert_commit(
-                            pool,
-                            &id.0,
-                            &group_id,
-                            &commit,
-                            welcome_option.as_deref(),
+                        db.writer.store(Row::Commit {
+                            id: id.0,
+                            group_id: group_id.clone(),
+                            commit: commit.clone(),
+                            welcome_option,
                             epoch,
-                        )
-                        .await?;
+                        });
                         self.handle_commit(my_open_mls, group_id, commit)?;
                         println!("Got a Commit");
                     }
@@ -709,7 +700,11 @@ impl MyBehaviour {
                 for addr in listen_addrs {
                     // Skip addresses no remote host can dial (loopback, Docker bridges).
                     if is_unroutable_addr(&addr) {
-                        log::debug!("Ignoring unroutable addr from identify for {}: {}", peer_id, addr);
+                        log::debug!(
+                            "Ignoring unroutable addr from identify for {}: {}",
+                            peer_id,
+                            addr
+                        );
                         continue;
                     }
                     log::debug!("Adding received IdentifyInfo matching protocol to the DHT. Peer: {}, addr: {}", peer_id, addr);
@@ -721,11 +716,11 @@ impl MyBehaviour {
         Ok(())
     }
 
-    async fn handle_request_response_event(
+    fn handle_request_response_event(
         &mut self,
         request_event: request_response::Event<Request, Response>,
         my_open_mls: &MyOpenMls,
-        pool: &sqlx::PgPool,
+        db: &mut Db,
     ) -> Result<(), AbstSwarmError> {
         log::debug!("Received Request::Event: {:?}", request_event);
         if let request_response::Event::Message { message, peer, .. } = request_event {
@@ -768,23 +763,21 @@ impl MyBehaviour {
                     //Return Update
                     match request_body {
                         RequestMessage::Update { group_id, epoch } => {
-                            let mut messages = Vec::new();
-                            messages.append(
-                                &mut Self::get_newer_commits(pool, &group_id, epoch).await?,
-                            );
-                            messages.append(
-                                &mut Self::get_newer_proposals(pool, &group_id, epoch).await?,
-                            );
-
-                            self.request_response
-                                .send_response(
+                            let pool = db.pool.clone();
+                            db.spawn("Answering an update request", async move {
+                                let mut messages =
+                                    Self::get_newer_commits(&pool, &group_id, epoch).await?;
+                                messages.append(
+                                    &mut Self::get_newer_proposals(&pool, &group_id, epoch).await?,
+                                );
+                                Ok::<_, MyBehaviourError>(Some(Deferred::Respond {
                                     channel,
-                                    Response {
+                                    response: Box::new(Response {
                                         body: ResponseMessage::ResUpdate { group_id, messages },
                                         signature: None,
-                                    },
-                                )
-                                .map_err(|_| SendResponseError)?;
+                                    }),
+                                }))
+                            });
                         }
 
                         // Shares come from the AA only. The group signature shows only that some
@@ -802,22 +795,28 @@ impl MyBehaviour {
                             commits,
                         } => {
                             println!("Got a new ID Share");
-                            //Verify Share and Add to DB
+                            let response = Response {
+                                body: ResponseMessage::AddPeerShare,
+                                signature: None,
+                            };
+                            // A valid share is answered once it is stored; an invalid one at once.
                             if my_open_mls.verify_enc_share(&enc_share, &commits, None) {
                                 let commits = bincode::serialize(&commits).unwrap();
                                 let enc_share = enc_share.to_bytes();
-                                Self::insert_id_enc_share(pool, id, &enc_share, &commits).await?;
+                                let pool = db.pool.clone();
+                                db.spawn("Storing an ID share", async move {
+                                    Self::insert_id_enc_share(&pool, id, &enc_share, &commits)
+                                        .await?;
+                                    Ok::<_, MyBehaviourError>(Some(Deferred::Respond {
+                                        channel,
+                                        response: Box::new(response),
+                                    }))
+                                });
+                            } else {
+                                self.request_response
+                                    .send_response(channel, response)
+                                    .map_err(|_| SendResponseError)?;
                             }
-                            //Add to DB
-                            self.request_response
-                                .send_response(
-                                    channel,
-                                    Response {
-                                        body: ResponseMessage::AddPeerShare,
-                                        signature: None,
-                                    },
-                                )
-                                .map_err(|_| SendResponseError)?;
                         }
 
                         RequestMessage::AddPeerShare {
@@ -826,24 +825,31 @@ impl MyBehaviour {
                             commits,
                         } => {
                             println!("Got a new Peer Share");
-                            //Verify Share and Add to DB
+                            let response = Response {
+                                body: ResponseMessage::AddPeerShare,
+                                signature: None,
+                            };
+                            // A valid share is answered once it is stored; an invalid one at once.
                             if my_open_mls.verify_enc_share(&enc_share, &commits, None) {
                                 let commits = bincode::serialize(&commits).unwrap();
                                 let enc_share = enc_share.to_bytes();
                                 let peer_id = peer_id.to_bytes();
-                                Self::insert_peer_enc_share(pool, &peer_id, &enc_share, &commits)
+                                let pool = db.pool.clone();
+                                db.spawn("Storing a peer share", async move {
+                                    Self::insert_peer_enc_share(
+                                        &pool, &peer_id, &enc_share, &commits,
+                                    )
                                     .await?;
+                                    Ok::<_, MyBehaviourError>(Some(Deferred::Respond {
+                                        channel,
+                                        response: Box::new(response),
+                                    }))
+                                });
+                            } else {
+                                self.request_response
+                                    .send_response(channel, response)
+                                    .map_err(|_| SendResponseError)?;
                             }
-                            //Add to DB
-                            self.request_response
-                                .send_response(
-                                    channel,
-                                    Response {
-                                        body: ResponseMessage::AddPeerShare,
-                                        signature: None,
-                                    },
-                                )
-                                .map_err(|_| SendResponseError)?;
                         }
 
                         RequestMessage::JoinGroup {
@@ -875,30 +881,33 @@ impl MyBehaviour {
                         }
 
                         // The archive decides on every opening itself; the authority can only ask.
-                        RequestMessage::RequestOpen { signature } => {
-                            if my_open_mls.get_authorityid() == peer {
-                                let id = open_request_id(&signature);
-                                if *AUTO_APPROVE_OPEN.get().unwrap_or(&false) {
-                                    log::warn!(
-                                        "Auto-approving opening request {id} (--auto-approve-open)"
-                                    );
-                                    self.submit_open_pairings(pool, my_open_mls, signature)
-                                        .await?;
-                                } else {
-                                    Self::queue_open(pool, &id, &signature).await?;
-                                    println!(
-                                        "Opening request {id} from the authority is pending. Check the evidence, then run `approve {id}` or `deny {id}`."
-                                    );
-                                }
+                        RequestMessage::RequestOpen { signature }
+                            if my_open_mls.get_authorityid() == peer =>
+                        {
+                            let id = open_request_id(&signature);
+                            let pool = db.pool.clone();
+                            let response = Response {
+                                body: ResponseMessage::OpenPending,
+                                signature: None,
+                            };
+                            if *AUTO_APPROVE_OPEN.get().unwrap_or(&false) {
+                                log::warn!(
+                                    "Auto-approving opening request {id} (--auto-approve-open)"
+                                );
+                                db.spawn("Reading the shares for an opening", async move {
+                                    Self::read_shares(&pool, signature, None).await.map(Some)
+                                });
                                 self.request_response
-                                    .send_response(
-                                        channel,
-                                        Response {
-                                            body: ResponseMessage::OpenPending,
-                                            signature: None,
-                                        },
-                                    )
+                                    .send_response(channel, response)
                                     .map_err(|_| SendResponseError)?;
+                            } else {
+                                db.spawn("Queueing an opening request", async move {
+                                        Self::queue_open(&pool, &id, &signature).await?;
+                                        println!(
+                                            "Opening request {id} from the authority is pending. Check the evidence, then run `approve {id}` or `deny {id}`."
+                                        );
+                                        Ok::<_, MyBehaviourError>(Some(Deferred::Respond { channel, response: Box::new(response) }))
+                                    });
                             }
                         }
 
@@ -966,11 +975,7 @@ impl MyBehaviour {
                 None => log::warn!("Outgoing connection error (no peer id): {}", error),
                 Some(peer_id) => log::error!("Could not connect to peer '{}': {}", peer_id, error),
             },
-            SwarmEvent::ConnectionClosed {
-                peer_id,
-                cause,
-                ..
-            } => {
+            SwarmEvent::ConnectionClosed { peer_id, cause, .. } => {
                 if let Some(connerror) = cause {
                     log::error!(
                         "Connection to peer {} closed because of an error: {}",
@@ -987,12 +992,11 @@ impl MyBehaviour {
     }
 }
 
-#[async_trait]
 impl EventHandler for MyBehaviour {
-    async fn handle_event(
+    fn handle_event(
         &mut self,
         event: SwarmEvent<Self::ToSwarm>,
-        pool: &sqlx::PgPool,
+        db: &mut Db,
         my_open_mls: &MyOpenMls,
     ) {
         let connected = match &event {
@@ -1001,14 +1005,13 @@ impl EventHandler for MyBehaviour {
         };
         if let Err(e) = match event {
             SwarmEvent::Behaviour(MyBehaviourEvent::Gossipsub(event)) => {
-                self.handle_pubsub_event(*event, pool, my_open_mls).await
+                self.handle_pubsub_event(*event, db, my_open_mls)
             }
             SwarmEvent::Behaviour(MyBehaviourEvent::IdentifyEvent(e)) => {
                 self.handle_identify_event(e)
             }
             SwarmEvent::Behaviour(MyBehaviourEvent::RequestResponseEvent(e)) => {
-                self.handle_request_response_event(*e, my_open_mls, pool)
-                    .await
+                self.handle_request_response_event(*e, my_open_mls, db)
             }
             non_functional_event => self.handle_non_functional_event(non_functional_event),
         } {
@@ -1016,28 +1019,37 @@ impl EventHandler for MyBehaviour {
         }
         admission::update(&mut self.gossipsub, my_open_mls, connected.as_ref());
     }
+
+    fn handle_deferred(&mut self, deferred: Deferred, my_open_mls: &MyOpenMls) {
+        if let Err(e) = self.run_deferred(deferred, my_open_mls) {
+            log::error!("{e:?}")
+        }
+    }
 }
 
-#[async_trait]
 impl InstructionHandler for MyBehaviour {
-    async fn handle_instruction(
+    fn handle_instruction(
         &mut self,
         instruction: Instruction,
-        pool: &sqlx::PgPool,
-        my_open_mls: &MyOpenMls,
+        db: &mut Db,
+        _my_open_mls: &MyOpenMls,
     ) {
-        let result = match instruction {
+        match instruction {
             Instruction::RegisterIdentity { peer_id, identity } => {
-                self.register_identity(&peer_id, identity);
-                Ok(())
+                self.register_identity(&peer_id, identity)
             }
-            Instruction::ListPendingOpens => self.print_pending_opens(pool).await,
-            Instruction::ApproveOpen { id } => self.approve_open(pool, my_open_mls, &id).await,
-            Instruction::DenyOpen { id } => self.deny_open(pool, &id).await,
-            _ => Ok(()),
-        };
-        if let Err(e) = result {
-            log::error!("{e:?}")
+            Instruction::ListPendingOpens => db.spawn(
+                "Listing opening requests",
+                Self::print_pending_opens(db.pool.clone()),
+            ),
+            Instruction::ApproveOpen { id } => db.spawn(
+                "Approving an opening",
+                Self::approve_open(db.pool.clone(), id),
+            ),
+            Instruction::DenyOpen { id } => {
+                db.spawn("Denying an opening", Self::deny_open(db.pool.clone(), id))
+            }
+            _ => {}
         }
     }
 }
