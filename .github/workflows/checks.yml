@@ -52,6 +52,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # The env file that the bring-up writes (docs/RUNBOOK.md, Phase 4), with a placeholder.
+      - run: mkdir -p key_material && echo 'BOOT_PEER_ID=placeholder' > key_material/boot_id.env
       - run: >-
           docker compose --profile node116 --profile node117 --profile node118
           --profile node119 config --quiet

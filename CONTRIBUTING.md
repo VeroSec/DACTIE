@@ -57,3 +57,6 @@ CI builds every Dockerfile and validates `docker-compose.yml`:
 - `experiments/fabric/loadgen` and `experiments/fabric/chaincode`.
 
 A new Dockerfile gets an entry in the `docker` job of `.github/workflows/checks.yml`.
+
+The Rust version is pinned (`rust-toolchain.toml` and `FROM rust:1.99` in the Dockerfiles), so
+that a new Rust release cannot break the build unnoticed. Change both together.

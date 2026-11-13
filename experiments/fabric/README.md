@@ -39,7 +39,7 @@ cd experiments/fabric
 ./sweep.sh thakkar ../../results/fabric/rate-sweep-<date>/thakkar-20B
 ```
 
-`hosts/local.env` runs everything on one machine for a try-out; `RATES="25 100" DURATION=20 ./sweep.sh misp /tmp/try` takes about three minutes. A redeploy deletes the ledgers. To stop the network on a host: `docker compose -f network/compose.yaml --env-file build/hosts.env --profile <m1|m2|m3|m4|local> down -v` in `REMOTE_DIR` (`/opt/vero/fabric-comparison` on the minervas).
+`hosts/local.env` runs everything on one machine for a try-out; `RATES="25 100" DURATION=20 ./sweep.sh misp /tmp/try` takes about three minutes. A redeploy deletes the ledgers. To stop the network on a host: `docker compose -f network/compose.yaml --env-file build/hosts.env --profile <m1|m2|m3|m4|local> down -v` in `REMOTE_DIR` (`~/fabric-comparison` on the minervas).
 
 Each sweep directory holds:
 - `raw.csv.gz`: every commit at peer0.org1, with its block number.

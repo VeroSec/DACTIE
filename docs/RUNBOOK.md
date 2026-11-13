@@ -14,7 +14,7 @@ Last full run: 2026-10-13, all checks in Phase 9 passed.
 | minerva3 | `ssh minerva3` | 10.244.192.118 | `node118` | `db2`, `archive_node2`, `peer_2` | 5433 (loopback), 20012, 21012, 9898 |
 | minerva4 | `ssh minerva4` | 10.244.192.119 | `node119` | `peer_3`, `peer_4` | 21013, 21014, 9898, 9899 |
 
-The checkout is `/opt/vero/dactie` on all four hosts. You are in the `docker` group there, so
+The checkout is `~/dactie`, in your home directory, on all four hosts. You are in the `docker` group there, so
 nothing below needs `sudo` (which would ask for a password).
 
 ### Key material map
@@ -64,7 +64,7 @@ Run this in every minerva shell you open. `dsend` types one line into a containe
 (like attach, type, Ctrl-P Ctrl-Q); `logs` prints a container's log without color codes.
 
 ```bash
-cd /opt/vero/dactie
+cd ~/dactie
 dsend() { { printf '%s\r\n' "$2"; sleep 10; } | timeout 5 script -qfec "docker attach --sig-proxy=false $1" /dev/null >/dev/null 2>&1; }
 logs()  { docker logs "$@" 2>&1 | sed 's/\x1b\[[0-9;]*m//g'; }
 [ -f key_material/boot_id.env ] && export AA=$(sed -n 's/^BOOT_PEER_ID=//p' key_material/boot_id.env)
@@ -84,14 +84,14 @@ checkout's own `core.sshCommand` points at a GitHub deploy key.
 ```bash
 cd ~/projects/dactie
 for i in 1 2 3 4; do
-  git -c core.sshCommand=ssh push ssh://minerva$i/opt/vero/dactie main:refs/heads/public-main
+  git -c core.sshCommand=ssh push minerva$i:dactie main:refs/heads/public-main
 done
 ```
 
 **All four hosts:**
 
 ```bash
-cd /opt/vero/dactie
+cd ~/dactie
 git checkout public-main
 git log -1 --oneline        # the commit you pushed
 ```
@@ -108,14 +108,14 @@ four hosts in parallel.
 **minerva1:**
 
 ```bash
-cd /opt/vero/dactie
+cd ~/dactie
 docker build -t dactie-authority -f ./crates/dactie-authority/Dockerfile .
 ```
 
 **minerva2 and minerva3:**
 
 ```bash
-cd /opt/vero/dactie
+cd ~/dactie
 docker build -t dactie-archive -f ./crates/dactie-archive/Dockerfile .
 docker build -t dactie-peer -f ./crates/dactie-peer/Dockerfile . --build-arg FEATURES=bench
 ```
@@ -123,7 +123,7 @@ docker build -t dactie-peer -f ./crates/dactie-peer/Dockerfile . --build-arg FEA
 **minerva4:**
 
 ```bash
-cd /opt/vero/dactie
+cd ~/dactie
 docker build -t dactie-peer -f ./crates/dactie-peer/Dockerfile . --build-arg FEATURES=bench
 ```
 
@@ -135,7 +135,7 @@ The peer image needs `FEATURES=bench` for the benchmark publisher of `peer_4`.
 The key files belong to root (rule 5), so a throwaway container deletes them:
 
 ```bash
-cd /opt/vero/dactie
+cd ~/dactie
 docker compose --profile node116 --profile node117 --profile node118 --profile node119 down --remove-orphans
 mkdir -p key_material/key_material_{0..9}
 docker run --rm -v "$PWD/key_material:/km" busybox sh -c \
@@ -154,10 +154,10 @@ docker volume rm dactie_db2_data     # minerva3
 Optional, before wiping: keep a copy of the old state.
 
 ```bash
-mkdir -p /opt/vero/backups
-docker run --rm -v "$PWD/key_material:/km:ro" -v /opt/vero/backups:/backup busybox \
+mkdir -p ~/backups
+docker run --rm -v "$PWD/key_material:/km:ro" -v ~/backups:/backup busybox \
   tar czf /backup/key_material-$(date +%Y%m%d).tgz -C /km .
-docker run --rm -v dactie_db_data:/data:ro -v /opt/vero/backups:/backup busybox \
+docker run --rm -v dactie_db_data:/data:ro -v ~/backups:/backup busybox \
   tar czf /backup/dactie_db_data-$(date +%Y%m%d).tgz -C /data .     # minerva2; dactie_db2_data on minerva3
 ```
 
@@ -183,7 +183,7 @@ file may belong to root (rule 5), so it is removed first.
 AA=$(ssh minerva1 'docker logs dactie-authority_node-1 2>&1' | grep -o 'Local PeerId: [A-Za-z0-9]*' | tail -1 | awk '{print $3}')
 echo "$AA"
 for i in 1 2 3 4; do
-  ssh minerva$i "cd /opt/vero/dactie && rm -f key_material/boot_id.env && echo BOOT_PEER_ID=$AA > key_material/boot_id.env && cat key_material/boot_id.env"
+  ssh minerva$i "cd ~/dactie && rm -f key_material/boot_id.env && echo BOOT_PEER_ID=$AA > key_material/boot_id.env && cat key_material/boot_id.env"
 done
 ```
 
@@ -192,7 +192,7 @@ Then rerun the [Helpers](#helpers) block in every minerva shell, so `$AA` is set
 In each of your four minerva terminals (minerva2–4), not the AA, paste these lines:
 
 ```bash
-cd /opt/vero/dactie
+cd ~/dactie
 export AA=$(sed -n 's/^BOOT_PEER_ID=//p' key_material/boot_id.env)
 echo $AA
 ```
@@ -200,7 +200,7 @@ echo $AA
 Or the helpers block again:
 
 ```bash
-cd /opt/vero/dactie
+cd ~/dactie
 dsend() { { printf '%s\r\n' "$2"; sleep 10; } | timeout 5 script -qfec "docker attach --sig-proxy=false $1" /dev/null >/dev/null 2>&1; }
 logs()  { docker logs "$@" 2>&1 | sed 's/\x1b\[[0-9;]*m//g'; }
 [ -f key_material/boot_id.env ] && export AA=$(sed -n 's/^BOOT_PEER_ID=//p' key_material/boot_id.env)
@@ -209,7 +209,7 @@ logs()  { docker logs "$@" 2>&1 | sed 's/\x1b\[[0-9;]*m//g'; }
 ## Phase 5 — Archives
 
 The archives' database password has no default. On minerva2 and minerva3, write it once into
-`/opt/vero/dactie/.env`, where compose reads it, and keep it as long as the database volume:
+`~/dactie/.env`, where compose reads it, and keep it as long as the database volume:
 PostgreSQL stores it when the volume is created (Phase 2 deletes the volume).
 
 ```bash
@@ -453,7 +453,7 @@ throwaway one.
 
 ```bash
 docker run -dit --name dactie-peer1b --network host -e RUST_LOG=info \
-  -v /opt/vero/dactie/key_material/key_material_3:/member dactie-peer \
+  -v ~/dactie/key_material/key_material_3:/member dactie-peer \
   sh -c "/usr/src/dactie/target/release/dactie-peer -K /tmp/peer1b -b $AA -B /ip4/10.244.192.116/tcp/10001 -p 21021 --advertise-addr /ip4/10.244.192.117/tcp/21021"
 sleep 6
 dsend dactie-peer1b "get_opener_keys $AA"
@@ -511,7 +511,7 @@ out of every mesh: on **minerva4**, `logs dactie-peer_3-1 | grep -c BENCH_RX` st
 **All four hosts:**
 
 ```bash
-cd /opt/vero/dactie
+cd ~/dactie
 docker compose --profile node116 --profile node117 --profile node118 --profile node119 down --remove-orphans
 docker rm -f dactie-observer dactie-peer1b 2>/dev/null
 ```

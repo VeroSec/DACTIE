@@ -8,7 +8,7 @@
 D=${1:-latency-sweep}; mkdir -p "$D/raw"
 S="ssh -q -o BatchMode=yes -o LogLevel=ERROR -o ConnectTimeout=10 -o ServerAliveInterval=10"
 r() { local h=$1; shift; for _ in 1 2 3 4 5; do $S "$h" "$@" && return 0; sleep 3; done; return 1; }
-HP=". /opt/vero/dactie-helpers.sh"
+HP=". ~/dactie-helpers.sh"
 MISP=workloads/misp/0dc6a09d-e8d7-48fd-a3f7-f554afb8d1b3
 run() { # name file rate seconds tcp_nodelay
   local name=$1 file=$2 rate=$3 secs=$4 nd=$5 t0=""
