@@ -2074,8 +2074,8 @@ impl From<request_response::Event<StemMessage, StemAck>> for MyBehaviourEvent {
     }
 }
 
-impl From<std::convert::Infallible> for MyBehaviourEvent {
-    fn from(event: std::convert::Infallible) -> Self {
+impl From<dactie_utils::NoEvent> for MyBehaviourEvent {
+    fn from(event: dactie_utils::NoEvent) -> Self {
         match event {}
     }
 }

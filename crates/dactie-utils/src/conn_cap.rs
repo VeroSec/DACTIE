@@ -131,7 +131,7 @@ impl ConnCap {
 
 impl NetworkBehaviour for ConnCap {
     type ConnectionHandler = dummy::ConnectionHandler;
-    type ToSwarm = std::convert::Infallible;
+    type ToSwarm = crate::NoEvent;
 
     fn handle_pending_inbound_connection(
         &mut self,

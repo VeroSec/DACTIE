@@ -1,4 +1,3 @@
-use std::convert::Infallible;
 use std::io;
 use std::sync::Arc;
 use std::time::Duration;
@@ -96,7 +95,8 @@ where
     pub(crate) fn build(self) -> Result<AbstSwarm<TBehaviour>, AbstSwarmBuilderError> {
         // Build swarm as before
         let mut swarm = {
-            libp2p::SwarmBuilder::with_existing_identity(self.keypair)
+            // A ready behaviour cannot fail: with_behaviour's error type is Infallible.
+            let Ok(builder) = libp2p::SwarmBuilder::with_existing_identity(self.keypair)
                 .with_tokio()
                 .with_tcp(
                     // Nagle off by default: libp2p's default sets TCP_NODELAY to
@@ -105,7 +105,8 @@ where
                     noise::Config::new,
                     yamux::Config::default,
                 )?
-                .with_behaviour(|_| self.behaviour)?
+                .with_behaviour(|_| self.behaviour);
+            builder
                 .with_swarm_config(|c| c.with_idle_connection_timeout(Duration::from_secs(5)))
                 .build()
         };
@@ -133,11 +134,9 @@ where
 #[derive(Debug, Error)]
 pub(crate) enum AbstSwarmBuilderError {
     #[error(transparent)]
-    BuildError(#[from] TransportError<io::Error>),
+    Build(#[from] TransportError<io::Error>),
     #[error(transparent)]
-    ListenAddressError(#[from] multiaddr::Error),
+    ListenAddress(#[from] multiaddr::Error),
     #[error(transparent)]
-    TransportError(#[from] noise::Error),
-    #[error(transparent)]
-    BuildError2(#[from] Infallible),
+    Transport(#[from] noise::Error),
 }
