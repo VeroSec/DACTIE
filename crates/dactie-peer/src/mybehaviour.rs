@@ -79,6 +79,31 @@ pub(crate) mod archive_keys {
     pub(crate) fn trusted() -> &'static [PeerId] {
         TRUSTED.get().map(Vec::as_slice).unwrap_or(&[])
     }
+
+    /// The AAs besides the authority that hold a key share (`--issuer`, threshold issuance).
+    pub(crate) static ISSUERS: OnceLock<Vec<PeerId>> = OnceLock::new();
+
+    pub(crate) fn issuers() -> &'static [PeerId] {
+        ISSUERS.get().map(Vec::as_slice).unwrap_or(&[])
+    }
+
+    /// A join with several AAs: each AA's nonce as its IdentityVerified arrives, the AAs that
+    /// got their JoinKeyMaterial, and the partial credentials received so far.
+    pub(crate) struct ThresholdJoin {
+        pub(crate) id: usize,
+        pub(crate) group_key: Vec<u8>,
+        pub(crate) info: dactie_utils::shared_structs::IssuerInfo,
+        pub(crate) nonces: std::collections::HashMap<PeerId, (usize, thressig::G1)>,
+        pub(crate) sent: HashSet<PeerId>,
+        pub(crate) partials: Vec<thressig::issuers::PartialCredential>,
+        /// The archive keys are confirmed and the member's sk and shares exist.
+        pub(crate) started: bool,
+    }
+
+    pub(crate) fn threshold_join() -> &'static Mutex<Option<ThresholdJoin>> {
+        static J: OnceLock<Mutex<Option<ThresholdJoin>>> = OnceLock::new();
+        J.get_or_init(|| Mutex::new(None))
+    }
 }
 
 /// Outstanding archive queries, keyed by request id, for round-trip timing.
@@ -851,16 +876,20 @@ impl MyBehaviour {
         identity: String,
     ) -> Result<(), AbstSwarmError> {
         join_relay::start();
-        join_relay::send(
-            peer_id,
-            Request {
-                body: RequestMessage::VerifyIdentity {
-                    identity,
-                    with_signature: true,
+        *archive_keys::threshold_join().lock().unwrap() = None;
+        // With several AAs, every one of them verifies the identity and sends its nonce.
+        for aa in std::iter::once(peer_id).chain(archive_keys::issuers().iter().copied()) {
+            join_relay::send(
+                aa,
+                Request {
+                    body: RequestMessage::VerifyIdentity {
+                        identity: identity.clone(),
+                        with_signature: true,
+                    },
+                    signature: None,
                 },
-                signature: None,
-            },
-        );
+            );
+        }
         Ok(())
     }
 
@@ -1561,7 +1590,11 @@ impl MyBehaviour {
         my_open_mls.set_opener_threshold(threshold);
         my_open_mls.add_opener_pubkeys(&keys)?;
         if let Some(join) = join {
-            self.send_join_key_material(join, my_open_mls)?;
+            if archive_keys::threshold_join().lock().unwrap().is_some() {
+                self.start_threshold_join(my_open_mls)?;
+            } else {
+                self.send_join_key_material(join, my_open_mls)?;
+            }
         }
         Ok(())
     }
@@ -1589,6 +1622,64 @@ impl MyBehaviour {
                 signature: None,
             },
         );
+        Ok(())
+    }
+
+    /// The archive keys of a join with several AAs are confirmed: creates the member's sk and
+    /// shares once and sends each AA whose nonce arrived its JoinKeyMaterial.
+    fn start_threshold_join(&mut self, my_open_mls: &MyOpenMls) -> Result<(), AbstSwarmError> {
+        let (id, group_key) = {
+            let mut guard = archive_keys::threshold_join().lock().unwrap();
+            let Some(join) = guard.as_mut() else {
+                return Ok(());
+            };
+            join.started = true;
+            (join.id, join.group_key.clone())
+        };
+        my_open_mls.start_threshold_join(id, group_key.clone())?;
+        my_open_mls.set_grpkey(group_key)?;
+        my_open_mls.set_id(id)?;
+        self.send_threshold_key_material(my_open_mls)
+    }
+
+    /// Sends JoinKeyMaterial to every AA of a started threshold join that has not got it yet.
+    fn send_threshold_key_material(
+        &mut self,
+        my_open_mls: &MyOpenMls,
+    ) -> Result<(), AbstSwarmError> {
+        let due: Vec<(PeerId, thressig::G1)> = {
+            let mut guard = archive_keys::threshold_join().lock().unwrap();
+            let Some(join) = guard.as_mut().filter(|join| join.started) else {
+                return Ok(());
+            };
+            let due: Vec<_> = join
+                .nonces
+                .iter()
+                .filter(|(aa, _)| !join.sent.contains(*aa))
+                .map(|(aa, (_, n))| (*aa, n.clone()))
+                .collect();
+            join.sent.extend(due.iter().map(|(aa, _)| *aa));
+            due
+        };
+        for (aa, n) in due {
+            let (g_sk, h_sk, pi1, pi2, pi3, enc_shares, commits) =
+                my_open_mls.join_key_material_for(&n)?;
+            join_relay::send(
+                aa,
+                Request {
+                    body: RequestMessage::JoinKeyMaterial {
+                        g_sk,
+                        h_sk,
+                        pi1,
+                        pi2,
+                        pi3,
+                        enc_shares,
+                        commits,
+                    },
+                    signature: None,
+                },
+            );
+        }
         Ok(())
     }
 
@@ -1753,27 +1844,135 @@ impl MyBehaviour {
                 threshold,
                 epoch_secs,
                 peers_per_member,
+                issuers,
             } => {
-                if peer != my_open_mls.get_authorityid() {
+                let authority = my_open_mls.get_authorityid();
+                if peer != authority && !archive_keys::issuers().contains(&peer) {
+                    log::warn!("Ignoring an identity verification from {peer}, which is not an AA");
+                    return Ok(());
+                }
+                if !join_relay::active() {
                     log::warn!(
-                        "Ignoring an identity verification from {peer}, which is not the authority"
+                        "Ignoring an identity verification from {peer}: no join in progress"
                     );
                     return Ok(());
                 }
-                log::info!("Identity was verified, proceeding with memkey creation.");
+                log::info!("Identity was verified by {peer}, proceeding with memkey creation.");
                 my_open_mls.set_epoch_policy(epoch_secs, peers_per_member);
                 let (Some(n), Some(opener_pubkeys), Some(threshold)) =
                     (n, opener_pubkeys, threshold)
                 else {
                     return Ok(());
                 };
-                let join = archive_keys::PendingJoin {
-                    authority: peer,
-                    id,
-                    n,
-                    group_key,
+                let Some(info) = issuers else {
+                    // A single AA issues the whole member key.
+                    if peer != authority {
+                        log::warn!("Ignoring {peer}: it holds no key share, and only the authority issues alone");
+                        return Ok(());
+                    }
+                    let join = archive_keys::PendingJoin {
+                        authority: peer,
+                        id,
+                        n,
+                        group_key,
+                    };
+                    return self.verify_archive_keys(
+                        opener_pubkeys,
+                        threshold,
+                        Some(join),
+                        my_open_mls,
+                    );
                 };
-                self.verify_archive_keys(opener_pubkeys, threshold, Some(join), my_open_mls)?;
+                // Several AAs: collect each AA's nonce; the first answer starts the archive
+                // key check, and every AA must agree on the MemberID, group key and shares.
+                let first = {
+                    let mut guard = archive_keys::threshold_join().lock().unwrap();
+                    match guard.as_mut() {
+                        None => {
+                            *guard = Some(archive_keys::ThresholdJoin {
+                                id,
+                                group_key: group_key.clone(),
+                                info: info.clone(),
+                                nonces: std::collections::HashMap::from([(
+                                    peer,
+                                    (info.index, n.clone()),
+                                )]),
+                                sent: std::collections::HashSet::new(),
+                                partials: Vec::new(),
+                                started: false,
+                            });
+                            true
+                        }
+                        Some(join) => {
+                            if join.id != id
+                                || join.group_key != group_key
+                                || join.info.pubs != info.pubs
+                                || join.info.threshold != info.threshold
+                            {
+                                log::error!("AA {peer} disagrees with the other AAs on the MemberID, group key or key shares; ignoring it");
+                                return Ok(());
+                            }
+                            join.nonces.insert(peer, (info.index, n.clone()));
+                            false
+                        }
+                    }
+                };
+                if first {
+                    let join = archive_keys::PendingJoin {
+                        authority: peer,
+                        id,
+                        n,
+                        group_key,
+                    };
+                    self.verify_archive_keys(opener_pubkeys, threshold, Some(join), my_open_mls)?;
+                } else {
+                    self.send_threshold_key_material(my_open_mls)?;
+                }
+            }
+            ResponseMessage::PartialMemKey { ref partial } => {
+                let combined = {
+                    let mut guard = archive_keys::threshold_join().lock().unwrap();
+                    let Some(join) = guard.as_mut() else {
+                        log::warn!("Ignoring a partial credential from {peer}: no join with several AAs in progress");
+                        return Ok(());
+                    };
+                    match join.nonces.get(&peer) {
+                        Some((index, _))
+                            if *index == partial.index && join.sent.contains(&peer) => {}
+                        _ => {
+                            log::warn!("Ignoring a partial credential from {peer}, which was not asked for it");
+                            return Ok(());
+                        }
+                    }
+                    join.partials.push(partial.clone());
+                    log::info!(
+                        "Partial credential {} of {} from AA {} ({peer})",
+                        join.partials.len(),
+                        join.info.threshold,
+                        partial.index
+                    );
+                    if join.partials.len() < join.info.threshold {
+                        return Ok(());
+                    }
+                    match my_open_mls.combine_partial_credentials(
+                        &join.partials,
+                        &join.info.pubs,
+                        join.info.threshold,
+                    ) {
+                        Ok(()) => guard.take().is_some(),
+                        Err(e) => {
+                            // A bad partial is skipped; wait for one from another AA.
+                            log::warn!("Cannot combine the partial credentials yet: {e}");
+                            false
+                        }
+                    }
+                };
+                if combined {
+                    join_relay::finish();
+                    let authority = my_open_mls.get_authorityid();
+                    log::info!("Joined as a member with a credential from several AAs; registering this node as a sharing peer");
+                    self.register_self(my_open_mls, authority)?;
+                }
             }
             ResponseMessage::MemKey { ref partial_memkey } => {
                 // Only the AA hands out member keys, signed, and only during this node's join.
@@ -1794,6 +1993,8 @@ impl MyBehaviour {
                 }
             }
             ResponseMessage::PeerAdded => {}
+            // Archives answer AddIDShare to the AAs, not to peers.
+            ResponseMessage::IdShareStored { .. } | ResponseMessage::IdShareConflict { .. } => {}
             ResponseMessage::OpenerKeys {
                 opener_pubkeys,
                 threshold,
@@ -2011,7 +2212,7 @@ impl InstructionHandler for MyBehaviour {
             }
             Instruction::ReqOpen { .. } => {} //Ignore
             Instruction::Open { .. } => {}    //Ignore
-            Instruction::EndInitArchive => {} //Ignore
+            Instruction::EndInitArchive | Instruction::DealIssuers { .. } => {} //Ignore
             Instruction::ListPendingOpens
             | Instruction::ApproveOpen { .. }
             | Instruction::DenyOpen { .. } => {} //Archive-only

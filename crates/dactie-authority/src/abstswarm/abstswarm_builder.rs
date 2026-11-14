@@ -25,6 +25,8 @@ pub(crate) struct AbstSwarmBuilder<TBehaviour> {
     storage: Storage,
     // Addresses to advertise to remote peers as dialable
     external_addresses: Vec<Multiaddr>,
+    // Peers this node dials by address, e.g. the archives for an AA that holds a key share
+    peer_addresses: Vec<(libp2p::PeerId, Multiaddr)>,
 }
 
 impl<TBehaviour> AbstSwarmBuilder<TBehaviour>
@@ -50,6 +52,7 @@ where
             group_commit_rx,
             storage,
             external_addresses: Vec::new(),
+            peer_addresses: Vec::new(),
         })
     }
 
@@ -61,6 +64,12 @@ where
     /// Add a host-reachable address to advertise via Identify/Kademlia.
     pub(crate) fn add_external_address(mut self, address: Multiaddr) -> Self {
         self.external_addresses.push(address);
+        self
+    }
+
+    /// A peer to reach by address (requests to it dial it when needed).
+    pub(crate) fn add_peer_address(mut self, peer: libp2p::PeerId, address: Multiaddr) -> Self {
+        self.peer_addresses.push((peer, address));
         self
     }
 
@@ -91,6 +100,10 @@ where
         for addr in &self.external_addresses {
             log::info!("Advertising external address: {}", addr);
             libp2p::Swarm::add_external_address(&mut swarm, addr.clone());
+        }
+
+        for (peer, addr) in &self.peer_addresses {
+            swarm.add_peer_address(*peer, addr.clone());
         }
 
         log::info!("Local PeerId: {}", swarm.local_peer_id());

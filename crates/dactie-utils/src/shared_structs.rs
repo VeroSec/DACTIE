@@ -65,6 +65,11 @@ pub enum RequestMessage {
         enc_share: EncShare,
         commits: Vec<thressig::G1>,
     },
+    // Sent by the registrar AA to the archives after it split the issuing key: the PeerIDs of
+    // the other AAs, whose ID shares the archives accept as well.
+    IssuerSet {
+        issuers: Vec<PeerId>,
+    },
     //In a practical setting this could be a manual process with in person meetings etc.
     VerifyIdentity {
         identity: String,
@@ -121,6 +126,15 @@ impl Signable for RequestMessage {
     }
 }
 
+/// What a member needs to combine partial credentials (threshold issuance).
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
+pub struct IssuerInfo {
+    /// The index of the AA that sends it.
+    pub index: usize,
+    pub pubs: Vec<thressig::issuers::IssuerPub>,
+    pub threshold: usize,
+}
+
 //Different Types of Responses
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
 pub enum ResponseMessage {
@@ -142,9 +156,26 @@ pub enum ResponseMessage {
         // epoch length and slots per member and epoch, for registering sharing peers
         epoch_secs: u64,
         peers_per_member: usize,
+        // With several AAs (threshold issuance): this AA's index, every AA's public key share
+        // and how many partial credentials a member needs. None with a single AA.
+        #[serde(default)]
+        issuers: Option<IssuerInfo>,
     },
     MemKey {
         partial_memkey: Option<Vec<u8>>,
+    },
+    // One AA's part of a member's credential (threshold issuance).
+    PartialMemKey {
+        partial: thressig::issuers::PartialCredential,
+    },
+    // An archive's answer to AddIDShare: the share is stored, or equal to the stored one ...
+    IdShareStored {
+        id: usize,
+    },
+    // ... or the archive already holds a different share for this MemberID, so an AA must not
+    // issue a credential for it (Cam20's ledger: one entry per MemberID, first write wins).
+    IdShareConflict {
+        id: usize,
     },
     PeerAdded,
     AddPeerShare,
@@ -340,6 +371,13 @@ pub enum Instruction {
         signature: Vec<u8>,
     },
     EndInitArchive,
+    // Split the issuing key among n AAs with threshold t (threshold issuance), writing the
+    // other AAs' directories under dir.
+    DealIssuers {
+        n: usize,
+        t: usize,
+        dir: String,
+    },
     /// Archive operator commands for pending opening requests
     ListPendingOpens,
     ApproveOpen {

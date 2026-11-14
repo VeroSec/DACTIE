@@ -52,7 +52,7 @@ impl Asked {
                 | (Asked::JoinGroup, R::JoinGroup)
                 | (Asked::Update, R::ResUpdate { .. })
                 | (Asked::Identity, R::IdentityVerified { .. })
-                | (Asked::MemKey, R::MemKey { .. })
+                | (Asked::MemKey, R::MemKey { .. } | R::PartialMemKey { .. })
                 | (Asked::Registration, R::PeerAdded | R::PeerRefused { .. })
                 | (
                     Asked::Renewal,

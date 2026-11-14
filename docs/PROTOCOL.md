@@ -36,6 +36,7 @@ A node writes its state files (below) atomically and readable by its owner only,
 ```text
 dactie-authority -K <dir> [-p <port>] [--advertise-addr <multiaddr>]
                  [--threshold <t>] [--epoch-secs <seconds>] [--peers-per-member <k>]
+                 [--archive <multiaddr>/p2p/<PeerId> ...]
 ```
 
 | Option | Default | What it does |
@@ -46,9 +47,10 @@ dactie-authority -K <dir> [-p <port>] [--advertise-addr <multiaddr>]
 | `--threshold <t>` | strict majority, `⌊n/2⌋ + 1` | How many of the `n` archives must approve before a signature can be opened. It takes effect when `end_init_archive` closes the init phase, and is fixed from then on, because every member shares its key for it; a different value on a later start is ignored with a warning. Allowed: `1 ≤ t ≤ n`. The AA warns at `t ≤ n/2` (a minority of archives can open signatures) and at `t = n` (one unavailable archive blocks every opening). |
 | `--epoch-secs <seconds>` | `2592000` (30 days) | Epoch length. A sharing peer's registration lasts until the end of its slot tag's epoch; epochs start at multiples of this length in Unix time. Shorter epochs remove unused sharing peers sooner, but members must renew more often. |
 | `--peers-per-member <k>` | `5` | Slots per member and epoch: the most sharing peers a member can have registered at once, including the node it joined from. `m` colluding members run at most `m·k` sharing peers. |
+| `--archive <multiaddr>/p2p/<PeerId>` | none | An archive to reach by address; repeat for each. Only the AAs that hold a key share besides the registrar need it (section 8), since the archives connect to the registrar only. |
 | `-l, --load-file <file>` | | Not used. |
 
-Console: `end_init_archive` closes the init phase (section 1); `req_open <signature hex>` and `open <signature hex>` open a signature (section 7).
+Console: `end_init_archive` closes the init phase (section 1); `req_open <signature hex>` and `open <signature hex>` open a signature (section 7); `deal <n> <t> <dir>` splits the issuing key among `n` AAs (section 8).
 
 ### dactie-archive
 
@@ -314,6 +316,18 @@ Opening reveals the member behind a group signature. It needs the AA and at leas
 
 Sharing peers cannot request openings. A peer that observes misbehavior reports the signature, which the receiving console prints as hex, to the AA out of band.
 
+## 8. Several AAs (threshold issuance)
+
+By default one AA issues every member key. It can instead split its issuing key among `n` AAs, `t` of which issue a key together, so that no single AA can admit a member.
+
+1. After `end_init_archive`, the AA's operator runs `deal <n> <t> <dir>`. The AA (index 1) splits the issuing key `(x, y1, y2)` into Shamir shares, keeps share 1 and deletes the whole key. For each other AA `i` it writes `<dir>/aa<i>/`: a fresh libp2p identity (`key_material.json`) and a copy of its own state with share `i` (`storage.json`). It tells the archives the other AAs' PeerIDs (`IssuerSet`), whose ID shares they then accept. The directories hold secret key shares: copy each to its AA only, then delete it.
+2. AA `i` starts with `dactie-authority -K <dir>/aa<i> -p <port> --archive <archive address> ...`. It answers `VerifyIdentity` and `JoinKeyMaterial` and nothing else; the AA with index 1 stays the *registrar*: it registers sharing peers, commits to the common group, expires peers and runs openings.
+3. A peer joins with `--issuer <AA address>/p2p/<PeerId>` for every further AA. Its throwaway identity sends `VerifyIdentity` to every AA, and each answers with its own nonce and `issuers`: its index, every AA's public key share and `t`. After the archive keys are confirmed, the member chooses `sk` and its shares once, and sends each AA a `JoinKeyMaterial` with proofs over that AA's nonce.
+4. AA `i` checks the request as a single AA does and computes its partial credential `σ2_i = h^{x_i + y2_i·a'} · (h^sk)^{y1_i}`. Before it answers, it sends the member's shares to every archive (`AddIDShare`). An archive stores the first share per MemberID and answers `IdShareStored` for it, or for an identical one, and `IdShareConflict` for a different one. The AA sends `PartialMemKey` only when every archive answered `IdShareStored`, and records the MemberID only then. This is the scheme's ledger check: a MemberID gets one key, even if another AA is dishonest.
+5. The member checks every partial credential against that AA's public share, combines `t` of them by Lagrange interpolation into the credential a single AA would have issued, and checks it. It then registers its node with the registrar, as in section 2.
+
+Any `t` AAs can issue, the registrar included or not; registering sharing peers needs the registrar. All archives must be reachable during a join. The key is split by a dealer at setup (whoever runs `deal` could keep the key); the scheme's distributed key generation is not implemented. `scripts/e2e_threshold.sh` runs this with three AAs and `t = 2`.
+
 ## Relation to the Camenisch et al. scheme
 
-DACTIE uses the Short Threshold Dynamic Group Signatures of Camenisch, Drijvers, Lehmann, Neven and Towa (2020), with one issuer, the AA, instead of a distributed issuer and a public ledger. The member list (`gml`) lives at the AA, and the per-member opening shares live in the archives' databases. Joining follows the scheme's `GJoin` protocol: the member proves knowledge of `sk`, Shamir-shares it to the openers under ElGamal encryption, and receives a credential on `sk`. The prototype adds two steps: the member may first confirm the openers' keys with the openers themselves, and a member adding a sharing peer proves with `share_link` that the new shares hide its key, since the issuer cannot see which member asks. Signing and verification are unchanged.
+DACTIE uses the Short Threshold Dynamic Group Signatures of Camenisch, Drijvers, Lehmann, Neven and Towa (2020), with one issuer, the AA, or several (section 8, with a dealer instead of distributed key generation), and with the archives' databases instead of a public ledger. The member list (`gml`) lives at the AA, and the per-member opening shares live in the archives' databases. Joining follows the scheme's `GJoin` protocol: the member proves knowledge of `sk`, Shamir-shares it to the openers under ElGamal encryption, and receives a credential on `sk`. The prototype adds two steps: the member may first confirm the openers' keys with the openers themselves, and a member adding a sharing peer proves with `share_link` that the new shares hide its key, since the issuer cannot see which member asks. Signing and verification are unchanged.
