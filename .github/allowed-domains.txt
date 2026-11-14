@@ -5,6 +5,7 @@
 # Code hosting and package sources
 github.com
 githubusercontent.com
+ghcr.io
 golang.org
 google.golang.org
 go.uber.org

@@ -48,16 +48,15 @@ while true; do
 
     # `sudo lsof -p "$INITIAL_PID"` lists all open files for this specific PID.
     # `2>/dev/null` redirects stderr (errors like "process not found") to null.
-    # `grep -v " txt "` filters out loaded executable code and libraries for a more relevant count.
-    # `wc -l` counts the lines, effectively the number of open files.
-    # `tr -d ' '` removes any leading/trailing spaces for clean arithmetic.
-    OPEN_FILES_COUNT=$(sudo lsof -p "$INITIAL_PID" 2>/dev/null | grep -v " txt " | wc -l | tr -d ' ')
+    # `grep -vc " txt "` counts the lines without loaded executable code and libraries,
+    # effectively the number of open files.
+    OPEN_FILES_COUNT=$(sudo lsof -p "$INITIAL_PID" 2>/dev/null | grep -vc " txt ")
 
     # Ensure COUNT is not empty (it might be if lsof returns nothing)
     if [ -z "$OPEN_FILES_COUNT" ]; then
     	OPEN_FILES_COUNT=0
     fi
 
-    print_status "$INITIAL_PID" "$TOTAL_OPEN_FILES"
+    print_status "$INITIAL_PID" "$OPEN_FILES_COUNT"
 done
 

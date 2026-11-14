@@ -6,7 +6,9 @@
 set -euo pipefail
 cd /work
 set -a
+# shellcheck source=/dev/null  # written by generate.sh into build/
 source hosts.env
+# shellcheck source=/dev/null  # written by deploy.sh into build/
 source chaincode.env
 set +a
 C=/work/crypto
@@ -22,18 +24,19 @@ as_admin_of() { # org ip port
     export CORE_PEER_ADDRESS=$2:$3
 }
 
+# shellcheck disable=SC2153  # ORDERER_IP comes from hosts.env
 osnadmin channel join --channelID dactiebench --config-block /work/channel.block -o "$ORDERER_IP:7053" \
     --ca-file "$ORDERER_CA" --client-cert "$ORDERER_ADMIN/client.crt" --client-key "$ORDERER_ADMIN/client.key"
 sleep 5 # Raft elects the single orderer as leader
 
 for peer in "1 $P0ORG1_IP 7051" "2 $P0ORG2_IP 8051" "1 $P1ORG1_IP 9051" "2 $P1ORG2_IP 10051"; do
-    as_admin_of $peer
+    as_admin_of "$peer"
     peer channel join -b /work/channel.block
     peer lifecycle chaincode install /work/dactiebench.tgz
 done
 
 for peer in "1 $P0ORG1_IP 7051" "2 $P0ORG2_IP 8051"; do
-    as_admin_of $peer
+    as_admin_of "$peer"
     peer lifecycle chaincode approveformyorg -o "$ORDERER_IP:7050" --tls --cafile "$ORDERER_CA" \
         --channelID dactiebench --name dactiebench --version 1 --sequence 1 \
         --package-id "$CHAINCODE_ID" --signature-policy "$POLICY"

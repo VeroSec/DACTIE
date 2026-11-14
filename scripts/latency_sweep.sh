@@ -33,11 +33,11 @@ recreate() { # tcp_nodelay
 }
 sweep() { # prefix tcp_nodelay
   for size in 1KiB 4KiB 16KiB 64KiB 256KiB; do
-    run $1-misp-$size $MISP.$size.json 40 32 $2
-    run $1-stix-$size workloads/stix/ics-attack.$size.json 40 32 $2
+    run "$1-misp-$size" "$MISP.$size.json" 40 32 "$2"
+    run "$1-stix-$size" "workloads/stix/ics-attack.$size.json" 40 32 "$2"
   done
-  run $1-misp-full $MISP.json 5 210 $2
-  run $1-stix-full workloads/stix/ics-attack.json 5 210 $2
+  run "$1-misp-full" "$MISP.json" 5 210 "$2"
+  run "$1-stix-full" workloads/stix/ics-attack.json 5 210 "$2"
 }
 recreate true;  sweep off true
 recreate false; sweep on false

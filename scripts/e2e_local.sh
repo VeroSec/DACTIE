@@ -77,7 +77,7 @@ send p2 "broad t after-other-e2e"
 wait_count "$W/p1.log" 'after-other-e2e' 1 30
 sleep 2
 if grep -q 'same-channel-e2e' "$W/p1.log"; then fail "peer1 showed a broadcast on a topic it did not subscribe to"; fi
-ROW=$(docker exec $S-pg1 psql -U archive -d archivedb -tAc "SELECT channel, topic FROM broadcast WHERE data = convert_to('same-channel-e2e', 'UTF8')")
+ROW=$(docker exec "$S-pg1" psql -U archive -d archivedb -tAc "SELECT channel, topic FROM broadcast WHERE data = convert_to('same-channel-e2e', 'UTF8')")
 [ "$ROW" = "channel_9|other2" ] || fail "archive1 stored '$ROW' instead of channel_9|other2"
 echo "OK topic inside the ciphertext: peer1 dropped another topic of its channel, archive1 stored channel and topic"
 

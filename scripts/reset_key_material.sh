@@ -20,7 +20,7 @@ KM_ROOT="./key_material"
 
 slots=("$@")
 if [ ${#slots[@]} -eq 0 ]; then
-    mapfile -t slots < <(ls -d "$KM_ROOT"/key_material_[0-9]* 2>/dev/null | sed 's/.*key_material_//' | sort -n)
+    mapfile -t slots < <(for d in "$KM_ROOT"/key_material_[0-9]*; do [ -d "$d" ] && echo "${d##*key_material_}"; done | sort -n)
 fi
 [ ${#slots[@]} -eq 0 ] && { echo "no key_material_* directories found"; exit 1; }
 

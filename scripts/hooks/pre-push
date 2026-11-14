@@ -9,7 +9,7 @@
 root=$(git rev-parse --show-toplevel) || exit 1
 zero=0000000000000000000000000000000000000000
 status=0
-while read -r local_ref local_sha remote_ref remote_sha; do
+while read -r _ local_sha _ remote_sha; do
     [ "$local_sha" = "$zero" ] && continue # deleting a branch
     if [ "$remote_sha" = "$zero" ]; then
         python3 "$root/scripts/check_public.py" commits "$local_sha" --not --remotes || status=1
