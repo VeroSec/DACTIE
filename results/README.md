@@ -215,7 +215,8 @@ with Nagle off. Setup and results are in `docs/EVALUATION.md`.
   sweep recreated it.
 - **`latency/rate-sweep-2026-11-14/`:** `main` with the Cam20 credential (#18) and verification
   as one multi-pairing (#21, `f4e047c`), receivers `peer_1` to `peer_3`, up to 250 messages per
-  second. Its `comparison.csv` puts it beside every Fabric series below:
+  second. `thressig-bench-minerva3.txt` times signing (4.1 ms) and verifying (5.0 ms) on one
+  core of minerva3 with the same code. Its `comparison.csv` puts it beside every Fabric series below:
   `python3 experiments/fabric/compare.py results/latency/rate-sweep-2026-11-14 results/fabric/rate-sweep-2026-11-11/misp-1KiB results/fabric/rate-sweep-2026-11-11/thakkar-20B fabricidemix=results/fabric/rate-sweep-2026-11-13-idemix/idemix-misp-1KiB fabricx509rerun=results/fabric/rate-sweep-2026-11-13-idemix/x509-misp-1KiB`.
 
 The DACTIE directories hold:

@@ -279,8 +279,10 @@ per second on every block is full.
 
 **Saturation.** DACTIE saturates at about 213 messages per second. From 200 per second on,
 every receiving peer and both archives use about one full CPU core
-(`results/latency/rate-sweep-2026-11-14/cpu/`), which points to verifying the group signatures
-one after another; verifying them in parallel would raise the limit. Fabric committed every
+(`results/latency/rate-sweep-2026-11-14/cpu/`). On one core of these hosts, verifying a group
+signature takes 5.0 ms (`results/latency/rate-sweep-2026-11-14/thressig-bench-minerva3.txt`),
+so a peer that verifies them one after another manages about 200 per second; verifying them in
+parallel would raise the limit. Fabric committed every
 transaction at every rate up to 1,000 per second, with no node above 1.7 cores. Its peers check ECDSA signatures, and its clients are not
 anonymous in this setup; with anonymous clients, see below.
 
@@ -320,7 +322,8 @@ anonymous senders is its Idemix MSP.
     2.2 ms per signature, two per transaction during the run;
   - every node that checks the transaction needs 35.0 ms for the proof (a pairing check) and
     3.6 ms for the signature;
-  - a DACTIE receiver spends about 5 ms per message (one core at 213 messages per second).
+  - a DACTIE receiver needs 5.0 ms to verify a message, on one core of minerva3
+    (`results/latency/rate-sweep-2026-11-14/thressig-bench-minerva3.txt`).
 - **Saturation:**
   - Fabric with anonymous clients keeps up to about 20 transactions per second.
   - Up to 15 per second, every transaction commits within 0.92 to 0.94 s on average, against
