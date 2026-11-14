@@ -1,7 +1,7 @@
 #!/bin/bash
 # Local end-to-end run of threshold issuance: three AAs, any two of which issue a member key.
-# The AA splits its issuing key (deal 3 2) and stays the registrar; AA 2 and AA 3 start from the
-# dealt directories. A member joins with all three AAs up, a second one with AA 3 down, and a
+# The AA splits its issuing key (split_key 3 2) and stays the registrar; AA 2 and AA 3 start from
+# the directories it writes. A member joins with all three AAs up, a second one with AA 3 down, and a
 # third one with AA 2 down as well, which must fail (one partial credential is not enough).
 # The members' messages are signed and opened as with a single AA. Finally AA 2 and AA 3 issue
 # a fourth member's key while the registrar is down.
@@ -11,8 +11,8 @@ AA2_PORT=$((AA_PORT + 2))
 AA3_PORT=$((AA_PORT + 3))
 
 start_network --threshold 2
-send aa "deal 3 2 $W/issuers"
-wait_count "$W/aa.log" 'Dealt 3 key shares' 1 20
+send aa "split_key 3 2 $W/issuers"
+wait_count "$W/aa.log" 'Split the issuing key into 3 shares' 1 20
 for i in 1 2; do
     wait_count "$W/arc$i.log" 'Accepting ID shares from the AAs' 1 20
 done
@@ -27,9 +27,9 @@ wait_count "$W/aa2.log" 'Local PeerId' 1 30
 wait_count "$W/aa3.log" 'Local PeerId' 1 30
 AA2=$(peer_id aa2)
 AA3=$(peer_id aa3)
-grep -q "AA 2: PeerId $AA2" "$W/aa.log" || fail "AA 2 does not run the dealt identity"
+grep -q "AA 2: PeerId $AA2" "$W/aa.log" || fail "AA 2 does not run the identity written for it"
 PEER_ARGS="--issuer /ip4/127.0.0.1/tcp/$AA2_PORT/p2p/$AA2 --issuer /ip4/127.0.0.1/tcp/$AA3_PORT/p2p/$AA3"
-echo "OK deal: AA 2 ($AA2) and AA 3 ($AA3) run with their key shares"
+echo "OK split_key: AA 2 ($AA2) and AA 3 ($AA3) run with their key shares"
 
 join_member p1 peer1
 grep -q 'credential from several AAs' "$W/p1.log" || fail "p1 did not combine partial credentials"

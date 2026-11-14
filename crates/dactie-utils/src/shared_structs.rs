@@ -373,7 +373,7 @@ pub enum Instruction {
     EndInitArchive,
     // Split the issuing key among n AAs with threshold t (threshold issuance), writing the
     // other AAs' directories under dir.
-    DealIssuers {
+    SplitIssuingKey {
         n: usize,
         t: usize,
         dir: String,

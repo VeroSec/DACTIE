@@ -58,8 +58,8 @@ impl MyClient {
             Self::send_open(signatur, self.instruction_tx.clone()).await?;
         } else if input.starts_with("end") {
             Self::send_end_init_archive(self.instruction_tx.clone()).await?;
-        } else if input.starts_with("deal") && split.len() == 4 {
-            let instruction = Instruction::DealIssuers {
+        } else if input.starts_with("split_key") && split.len() == 4 {
+            let instruction = Instruction::SplitIssuingKey {
                 n: split[1].parse()?,
                 t: split[2].parse()?,
                 dir: split[3].to_string(),
@@ -71,7 +71,7 @@ impl MyClient {
         - req_open <signatur>: Asks the archives to open; each archive operator must approve
         - open <signatur>: Opens Signatur   
         - end_init_archive: Ends Init Phase no new archives can join
-        - deal <n> <t> <dir>: Splits the issuing key among n AAs, t of which issue together;
+        - split_key <n> <t> <dir>: Splits the issuing key among n AAs, t of which issue together;
           writes the other AAs' directories <dir>/aa2.. (secret: copy each to its AA only)"
             )
         }

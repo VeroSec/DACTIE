@@ -5,7 +5,7 @@
 //! interpolate at 0 to sigma2 = h^{x + y1 sk + y2 a'}: exactly the credential a single manager
 //! holding the whole key issues, under the same group key. Signing, verification, slot tags
 //! and opening do not change. No issuer alone, and no t - 1 of them, can issue a credential.
-//! Unlike Cam20, the key is split by a dealer (`deal_issuer_shares`), not by distributed key
+//! Unlike Cam20, one AA splits the key at setup (`split_issuing_key`), not distributed key
 //! generation; Cam20's thresholds count tolerated corruptions t_I, here t = t_I + 1 issuers sign.
 
 use crate::structs::{EncShare, Grpkey, Memkey, Mgrkey};
@@ -47,10 +47,10 @@ pub struct PartialCredential {
     pub sigma2: G1,
 }
 
-/// Splits the issuing key of `setup()` into `n` shares with threshold `t`: the dealer of a
-/// trusted setup ceremony runs this once, hands share i to issuer i and then deletes `mgrkey`.
+/// Splits the issuing key of `setup()` into `n` shares with threshold `t`. The AA that holds the
+/// key runs this once at setup, hands share i to AA i and then deletes `mgrkey`.
 /// Returns the secret shares and the public shares.
-pub fn deal_issuer_shares(
+pub fn split_issuing_key(
     mgrkey: &Mgrkey,
     grpkey: &Grpkey,
     n: usize,
@@ -268,7 +268,7 @@ mod tests {
     /// A member joins with each of `n` issuers (threshold `t`), next to 3 archives (threshold 2).
     fn join_with_issuers(n: usize, t: usize) -> Joined {
         let (grpkey, mgrkey) = setup();
-        let (shares, pubs) = deal_issuer_shares(&mgrkey, &grpkey, n, t).unwrap();
+        let (shares, pubs) = split_issuing_key(&mgrkey, &grpkey, n, t).unwrap();
         let (opener_secret_keys, opener_pubkeys): (Vec<_>, Vec<_>) =
             (0..3).map(|_| elgamal_keygen(&grpkey.g_tilde)).unzip();
         let id = 7usize;
@@ -316,11 +316,11 @@ mod tests {
     }
 
     #[test]
-    fn deal_rejects_bad_thresholds() {
+    fn split_rejects_bad_thresholds() {
         let (grpkey, mgrkey) = setup();
-        assert!(deal_issuer_shares(&mgrkey, &grpkey, 3, 0).is_err());
-        assert!(deal_issuer_shares(&mgrkey, &grpkey, 3, 4).is_err());
-        assert!(deal_issuer_shares(&mgrkey, &grpkey, 3, 3).is_ok());
+        assert!(split_issuing_key(&mgrkey, &grpkey, 3, 0).is_err());
+        assert!(split_issuing_key(&mgrkey, &grpkey, 3, 4).is_err());
+        assert!(split_issuing_key(&mgrkey, &grpkey, 3, 3).is_ok());
     }
 
     #[test]

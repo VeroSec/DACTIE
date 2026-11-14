@@ -2212,7 +2212,7 @@ impl InstructionHandler for MyBehaviour {
             }
             Instruction::ReqOpen { .. } => {} //Ignore
             Instruction::Open { .. } => {}    //Ignore
-            Instruction::EndInitArchive | Instruction::DealIssuers { .. } => {} //Ignore
+            Instruction::EndInitArchive | Instruction::SplitIssuingKey { .. } => {} //Ignore
             Instruction::ListPendingOpens
             | Instruction::ApproveOpen { .. }
             | Instruction::DenyOpen { .. } => {} //Archive-only

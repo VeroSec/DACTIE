@@ -447,9 +447,9 @@ impl MyBehaviour {
         Ok(())
     }
 
-    /// Splits the issuing key among `n` AAs with threshold `t` (console `deal`), writes the
+    /// Splits the issuing key among `n` AAs with threshold `t` (console `split_key`), writes the
     /// other AAs' directories under `dir`, and tells the archives to accept their ID shares.
-    fn deal_issuers(
+    fn split_issuing_key(
         &mut self,
         storage: &Storage,
         my_open_mls: &MyOpenMls,
@@ -457,7 +457,7 @@ impl MyBehaviour {
         t: usize,
         dir: String,
     ) -> Result<(), AbstSwarmError> {
-        let others = storage.deal(n, t, std::path::Path::new(&dir))?;
+        let others = storage.split_issuing_key(n, t, std::path::Path::new(&dir))?;
         let issuers: Vec<PeerId> = others.iter().map(|(_, peer)| *peer).collect();
         for archive in storage.get_archive_peer_ids() {
             self.request_response.send_request(
@@ -470,7 +470,9 @@ impl MyBehaviour {
         for (index, peer) in &others {
             println!("AA {index}: PeerId {peer}, directory {dir}/aa{index}");
         }
-        println!("Dealt {n} key shares, threshold {t}. Start AA i with -K {dir}/aa<i>.");
+        println!(
+            "Split the issuing key into {n} shares, threshold {t}. Start AA i with -K {dir}/aa<i>."
+        );
         Ok(())
     }
 
@@ -1122,8 +1124,8 @@ impl InstructionHandler for MyBehaviour {
                     Self::notify(notification_tx, Notification::Err(error));
                 }
             }
-            Instruction::DealIssuers { n, t, dir } => {
-                if let Err(error) = self.deal_issuers(storage, my_open_mls, n, t, dir) {
+            Instruction::SplitIssuingKey { n, t, dir } => {
+                if let Err(error) = self.split_issuing_key(storage, my_open_mls, n, t, dir) {
                     Self::notify(notification_tx, Notification::Err(error));
                 }
             }

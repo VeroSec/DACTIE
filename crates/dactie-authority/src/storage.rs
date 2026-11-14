@@ -30,7 +30,7 @@ use thressig::{FieldElement, GroupElement, G1, G2};
 pub(crate) struct Storage {
     n_store: Mutex<HashMap<PeerId, (G1, usize, String)>>,
     grpkey: Grpkey,
-    /// The whole issuing key; None once `deal` has split it among several AAs.
+    /// The whole issuing key; None once `split_issuing_key` has split it among several AAs.
     #[serde(default)]
     mgrkey: Mutex<Option<Mgrkey>>,
     gml: Mutex<HashMap<usize, String>>, //ID to Register_name
@@ -56,7 +56,7 @@ pub(crate) struct Storage {
     /// (epoch length in seconds, slots per member and epoch), set from the command line.
     #[serde(skip)]
     epoch_policy: Mutex<(u64, usize)>,
-    /// This AA's share of the issuing key after `deal` (threshold issuance).
+    /// This AA's share of the issuing key after `split_issuing_key` (threshold issuance).
     #[serde(default)]
     issuer: Mutex<Option<IssuerRole>>,
     /// Joins whose partial credential waits for every archive to store the member's shares.
@@ -68,7 +68,7 @@ pub(crate) struct Storage {
 }
 
 /// An AA's part in a threshold issuance: its key share, every AA's public share, and how many
-/// partial credentials a member needs. The AA with index 1 dealt the shares and stays the
+/// partial credentials a member needs. The AA with index 1 split the key and stays the
 /// registrar (sharing peers, the common group's MLS commits, expiry, openings).
 #[derive(Clone, Serialize, Deserialize)]
 pub(crate) struct IssuerRole {
@@ -526,7 +526,7 @@ impl Storage {
     /**
     Functions to save storage to a file.
     **/
-    /// This AA's index, every AA's public share and the threshold, after `deal`.
+    /// This AA's index, every AA's public share and the threshold, after `split_issuing_key`.
     pub(crate) fn issuer_info(&self) -> Option<IssuerInfo> {
         self.issuer.lock().unwrap().as_ref().map(|role| IssuerInfo {
             index: role.share.index,
@@ -535,7 +535,7 @@ impl Storage {
         })
     }
 
-    /// True for a single AA, and for the AA that dealt the shares (index 1): it registers
+    /// True for a single AA, and for the AA that split the key (index 1): it registers
     /// sharing peers, commits to the common group, expires peers and runs openings.
     pub(crate) fn is_registrar(&self) -> bool {
         self.issuer
@@ -545,12 +545,12 @@ impl Storage {
             .is_none_or(|role| role.share.index == 1)
     }
 
-    /// Splits the issuing key into `n` shares with threshold `t` (a dealer at setup, see
+    /// Splits the issuing key into `n` shares with threshold `t` (once, at setup, see
     /// `thressig::issuers`). Keeps share 1 and deletes the whole key; writes for each other AA
     /// a directory `<dir>/aa<i>` with a fresh identity (key_material.json) and a copy of this
     /// AA's state with share i (storage.json), to start that AA with `-K`. Returns the other
     /// AAs' PeerIDs. Only after the archive init phase, since the archive keys are copied.
-    pub(crate) fn deal(
+    pub(crate) fn split_issuing_key(
         &self,
         n: usize,
         t: usize,
@@ -559,7 +559,7 @@ impl Storage {
         let fail = |reason: String| CreateMemkeyError { reason };
         if self.get_archive_init_mode() {
             return Err(fail(
-                "end the archive init phase before dealing".to_string(),
+                "end the archive init phase before splitting the key".to_string(),
             ));
         }
         let mgrkey = self
@@ -569,7 +569,7 @@ impl Storage {
             .clone()
             .ok_or_else(|| fail("the issuing key is already split".to_string()))?;
         let (shares, pubs) =
-            thressig::issuers::deal_issuer_shares(&mgrkey, &self.grpkey, n, t).map_err(fail)?;
+            thressig::issuers::split_issuing_key(&mgrkey, &self.grpkey, n, t).map_err(fail)?;
         let mut others = Vec::new();
         for share in shares.iter().skip(1) {
             let aa_dir = dir.join(format!("aa{}", share.index));
