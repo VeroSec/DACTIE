@@ -160,10 +160,14 @@ impl Group {
 
     /// The AA's opening as in open_signature: the member, then all its sharing peers.
     pub fn open(&self, sig: &Signature, all_sj: &(AllSj, AllSj)) -> (Vec<usize>, Vec<usize>) {
-        (
-            thressig::open(sig, &self.grpkey, &self.member_ids(), &all_sj.0),
-            thressig::open(sig, &self.grpkey, &self.peer_ids(), &all_sj.1),
-        )
+        let members = thressig::open(sig, &self.grpkey, &self.member_ids(), &all_sj.0);
+        let peers = members
+            .iter()
+            .flat_map(|&member| {
+                thressig::open_peers_of(sig, &self.grpkey, member, &self.peer_ids(), &all_sj.1)
+            })
+            .collect();
+        (members, peers)
     }
 
     pub fn member_ids(&self) -> HashSet<usize> {

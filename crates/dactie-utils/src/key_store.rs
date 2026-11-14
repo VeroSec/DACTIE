@@ -5,8 +5,9 @@ use openmls_basic_credential::SignatureKeyPair;
 use serde::{Deserialize, Serialize};
 use std::fs::OpenOptions;
 use std::path::PathBuf;
+use thressig::issuers::{IssuerPub, PartialCredential};
 use thressig::structs::{EncShare, Grpkey, Memkey};
-use thressig::{create_enc_shares, join_mem1, FieldElement, G2};
+use thressig::{create_enc_shares, join_mem1, join_mem1_proofs, FieldElement, G2};
 
 pub type JoinKeyMaterial = (
     thressig::G1,
@@ -28,6 +29,13 @@ pub struct StoredKeyMaterial {
     elgamal_keypair: Option<(FieldElement, G2)>,
     signature_key_pair: SignatureKeyPair,
     id: Option<usize>,
+    /// On an archive: the AAs besides the authority whose ID shares it accepts (threshold
+    /// issuance), as the authority announced them.
+    #[serde(default)]
+    issuers: Vec<PeerId>,
+    /// During a join with several AAs: the member's shares, the same for every AA.
+    #[serde(skip)]
+    join_shares: Option<(Vec<EncShare>, Vec<thressig::G1>)>,
 }
 
 impl StoredKeyMaterial {
@@ -47,6 +55,8 @@ impl StoredKeyMaterial {
             elgamal_keypair,
             signature_key_pair,
             id,
+            issuers: Vec::new(),
+            join_shares: None,
         }
     }
 
@@ -100,10 +110,96 @@ impl StoredKeyMaterial {
             sigma1: None,
             sigma2: None,
             e1: None,
+            a: None,
+            e2: None,
         });
         self.grpkey = Some(grpkey);
         self.id = Some(id);
         Ok((g_sk, h_sk, pi1, pi2, pi3, enc_shares, commits)) //Return everything except sk
+    }
+
+    /// Starts a join with several AAs (threshold issuance): one sk and one set of shares for
+    /// all of them; `join_key_material_for` then proves them to each AA over its nonce.
+    pub fn start_threshold_join(
+        &mut self,
+        id: usize,
+        grpkey: Vec<u8>,
+        opener_pubkeys: &[G2],
+        threshold: usize,
+    ) -> Result<(), String> {
+        let grpkey = Grpkey::from_bytes(&grpkey).map_err(|e| format!("group key: {e}"))?;
+        let sk = FieldElement::random();
+        let shares = create_enc_shares(&id, &grpkey, threshold, opener_pubkeys, &sk);
+        self.memkey = Some(Memkey {
+            sk,
+            sigma1: None,
+            sigma2: None,
+            e1: None,
+            a: None,
+            e2: None,
+        });
+        self.grpkey = Some(grpkey);
+        self.id = Some(id);
+        self.join_shares = Some(shares);
+        Ok(())
+    }
+
+    /// The JoinKeyMaterial for one AA: the proofs over its nonce `n`, and the shares.
+    pub fn join_key_material_for(&self, n: &thressig::G1) -> Result<JoinKeyMaterial, String> {
+        let sk = &self.memkey.as_ref().ok_or("no join in progress")?.sk;
+        let grpkey = self.grpkey.as_ref().ok_or("no group key")?;
+        let id = self.id.ok_or("no MemberID")?;
+        let (enc_shares, commits) = self.join_shares.as_ref().ok_or("no join in progress")?;
+        let (g_sk, h_sk, pi1, pi2, pi3) = join_mem1_proofs(id, n, grpkey, sk, enc_shares, commits);
+        Ok((
+            g_sk,
+            h_sk,
+            pi1,
+            pi2,
+            pi3,
+            enc_shares.clone(),
+            commits.clone(),
+        ))
+    }
+
+    /// True once a join with several AAs has started (`start_threshold_join`).
+    pub fn threshold_join_started(&self) -> bool {
+        self.join_shares.is_some()
+    }
+
+    /// Combines `threshold` valid partial credentials of distinct AAs into the member key,
+    /// after checking that the AAs' public key shares belong to the group key.
+    pub fn combine_partial_credentials(
+        &mut self,
+        partials: &[PartialCredential],
+        pubs: &[IssuerPub],
+        threshold: usize,
+    ) -> Result<(), String> {
+        let sk = self
+            .memkey
+            .as_ref()
+            .ok_or("no join in progress")?
+            .sk
+            .clone();
+        let grpkey = self.grpkey.as_ref().ok_or("no group key")?;
+        let id = self.id.ok_or("no MemberID")?;
+        if !thressig::issuers::verify_issuer_pubs(pubs, grpkey, threshold) {
+            return Err("the AAs' public key shares do not belong to the group key".to_string());
+        }
+        let memkey =
+            thressig::issuers::combine_partials(partials, pubs, threshold, grpkey, id, &sk)?;
+        self.memkey = Some(memkey);
+        self.join_shares = None;
+        Ok(())
+    }
+
+    /// On an archive: the AAs whose ID shares it accepts besides the authority.
+    pub fn set_issuers(&mut self, issuers: Vec<PeerId>) {
+        self.issuers = issuers;
+    }
+
+    pub fn is_issuer(&self, peer: &PeerId) -> bool {
+        self.issuers.contains(peer)
     }
 
     pub fn generate_enc_shares(

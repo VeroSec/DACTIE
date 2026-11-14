@@ -189,21 +189,32 @@ impl MyBehaviour {
     /**
     Share inserts. Gossip messages are stored by db::Writer, off the event loop.
      **/
+    /// Stores a member's ID share once: the first entry per MemberID stays (Cam20's ledger).
+    /// True if the share is stored now or equal to the stored one, false if the archive holds
+    /// a different share for this MemberID.
     async fn insert_id_enc_share(
         pool: &sqlx::PgPool,
         id: usize,
         enc_share: &[u8],
         commits: &[u8],
-    ) -> Result<(), MyBehaviourError> {
-        let result =
-            sqlx::query("INSERT INTO id_shares (id, enc_share, commits) VALUES ($1, $2, $3)")
-                .bind(id as i64) //SQLX and probably Postgres do not support usize. Care has to be taken, when retrieving this value from the database
-                .bind(enc_share)
-                .bind(commits)
-                .execute(pool)
+    ) -> Result<bool, MyBehaviourError> {
+        let result = sqlx::query(
+            "INSERT INTO id_shares (id, enc_share, commits) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING",
+        )
+        .bind(id as i64) //SQLX and probably Postgres do not support usize. Care has to be taken, when retrieving this value from the database
+        .bind(enc_share)
+        .bind(commits)
+        .execute(pool)
+        .await?;
+        if result.rows_affected() == 1 {
+            return Ok(true);
+        }
+        let (stored_share, stored_commits): (Vec<u8>, Vec<u8>) =
+            sqlx::query_as("SELECT enc_share, commits FROM id_shares WHERE id = $1")
+                .bind(id as i64)
+                .fetch_one(pool)
                 .await?;
-        log::debug!("{result:?}");
-        Ok(())
+        Ok(stored_share == enc_share && stored_commits == commits)
     }
 
     async fn insert_peer_enc_share(
@@ -748,19 +759,28 @@ impl MyBehaviour {
                             .map_err(|_| SendResponseError)?;
                         return Ok(());
                     }
-                    //Verify Group Signature
-                    let (request_body, _) = match my_open_mls.verify(request) {
-                        Ok(message) => message,
-                        Err(e) => {
-                            return match e {
-                                MyOpenMLSError::SignatureInvalid { signature: mysig } => {
-                                    log::debug!(
-                                        "Got a Request with Invalid Signature: {}",
-                                        hex::encode(mysig.as_ref().to_bytes())
-                                    );
-                                    Ok(())
+                    // The other AAs of a threshold issuance hold no member key, so their ID
+                    // shares come unsigned; the connection authenticates their PeerID, which the
+                    // authority announced (IssuerSet).
+                    let request_body = if matches!(request.body, RequestMessage::AddIDShare { .. })
+                        && my_open_mls.is_issuer(&peer)
+                    {
+                        request.body
+                    } else {
+                        //Verify Group Signature
+                        match my_open_mls.verify(request) {
+                            Ok((body, _)) => body,
+                            Err(e) => {
+                                return match e {
+                                    MyOpenMLSError::SignatureInvalid { signature: mysig } => {
+                                        log::debug!(
+                                            "Got a Request with Invalid Signature: {}",
+                                            hex::encode(mysig.as_ref().to_bytes())
+                                        );
+                                        Ok(())
+                                    }
+                                    e => Err(MLSError(e)),
                                 }
-                                e => Err(MLSError(e)),
                             }
                         }
                     };
@@ -784,13 +804,36 @@ impl MyBehaviour {
                             });
                         }
 
-                        // Shares come from the AA only. The group signature shows only that some
-                        // member sent the request, and a member could otherwise attach any
-                        // PeerID to its own key, which an opening would then name.
-                        RequestMessage::AddIDShare { .. } | RequestMessage::AddPeerShare { .. }
+                        // Shares come from the AA only (ID shares also from the other AAs of a
+                        // threshold issuance that the AA announced). The group signature shows
+                        // only that some member sent the request, and a member could otherwise
+                        // attach any PeerID to its own key, which an opening would then name.
+                        RequestMessage::AddIDShare { .. }
+                            if my_open_mls.get_authorityid() != peer
+                                && !my_open_mls.is_issuer(&peer) =>
+                        {
+                            log::warn!("Ignoring an ID share from {peer}, which is not an AA");
+                        }
+                        RequestMessage::AddPeerShare { .. } | RequestMessage::IssuerSet { .. }
                             if my_open_mls.get_authorityid() != peer =>
                         {
-                            log::warn!("Ignoring a share from {peer}, which is not the authority");
+                            log::warn!(
+                                "Ignoring a request from {peer}, which is not the authority"
+                            );
+                        }
+
+                        RequestMessage::IssuerSet { issuers } => {
+                            log::info!("Accepting ID shares from the AAs {issuers:?} as well");
+                            my_open_mls.set_issuers(issuers)?;
+                            self.request_response
+                                .send_response(
+                                    channel,
+                                    Response {
+                                        body: ResponseMessage::AddPeerShare,
+                                        signature: None,
+                                    },
+                                )
+                                .map_err(|_| SendResponseError)?;
                         }
 
                         RequestMessage::AddIDShare {
@@ -799,26 +842,36 @@ impl MyBehaviour {
                             commits,
                         } => {
                             println!("Got a new ID Share");
-                            let response = Response {
-                                body: ResponseMessage::AddPeerShare,
+                            let answer = move |stored: bool| Response {
+                                body: if stored {
+                                    ResponseMessage::IdShareStored { id }
+                                } else {
+                                    ResponseMessage::IdShareConflict { id }
+                                },
                                 signature: None,
                             };
                             // A valid share is answered once it is stored; an invalid one at once.
+                            // An AA issues its (partial) credential only if every archive answers
+                            // IdShareStored, so a MemberID gets one entry and one key.
                             if my_open_mls.verify_enc_share(&enc_share, &commits, None) {
                                 let commits = bincode::serialize(&commits).unwrap();
                                 let enc_share = enc_share.to_bytes();
                                 let pool = db.pool.clone();
                                 db.spawn("Storing an ID share", async move {
-                                    Self::insert_id_enc_share(&pool, id, &enc_share, &commits)
-                                        .await?;
+                                    let stored =
+                                        Self::insert_id_enc_share(&pool, id, &enc_share, &commits)
+                                            .await?;
+                                    if !stored {
+                                        log::warn!("Refusing an ID share for member {id}: a different one is stored");
+                                    }
                                     Ok::<_, MyBehaviourError>(Some(Deferred::Respond {
                                         channel,
-                                        response: Box::new(response),
+                                        response: Box::new(answer(stored)),
                                     }))
                                 });
                             } else {
                                 self.request_response
-                                    .send_response(channel, response)
+                                    .send_response(channel, answer(false))
                                     .map_err(|_| SendResponseError)?;
                             }
                         }

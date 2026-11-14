@@ -50,6 +50,12 @@ struct Args {
     /// Slots per member and epoch (k): how many sharing peers a member can register.
     #[arg(long, default_value_t = 5)]
     peers_per_member: usize,
+
+    /// An archive to reach by address, as a multiaddr ending in /p2p/<PeerId>; repeat for each
+    /// archive. Needed by the AAs that hold a key share (threshold issuance) besides the
+    /// registrar, since the archives connect to the registrar only.
+    #[arg(long = "archive")]
+    archives: Vec<Multiaddr>,
 }
 
 #[tokio::main]
@@ -162,6 +168,16 @@ async fn main() -> Result<(), Box<dyn Error>> {
     if let Some(addr) = args.advertise_addr.clone() {
         if !addr.to_string().starts_with("/ip4/127.0.0.1/") {
             abstswarm_builder = abstswarm_builder.add_external_address(addr);
+        }
+    }
+
+    for addr in &args.archives {
+        let mut base = addr.clone();
+        match base.pop() {
+            Some(libp2p::multiaddr::Protocol::P2p(peer)) => {
+                abstswarm_builder = abstswarm_builder.add_peer_address(peer, base)
+            }
+            _ => return Err(format!("--archive {addr} must end in /p2p/<PeerId>").into()),
         }
     }
 

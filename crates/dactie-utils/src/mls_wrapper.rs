@@ -306,6 +306,59 @@ impl MyOpenMls {
         self.save_key_store()
     }
 
+    /// Starts a join with several AAs: one sk and one set of shares for the archive keys and
+    /// threshold accepted so far (see `add_opener_pubkeys`).
+    pub fn start_threshold_join(&self, id: usize, grpkey: Vec<u8>) -> Result<(), MyOpenMLSError> {
+        let opener_pubkeys = self.opener_pubkeys.lock().unwrap().clone();
+        let threshold = self.get_opener_threshold()?;
+        self.key_store
+            .lock()
+            .unwrap()
+            .start_threshold_join(id, grpkey, &opener_pubkeys, threshold)
+            .map_err(InvalidKeyMaterial)
+    }
+
+    pub fn threshold_join_started(&self) -> bool {
+        self.key_store.lock().unwrap().threshold_join_started()
+    }
+
+    /// The JoinKeyMaterial for one AA of a threshold join, over that AA's nonce.
+    pub fn join_key_material_for(
+        &self,
+        n: &thressig::G1,
+    ) -> Result<JoinKeyMaterial, MyOpenMLSError> {
+        self.key_store
+            .lock()
+            .unwrap()
+            .join_key_material_for(n)
+            .map_err(InvalidKeyMaterial)
+    }
+
+    /// Combines the AAs' partial credentials into the member key and saves it.
+    pub fn combine_partial_credentials(
+        &self,
+        partials: &[thressig::issuers::PartialCredential],
+        pubs: &[thressig::issuers::IssuerPub],
+        threshold: usize,
+    ) -> Result<(), MyOpenMLSError> {
+        self.key_store
+            .lock()
+            .unwrap()
+            .combine_partial_credentials(partials, pubs, threshold)
+            .map_err(InvalidKeyMaterial)?;
+        self.save_key_store()
+    }
+
+    /// On an archive: the AAs besides the authority whose ID shares it accepts.
+    pub fn set_issuers(&self, issuers: Vec<PeerId>) -> Result<(), MyOpenMLSError> {
+        self.key_store.lock().unwrap().set_issuers(issuers);
+        self.save_key_store()
+    }
+
+    pub fn is_issuer(&self, peer: &PeerId) -> bool {
+        self.key_store.lock().unwrap().is_issuer(peer)
+    }
+
     pub fn add_partial_memkey(&self, partial_memkey: Vec<u8>) -> Result<(), MyOpenMLSError> {
         self.key_store
             .lock()
@@ -1416,21 +1469,38 @@ impl MyOpenMls {
         thressig::verify_enc_share_correctness(enc_share, &group_key, &elgamal_pk, commits)
     }
 
-    pub fn open<K>(
+    /// The members in `gml` that made `signature`, from the archives' partial openings.
+    pub fn open(
         &self,
         signature: &Signature,
-        gml: HashSet<K>,
-        all_sj: HashMap<usize, Vec<(K, thressig::GT)>>,
-    ) -> Vec<K>
-    where
-        K: Eq + Clone,
-    {
+        gml: HashSet<usize>,
+        all_sj: HashMap<usize, Vec<(usize, thressig::GT)>>,
+    ) -> Vec<usize> {
         let group_key = match self.key_store.lock().unwrap().get_grpkey() {
             Some(v) => v,
             None => return Vec::new(),
         };
 
         thressig::open(signature, &group_key, &gml, &all_sj)
+    }
+
+    /// The sharing peers of `member`, which `open` found to have made `signature`.
+    pub fn open_peers_of<K>(
+        &self,
+        signature: &Signature,
+        member: usize,
+        peers: HashSet<K>,
+        all_sj: HashMap<usize, Vec<(K, thressig::GT)>>,
+    ) -> Vec<K>
+    where
+        K: Eq + Clone + std::hash::Hash,
+    {
+        let group_key = match self.key_store.lock().unwrap().get_grpkey() {
+            Some(v) => v,
+            None => return Vec::new(),
+        };
+
+        thressig::open_peers_of(signature, &group_key, member, &peers, &all_sj)
     }
 
     /*Encrypts a message for specific group

@@ -6,6 +6,8 @@ use crate::storage::MyStorageError::{
 use dactie_utils::key_store::StoredKeyMaterial;
 use dactie_utils::mls_wrapper::{key_package_belongs_to, MyOpenMls};
 use dactie_utils::persist;
+use dactie_utils::shared_structs::{IssuerInfo, Response};
+use libp2p::request_response::{OutboundRequestId, ResponseChannel};
 use libp2p::PeerId;
 use openmls::prelude::KeyPackage;
 use serde::{Deserialize, Serialize};
@@ -16,6 +18,7 @@ use std::io::BufReader;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use thiserror::Error;
+use thressig::issuers::{IssuerPub, IssuerShare, PartialCredential};
 use thressig::structs::{EncShare, EncSharePairing, Grpkey, Mgrkey, Signature, SlotTag};
 use thressig::{FieldElement, GroupElement, G1, G2};
 
@@ -27,7 +30,9 @@ use thressig::{FieldElement, GroupElement, G1, G2};
 pub(crate) struct Storage {
     n_store: Mutex<HashMap<PeerId, (G1, usize, String)>>,
     grpkey: Grpkey,
-    mgrkey: Mgrkey,
+    /// The whole issuing key; None once `split_issuing_key` has split it among several AAs.
+    #[serde(default)]
+    mgrkey: Mutex<Option<Mgrkey>>,
     gml: Mutex<HashMap<usize, String>>, //ID to Register_name
     path_buf: PathBuf,
     archive_peers: Mutex<Vec<PeerId>>,
@@ -51,6 +56,35 @@ pub(crate) struct Storage {
     /// (epoch length in seconds, slots per member and epoch), set from the command line.
     #[serde(skip)]
     epoch_policy: Mutex<(u64, usize)>,
+    /// This AA's share of the issuing key after `split_issuing_key` (threshold issuance).
+    #[serde(default)]
+    issuer: Mutex<Option<IssuerRole>>,
+    /// Joins whose partial credential waits for every archive to store the member's shares.
+    #[serde(skip)]
+    pending_issuance: Mutex<HashMap<usize, PendingIssuance>>,
+    /// Which pending join each AddIDShare request belongs to.
+    #[serde(skip)]
+    issuance_requests: Mutex<HashMap<OutboundRequestId, usize>>,
+}
+
+/// An AA's part in a threshold issuance: its key share, every AA's public share, and how many
+/// partial credentials a member needs. The AA with index 1 split the key and stays the
+/// registrar (sharing peers, the common group's MLS commits, expiry, openings).
+#[derive(Clone, Serialize, Deserialize)]
+pub(crate) struct IssuerRole {
+    pub(crate) share: IssuerShare,
+    pub(crate) pubs: Vec<IssuerPub>,
+    pub(crate) threshold: usize,
+}
+
+/// A join whose partial credential is ready but not yet sent: it goes out only when every
+/// archive has stored the member's shares (or holds exactly these), as Cam20's issuers check
+/// the ledger before they sign.
+pub(crate) struct PendingIssuance {
+    pub(crate) channel: ResponseChannel<Response>,
+    pub(crate) partial: PartialCredential,
+    pub(crate) name: String,
+    pub(crate) waiting: HashSet<OutboundRequestId>,
 }
 
 type OpenSignatureResult = (Vec<(usize, String)>, Vec<PeerId>);
@@ -78,7 +112,7 @@ impl Storage {
             Storage {
                 n_store: Mutex::new(HashMap::new()),
                 grpkey,
-                mgrkey,
+                mgrkey: Mutex::new(Some(mgrkey)),
                 gml: Mutex::new(gml),
                 path_buf,
                 allowed_peers: Mutex::new(Vec::new()),
@@ -91,6 +125,9 @@ impl Storage {
                 peer_epochs: Mutex::new(HashMap::new()),
                 used_tags: Mutex::new(HashMap::new()),
                 epoch_policy: Mutex::new((30 * 24 * 3600, 5)),
+                issuer: Mutex::new(None),
+                pending_issuance: Mutex::new(HashMap::new()),
+                issuance_requests: Mutex::new(HashMap::new()),
             },
             key_material,
         )
@@ -246,10 +283,12 @@ impl Storage {
         Ok(result)
     }
 
-    //Retrieves all EncShares of a signature
+    /// The sharing peers of an opened member, from the archives' partial openings with the
+    /// peers' shares.
     fn open_peers(
         &self,
         signature: &Signature,
+        member: usize,
         my_open_mls: &MyOpenMls,
     ) -> Result<Vec<PeerId>, MyStorageError> {
         let enc_share_pairings = self
@@ -269,7 +308,7 @@ impl Storage {
                     .push((id, share.pairing));
                 map
             });
-        Ok(my_open_mls.open(signature, gml, all_sj))
+        Ok(my_open_mls.open_peers_of(signature, member, gml, all_sj))
     }
 
     pub fn open_signature(
@@ -284,10 +323,13 @@ impl Storage {
         if have < need {
             return Err(NotEnoughPartialOpeningsError { have, need });
         }
-        let res = (
-            self.open_ids(&signature, my_open_mls)?,
-            self.open_peers(&signature, my_open_mls)?,
-        );
+        // Peers are matched against the opened member (their shares carry no a').
+        let ids = self.open_ids(&signature, my_open_mls)?;
+        let mut peers = Vec::new();
+        for (id, _) in &ids {
+            peers.extend(self.open_peers(&signature, *id, my_open_mls)?);
+        }
+        let res = (ids, peers);
         if !res.0.is_empty() {
             self.signature_enc_id_pairing_map
                 .lock()
@@ -443,13 +485,21 @@ impl Storage {
             peer_id: *args.peer_id,
         })?;
         let opener_pubkeys = self.opener_pubkeys.lock().unwrap().clone();
+        let mgrkey = self
+            .mgrkey
+            .lock()
+            .unwrap()
+            .clone()
+            .ok_or(CreateMemkeyError {
+                reason: "the issuing key is split among several AAs".to_string(),
+            })?;
         let mut gml_guard = self.gml.lock().unwrap();
         let part_memkey = thressig::join_mgr2(
             id,
             thressig::JoinMgr2Args {
                 gml: &mut gml_guard,
                 name,
-                mgrkey: &self.mgrkey,
+                mgrkey: &mgrkey,
                 grpkey: &self.grpkey,
                 n: &n,
                 g_sk: args.g_sk,
@@ -476,6 +526,189 @@ impl Storage {
     /**
     Functions to save storage to a file.
     **/
+    /// This AA's index, every AA's public share and the threshold, after `split_issuing_key`.
+    pub(crate) fn issuer_info(&self) -> Option<IssuerInfo> {
+        self.issuer.lock().unwrap().as_ref().map(|role| IssuerInfo {
+            index: role.share.index,
+            pubs: role.pubs.clone(),
+            threshold: role.threshold,
+        })
+    }
+
+    /// True for a single AA, and for the AA that split the key (index 1): it registers
+    /// sharing peers, commits to the common group, expires peers and runs openings.
+    pub(crate) fn is_registrar(&self) -> bool {
+        self.issuer
+            .lock()
+            .unwrap()
+            .as_ref()
+            .is_none_or(|role| role.share.index == 1)
+    }
+
+    /// Splits the issuing key into `n` shares with threshold `t` (once, at setup, see
+    /// `thressig::issuers`). Keeps share 1 and deletes the whole key; writes for each other AA
+    /// a directory `<dir>/aa<i>` with a fresh identity (key_material.json) and a copy of this
+    /// AA's state with share i (storage.json), to start that AA with `-K`. Returns the other
+    /// AAs' PeerIDs. Only after the archive init phase, since the archive keys are copied.
+    pub(crate) fn split_issuing_key(
+        &self,
+        n: usize,
+        t: usize,
+        dir: &std::path::Path,
+    ) -> Result<Vec<(usize, PeerId)>, MyStorageError> {
+        let fail = |reason: String| CreateMemkeyError { reason };
+        if self.get_archive_init_mode() {
+            return Err(fail(
+                "end the archive init phase before splitting the key".to_string(),
+            ));
+        }
+        let mgrkey = self
+            .mgrkey
+            .lock()
+            .unwrap()
+            .clone()
+            .ok_or_else(|| fail("the issuing key is already split".to_string()))?;
+        let (shares, pubs) =
+            thressig::issuers::split_issuing_key(&mgrkey, &self.grpkey, n, t).map_err(fail)?;
+        let mut others = Vec::new();
+        for share in shares.iter().skip(1) {
+            let aa_dir = dir.join(format!("aa{}", share.index));
+            std::fs::create_dir_all(&aa_dir).map_err(|e| FileAccessError {
+                reason: e.to_string(),
+            })?;
+            let copy = Storage {
+                n_store: Mutex::new(HashMap::new()),
+                grpkey: self.grpkey.clone(),
+                mgrkey: Mutex::new(None),
+                gml: Mutex::new(self.gml.lock().unwrap().clone()),
+                path_buf: aa_dir.join("storage.json"),
+                archive_peers: Mutex::new(self.get_archive_peer_ids()),
+                allowed_peers: Mutex::new(Vec::new()),
+                archive_init_mode: Mutex::new(false),
+                opener_pubkeys: Mutex::new(self.opener_pubkeys.lock().unwrap().clone()),
+                threshold: Mutex::new(self.get_threshold()),
+                signature_enc_id_pairing_map: Mutex::new(HashMap::new()),
+                signature_enc_peer_pairing_map: Mutex::new(HashMap::new()),
+                peer_epochs: Mutex::new(HashMap::new()),
+                used_tags: Mutex::new(HashMap::new()),
+                epoch_policy: Mutex::new(self.get_epoch_policy()),
+                issuer: Mutex::new(Some(IssuerRole {
+                    share: share.clone(),
+                    pubs: pubs.clone(),
+                    threshold: t,
+                })),
+                pending_issuance: Mutex::new(HashMap::new()),
+                issuance_requests: Mutex::new(HashMap::new()),
+            };
+            copy.to_file()?;
+            let key_material = StoredKeyMaterial::new(Some(self.grpkey.clone()), None, None, None);
+            key_material
+                .to_file(aa_dir.join("key_material.json"))
+                .map_err(|e| FileAccessError {
+                    reason: e.to_string(),
+                })?;
+            others.push((share.index, key_material.get_peer_id()));
+        }
+        *self.issuer.lock().unwrap() = Some(IssuerRole {
+            share: shares[0].clone(),
+            pubs,
+            threshold: t,
+        });
+        *self.mgrkey.lock().unwrap() = None;
+        self.to_file()?;
+        Ok(others)
+    }
+
+    /// One AA's partial credential for a join (threshold issuance), after the same checks as
+    /// `return_memkey`. The MemberID is not yet recorded: that happens in `commit_issued`,
+    /// once every archive has stored the member's shares.
+    pub(crate) fn issue_partial(
+        &self,
+        args: ReturnMemkeyArgs,
+    ) -> Result<(usize, String, PartialCredential), MyStorageError> {
+        let (n, id, name) = self.remove_n(args.peer_id).ok_or(GetNError {
+            peer_id: *args.peer_id,
+        })?;
+        let role = self
+            .issuer
+            .lock()
+            .unwrap()
+            .clone()
+            .ok_or(CreateMemkeyError {
+                reason: "this AA holds no key share".to_string(),
+            })?;
+        let opener_pubkeys = self.opener_pubkeys.lock().unwrap().clone();
+        let mut gml = self.gml.lock().unwrap().clone();
+        let partial = thressig::issuers::join_issuer2(
+            id,
+            thressig::issuers::JoinIssuer2Args {
+                gml: &mut gml,
+                name: name.clone(),
+                share: &role.share,
+                grpkey: &self.grpkey,
+                n: &n,
+                g_sk: args.g_sk,
+                h_sk: args.h_sk,
+                opener_pubkeys: &opener_pubkeys,
+                commits: args.commits,
+                pi1: args.pi1,
+                pi2: args.pi2,
+                pi3: args.pi3,
+                enc_shares: args.enc_shares,
+            },
+        )
+        .map_err(|reason| CreateMemkeyError { reason })?;
+        Ok((id, name, partial))
+    }
+
+    /// Records an issued MemberID; false if it was recorded meanwhile (then send nothing).
+    pub(crate) fn commit_issued(&self, id: usize, name: String) -> Result<bool, MyStorageError> {
+        {
+            let mut gml = self.gml.lock().unwrap();
+            if gml.contains_key(&id) {
+                return Ok(false);
+            }
+            gml.insert(id, name);
+        }
+        self.to_file()?;
+        Ok(true)
+    }
+
+    pub(crate) fn add_pending_issuance(&self, id: usize, pending: PendingIssuance) {
+        let mut requests = self.issuance_requests.lock().unwrap();
+        for request in &pending.waiting {
+            requests.insert(*request, id);
+        }
+        self.pending_issuance.lock().unwrap().insert(id, pending);
+    }
+
+    /// An archive's answer to one of a pending join's AddIDShare requests. Returns the join
+    /// once every archive has stored the shares; drops it at the first refusal or failure.
+    pub(crate) fn issuance_answer(
+        &self,
+        request: OutboundRequestId,
+        stored: bool,
+    ) -> Option<(usize, PendingIssuance)> {
+        let id = self.issuance_requests.lock().unwrap().remove(&request)?;
+        let mut pending = self.pending_issuance.lock().unwrap();
+        if !stored {
+            if let Some(dropped) = pending.remove(&id) {
+                let mut requests = self.issuance_requests.lock().unwrap();
+                for other in dropped.waiting {
+                    requests.remove(&other);
+                }
+            }
+            return None;
+        }
+        let join = pending.get_mut(&id)?;
+        join.waiting.remove(&request);
+        if join.waiting.is_empty() {
+            pending.remove(&id).map(|join| (id, join))
+        } else {
+            None
+        }
+    }
+
     pub(crate) fn to_file(&self) -> Result<(), MyStorageError> {
         // Writing in place would turn any mid-write failure into an unparseable storage.json
         // that the authority cannot start from. The file holds the group manager key, so it

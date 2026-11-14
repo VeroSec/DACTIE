@@ -20,7 +20,7 @@ All statements describe the code in this repository. Message names refer to `cra
 | Throwaway join identity | Fresh libp2p key a peer joins from; the only PeerID the AA links to a name, used once and dropped (`crates/dactie-peer/src/join_relay.rs`) | joining peer, briefly |
 | MemberID | Numeric ID derived by hashing the name a member registers with | AA (`gml`: MemberID → name) |
 | Group public key / manager key | Keys of the threshold dynamic group signature scheme (`thressig`, Camenisch et al. 2020, single-issuer variant) | AA (manager key); all nodes (group key) |
-| Member key | Member secret `sk` plus the AA's credential `(σ1, σ2, e1)` on it, with `σ1 = g^{H0(MemberID)}`; signing randomizes the credential, except for the attribution inside an attributed message (section 4) | member peers (`key_material.json`) |
+| Member key | Member secret `sk` plus the AA's credential on it, as in Cam20 (section 4.1): `(a', σ1, σ2)` with `(a', h) = H0(MemberID)`, `σ1 = h` hashed into G1 and `σ2 = h^{x + y1·sk + y2·a'}`, and the cached pairings `e1`, `e2`; signing randomizes the credential, except for the attribution inside an attributed message (section 4) | member peers (`key_material.json`) |
 | Slot tag | `H(epoch, slot)^sk` for one of a member's `k` slots per epoch; registers or renews one sharing peer, unlinkable to the member (section 3) | AA (used tags of the current epochs); member (`slots.json` next to `key_material.json`) |
 | Opener key | ElGamal key pair in G2, one per archive | archive (secret key); AA and peers (public key, with the archive's PeerID) |
 | MLS credential | MLS basic credential holding the PeerID bytes | each node |
@@ -36,6 +36,7 @@ A node writes its state files (below) atomically and readable by its owner only,
 ```text
 dactie-authority -K <dir> [-p <port>] [--advertise-addr <multiaddr>]
                  [--threshold <t>] [--epoch-secs <seconds>] [--peers-per-member <k>]
+                 [--archive <multiaddr>/p2p/<PeerId> ...]
 ```
 
 | Option | Default | What it does |
@@ -46,9 +47,10 @@ dactie-authority -K <dir> [-p <port>] [--advertise-addr <multiaddr>]
 | `--threshold <t>` | strict majority, `⌊n/2⌋ + 1` | How many of the `n` archives must approve before a signature can be opened. It takes effect when `end_init_archive` closes the init phase, and is fixed from then on, because every member shares its key for it; a different value on a later start is ignored with a warning. Allowed: `1 ≤ t ≤ n`. The AA warns at `t ≤ n/2` (a minority of archives can open signatures) and at `t = n` (one unavailable archive blocks every opening). |
 | `--epoch-secs <seconds>` | `2592000` (30 days) | Epoch length. A sharing peer's registration lasts until the end of its slot tag's epoch; epochs start at multiples of this length in Unix time. Shorter epochs remove unused sharing peers sooner, but members must renew more often. |
 | `--peers-per-member <k>` | `5` | Slots per member and epoch: the most sharing peers a member can have registered at once, including the node it joined from. `m` colluding members run at most `m·k` sharing peers. |
+| `--archive <multiaddr>/p2p/<PeerId>` | none | An archive to reach by address; repeat for each. Only the AAs that hold a key share besides the registrar need it (section 8), since the archives connect to the registrar only. |
 | `-l, --load-file <file>` | | Not used. |
 
-Console: `end_init_archive` closes the init phase (section 1); `req_open <signature hex>` and `open <signature hex>` open a signature (section 7).
+Console: `end_init_archive` closes the init phase (section 1); `req_open <signature hex>` and `open <signature hex>` open a signature (section 7); `split_key <n> <t> <dir>` splits the issuing key among `n` AAs (section 8).
 
 ### dactie-archive
 
@@ -110,7 +112,7 @@ All nodes use libp2p over TCP with Noise and Yamux. GossipSub is configured as f
 - Maximum message size 8 MiB, instead of the default 64 KiB that silently dropped complete MISP events.
 - Sharing peers use `flood_publish(false)` and `MessageAuthenticity::Anonymous`. Without flood publishing, a new message leaves its publisher only towards its mesh peers. Anonymous authenticity puts no author or sequence number into gossip messages.
 - All nodes use the mesh band `mesh_n_low = 10`, `mesh_n = 12`, `mesh_n_high = 24` (`crates/dactie-utils/src/net.rs`). GossipSub grafts only below `mesh_n_low` and prunes only above `mesh_n_high`, so the paper's anonymity bound is evaluated at `mesh_n_high`. The experiments in `experiments/anonymity` and `experiments/eclipse` set the band themselves with `-D`, `--mesh-n-low` and `--mesh-n-high`.
-- Gossip emission (IHAVE/IWANT) is off in all nodes (`gossip_lazy = 0`, `gossip_factor = 0`, same file), so messages travel only along the mesh. The anonymity experiments ran with libp2p's defaults (`--gossip-lazy 6`, `--gossip-factor 0.25`); gossip can only add direct receipts of a source's message, so their results bound the nodes' setting from above.
+- Gossip emission (IHAVE/IWANT) uses libp2p's defaults (`gossip_lazy = 6`, `gossip_factor = 0.25`, same file): it is GossipSub's repair path. Turning it off was tried (#16) and reverted: in the eclipse experiment it let attackers who drop a victim's messages cut the victim off far more often (97 vs 26 of 375 runs, and with up to 22 instead of 7 honest peers), and large networks under attack delivered only partly; there was no measurable anonymity gain, since a source reached at most D peers directly with emission on as well. Data: `results/eclipse/`.
 
 ### Admission to GossipSub
 
@@ -201,7 +203,7 @@ sequenceDiagram
 2. **Join parameters.** The AA replies `IdentityVerified` with the MemberID, `n`, the group public key, every archive's opener key paired with its PeerID, `t`, the epoch length and `k`.
 3. **Archive key check.** If the peer was started with `--archive <multiaddr>/p2p/<PeerID>` (repeatable), it asks each listed archive for its key directly (`RequestOpenerKeys` → `ArchiveOpenerKey`), also from the throwaway identity, and compares it with the key the AA sent. On a mismatch, the peer abandons the join. This keeps a dishonest AA from substituting archive keys it controls. Without `--archive`, the peer logs a warning and trusts the AA's keys.
 4. **Key material** (`thressig::join_mem1`, `create_enc_shares`). The peer
-   - chooses its secret `sk` and computes `g^sk` and `h^sk` with `h = g^{H0(MemberID)}`;
+   - chooses its secret `sk` and computes `g^sk` and `h^sk`, where `h` is the base of `H0(MemberID)`, hashed into G1;
    - proves knowledge of both discrete logarithms, bound to `n` (`π1`, `π2`);
    - blinds `h` with a random `α` and Shamir-shares `sk` with a polynomial of degree `t − 1`, publishing `t` Feldman commitments under the blinded base;
    - encrypts share `i` with archive `i`'s ElGamal key and attaches a proof that the ciphertext matches the commitments;
@@ -261,7 +263,7 @@ A receiver first rejects a `BroadcastEnc` whose signed channel differs from the 
 
 Messages are anonymous: neither the gossip message nor the group signature identifies the sender.
 
-**Attribution.** A sender who wants a message attributed to it, e.g. to build reputation, uses `attr_broad <topic> <msg>` or `attr_enc_broad <group> <msg>`. The gossip message is signed anonymously like any other, so relays and archives validate it alike and cannot tell it is attributed. Inside the plaintext, the peer adds an `Attribution { member_id, signature }`: a signature without randomizing its credential (`thressig::sign_attributed`) over the context (the channel, or the private group's ID), the topic (empty in a private group), the data and the MemberID. Its `σ1` stays `h = g^{H0(MemberID)}`, which anyone can compute from the MemberID, so it must not travel in clear: inside the ciphertext, only the common group (broadcasts) or the private group (`enc_broad`) sees it. A receiver decrypts, verifies the signature and checks `σ1 = h` (`thressig::signed_by`), so the MemberID can be neither forged nor moved to other data, channel or group; it drops a message whose attribution fails. It prints `Attributed to member: <MemberID>`; anonymous messages print `Sender: anonymous`. An attributed signature reveals the member's credential `(σ1, σ2)` to those who can decrypt; its anonymous signatures stay unlinkable to it under XDH, the assumption their anonymity already rests on. The outer anonymous signature can still be opened. Archives verify the attribution of a broadcast but store the message without it; a private-group message they store as ciphertext, with the attribution inside.
+**Attribution.** A sender who wants a message attributed to it, e.g. to build reputation, uses `attr_broad <topic> <msg>` or `attr_enc_broad <group> <msg>`. The gossip message is signed anonymously like any other, so relays and archives validate it alike and cannot tell it is attributed. Inside the plaintext, the peer adds an `Attribution { member_id, signature }`: a signature without randomizing its credential (`thressig::sign_attributed`) over the context (the channel, or the private group's ID), the topic (empty in a private group), the data and the MemberID. Its `σ1` stays `h`, the base of `H0(MemberID)`, which anyone can compute from the MemberID, so it must not travel in clear: inside the ciphertext, only the common group (broadcasts) or the private group (`enc_broad`) sees it. A receiver decrypts, verifies the signature and checks `σ1 = h` (`thressig::signed_by`), so the MemberID can be neither forged nor moved to other data, channel or group; it drops a message whose attribution fails. It prints `Attributed to member: <MemberID>`; anonymous messages print `Sender: anonymous`. An attributed signature reveals the member's credential `(σ1, σ2)` to those who can decrypt; its anonymous signatures stay unlinkable to it under XDH, the assumption their anonymity already rests on. The outer anonymous signature can still be opened. Archives verify the attribution of a broadcast but store the message without it; a private-group message they store as ciphertext, with the attribution inside.
 
 ## 5. MLS groups
 
@@ -314,6 +316,18 @@ Opening reveals the member behind a group signature. It needs the AA and at leas
 
 Sharing peers cannot request openings. A peer that observes misbehavior reports the signature, which the receiving console prints as hex, to the AA out of band.
 
+## 8. Several AAs (threshold issuance)
+
+By default one AA issues every member key. It can instead split its issuing key among `n` AAs, `t` of which issue a key together, so that no single AA can admit a member.
+
+1. After `end_init_archive`, the AA's operator runs `split_key <n> <t> <dir>`. The AA (index 1) splits the issuing key `(x, y1, y2)` into Shamir shares, keeps share 1 and deletes the whole key. For each other AA `i` it writes `<dir>/aa<i>/`: a fresh libp2p identity (`key_material.json`) and a copy of its own state with share `i` (`storage.json`). It tells the archives the other AAs' PeerIDs (`IssuerSet`), whose ID shares they then accept. The directories hold secret key shares: copy each to its AA only, then delete it.
+2. AA `i` starts with `dactie-authority -K <dir>/aa<i> -p <port> --archive <archive address> ...`. It answers `VerifyIdentity` and `JoinKeyMaterial` and nothing else; the AA with index 1 stays the *registrar*: it registers sharing peers, commits to the common group, expires peers and runs openings.
+3. A peer joins with `--issuer <AA address>/p2p/<PeerId>` for every further AA. Its throwaway identity sends `VerifyIdentity` to every AA, and each answers with its own nonce and `issuers`: its index, every AA's public key share and `t`. After the archive keys are confirmed, the member chooses `sk` and its shares once, and sends each AA a `JoinKeyMaterial` with proofs over that AA's nonce.
+4. AA `i` checks the request as a single AA does and computes its partial credential `σ2_i = h^{x_i + y2_i·a'} · (h^sk)^{y1_i}`. Before it answers, it sends the member's shares to every archive (`AddIDShare`). An archive stores the first share per MemberID and answers `IdShareStored` for it, or for an identical one, and `IdShareConflict` for a different one. The AA sends `PartialMemKey` only when every archive answered `IdShareStored`, and records the MemberID only then. This is the scheme's ledger check: a MemberID gets one key, even if another AA is dishonest.
+5. The member checks every partial credential against that AA's public share, combines `t` of them by Lagrange interpolation into the credential a single AA would have issued, and checks it. It then registers its node with the registrar, as in section 2.
+
+Any `t` AAs can issue, the registrar included or not; registering sharing peers needs the registrar. All archives must be reachable during a join. The key is split once at setup by the AA that holds it (its operator could keep a copy); the scheme's distributed key generation is not implemented. `scripts/e2e_threshold.sh` runs this with three AAs and `t = 2`.
+
 ## Relation to the Camenisch et al. scheme
 
-DACTIE uses the Short Threshold Dynamic Group Signatures of Camenisch, Drijvers, Lehmann, Neven and Towa (2020), with one issuer, the AA, instead of a distributed issuer and a public ledger. The member list (`gml`) lives at the AA, and the per-member opening shares live in the archives' databases. Joining follows the scheme's `GJoin` protocol: the member proves knowledge of `sk`, Shamir-shares it to the openers under ElGamal encryption, and receives a credential on `sk`. The prototype adds two steps: the member may first confirm the openers' keys with the openers themselves, and a member adding a sharing peer proves with `share_link` that the new shares hide its key, since the issuer cannot see which member asks. Signing and verification are unchanged.
+DACTIE uses the Short Threshold Dynamic Group Signatures of Camenisch, Drijvers, Lehmann, Neven and Towa (2020), with one issuer, the AA, or several (section 8, with the key split at setup instead of distributed key generation), and with the archives' databases instead of a public ledger. The member list (`gml`) lives at the AA, and the per-member opening shares live in the archives' databases. Joining follows the scheme's `GJoin` protocol: the member proves knowledge of `sk`, Shamir-shares it to the openers under ElGamal encryption, and receives a credential on `sk`. The prototype adds two steps: the member may first confirm the openers' keys with the openers themselves, and a member adding a sharing peer proves with `share_link` that the new shares hide its key, since the issuer cannot see which member asks. Signing and verification are unchanged.

@@ -38,7 +38,9 @@ verifies and opens to the right member.
 
 ## Results (2026-10-11, one share per member, before the constants of `open` were hoisted)
 
-Release build, single thread, 3 archives, t = 3, 1 KiB payload. Signature size: 226 bytes.
+Release build, single thread, 3 archives, t = 3, 1 KiB payload. Signature size: 226 bytes. (Since
+the credential follows Cam20 exactly, 2026-11-14, a signature takes 282 bytes, and signing,
+verifying and opening do one exponentiation or pairing more; these numbers are from before.)
 
 | Operation | Server (AMD EPYC 7763) | Laptop (Intel Core Ultra 7 165U) |
 | --- | --- | --- |

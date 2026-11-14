@@ -72,6 +72,12 @@ struct Args {
     #[arg(long = "archive")]
     archives: Vec<Multiaddr>,
 
+    /// Another AA that holds a key share (threshold issuance), as a multiaddr ending in
+    /// /p2p/<PeerId>; repeat for each. A join asks every AA and combines the partial
+    /// credentials of enough of them.
+    #[arg(long = "issuer")]
+    issuers: Vec<Multiaddr>,
+
     /// Low connection watermark: once full, the peer closes connections down to this.
     #[arg(long, default_value_t = 50)]
     conn_low: usize,
@@ -113,7 +119,7 @@ fn split_p2p(addr: &Multiaddr) -> Result<(PeerId, Multiaddr), String> {
     let mut base = addr.clone();
     match base.pop() {
         Some(libp2p::multiaddr::Protocol::P2p(peer_id)) => Ok((peer_id, base)),
-        _ => Err(format!("--archive {addr} must end in /p2p/<PeerId>")),
+        _ => Err(format!("{addr} must end in /p2p/<PeerId>")),
     }
 }
 
@@ -169,10 +175,18 @@ async fn main() -> Result<(), Box<dyn Error>> {
     mybehaviour::archive_keys::TRUSTED
         .set(archives.iter().map(|(peer_id, _)| *peer_id).collect())
         .expect("set once at startup");
-    // A join reaches the authority and the archives from a throwaway identity, so it dials
-    // them by these addresses.
+    let issuers = args
+        .issuers
+        .iter()
+        .map(split_p2p)
+        .collect::<Result<Vec<_>, _>>()?;
+    mybehaviour::archive_keys::ISSUERS
+        .set(issuers.iter().map(|(peer_id, _)| *peer_id).collect())
+        .expect("set once at startup");
+    // A join reaches the AAs and the archives from a throwaway identity, so it dials them by
+    // these addresses.
     let mut relay_addresses: std::collections::HashMap<PeerId, Multiaddr> =
-        archives.iter().cloned().collect();
+        archives.iter().chain(issuers.iter()).cloned().collect();
     if let Some(authority) = args.authority_peer_id {
         relay_addresses.insert(authority, args.bootstrap_addr.clone());
     }
