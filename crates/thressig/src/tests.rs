@@ -74,17 +74,16 @@ fn test_flow() {
 
 #[test]
 fn test_shares_verifiability() {
-    let (grpkey, _) = setup();
     let id = 0usize;
     let sk = FieldElement::random();
-    let h = h0(&id);
-    let (shares, commits) = shamir_feldman_share(&sk, 3, 6, &(&grpkey.g * &h));
+    let h = h0_base(&id);
+    let (shares, commits) = shamir_feldman_share(&sk, 3, 6, &h);
 
     let z = recover_secret(&shares[..3]);
     assert_eq!(sk, z);
 
     for (i, share) in shares.iter().enumerate() {
-        let is_valid = verify_share(&(&grpkey.g * &h), share.clone(), &commits);
+        let is_valid = verify_share(&h, share.clone(), &commits);
         assert!(is_valid, "Share {i} failed verification");
     }
 }
@@ -110,19 +109,19 @@ fn test_correct_encryption_proof() {
     let (grpkey, _) = setup();
     let id = 0usize;
     let sk = FieldElement::random();
-    let h = h0(&id);
+    let h = h0_base(&id);
 
     // Feldman commitments: create t-out-of-n shares
     let t = 3;
     let n = 5;
-    let (shares, commitments) = shamir_feldman_share(&sk, t, n, &(&grpkey.g * &h));
+    let (shares, commitments) = shamir_feldman_share(&sk, t, n, &h);
 
     // Pick a share and simulate an opener’s key
     let share = &shares[0];
     let (_, pk) = elgamal_keygen(&grpkey.g_tilde);
 
     // Create the NIZK proof
-    let enc_share = prove_enc_share(&grpkey, share, &pk, &(&grpkey.g * &h), &commitments);
+    let enc_share = prove_enc_share(&grpkey, share, &pk, &h, &commitments);
 
     // Verify the proof
     let is_valid = verify_enc_share_correctness(&enc_share, &grpkey, &pk, &commitments);
@@ -139,6 +138,7 @@ fn test_signature_bincode_roundtrip() {
         sigma2: G1::random(),
         c: FieldElement::random(),
         s: FieldElement::random(),
+        s2: FieldElement::random(),
     };
 
     let bytes = bincode::serialize(&sig).expect("serialize");
@@ -230,6 +230,7 @@ fn forged_identity_signature(grpkey: &Grpkey, msg: &[u8]) -> Signature {
         sigma2,
         c: FieldElement::from_msg_hash(&transcript),
         s,
+        s2: FieldElement::random(),
     }
 }
 
@@ -252,12 +253,13 @@ fn test_identity_signature_rejected() {
 
 #[test]
 fn test_off_curve_signature_bytes_rejected() {
-    // [u64 len][sigma1][u64 len][sigma2][u64 len][c][u64 len][s]
+    // [u64 len][sigma1][u64 len][sigma2][u64 len][c][u64 len][s][u64 len][s2]
     let honest = Signature {
         sigma1: G1::random(),
         sigma2: G1::random(),
         c: FieldElement::one(),
         s: FieldElement::one(),
+        s2: FieldElement::one(),
     };
     let mut bytes = bincode::serialize(&honest).unwrap();
     assert!(bincode::deserialize::<Signature>(&bytes).is_ok());
@@ -438,7 +440,12 @@ fn test_member_proof_for_additional_peer() {
         all_sj.insert(p.index, vec![(peer.clone(), p.pairing)]);
     }
     let peers: HashSet<String> = [peer.clone()].into_iter().collect();
-    assert_eq!(open(&sig, &grpkey, &peers, &all_sj), vec![peer]);
+    assert_eq!(
+        open_peers_of(&sig, &grpkey, id, &peers, &all_sj),
+        vec![peer.clone()]
+    );
+    // ... but not as another member's peers.
+    assert!(open_peers_of(&sig, &grpkey, id + 1, &peers, &all_sj).is_empty());
 }
 
 #[test]
@@ -541,3 +548,44 @@ fn test_member_checks_its_key() {
     // The partial key the manager sends has no sk yet.
     assert!(!verify_memkey(&partial, &grpkey, id));
 }
+
+/// Regression test for the base of H0. With sigma1 = g^{H(id)}, a base of known discrete
+/// logarithm, two members could divide out H(id), solve for g^x and g^y1, and make a valid
+/// credential on any key, whose signatures no archive can open. With h hashed into G1 (and
+/// Cam20's second value a'), the same computation gives nothing valid.
+#[test]
+fn test_two_members_cannot_mint_a_credential() {
+    let (grpkey, mgrkey, pks, _, _) = join_setup(3);
+    let member = |id: usize| {
+        let n = join_mgr1();
+        let material = join_mem1(id, n.clone(), &grpkey, 2, &pks);
+        let (_, _, _, _, _, sk, enc_shares, commits) = &material;
+        let partial = try_join(
+            id, &grpkey, &mgrkey, &pks, &n, &material, enc_shares, commits,
+        )
+        .unwrap();
+        join_mem2(sk, &partial)
+    };
+    let (a, b) = (member(1), member(2));
+    // The base is not g raised to a known exponent.
+    assert_ne!(a.sigma1, Some(&grpkey.g * h0_scalar(&1)));
+    // The old attack: u = sigma2^{1/e} = g^{x + y1 sk} if sigma1 = g^e.
+    let u_a = a.sigma2.clone().unwrap() * h0_scalar(&1).inverse();
+    let u_b = b.sigma2.clone().unwrap() * h0_scalar(&2).inverse();
+    let g_y = (u_a.clone() - u_b) * (&a.sk - &b.sk).inverse();
+    let g_x = u_a - (&g_y * &a.sk);
+    assert_ne!(g_x, &grpkey.g * &mgrkey.x);
+    let sk_star = FieldElement::random();
+    let id_star = 999usize;
+    let forged = credential(
+        &grpkey,
+        sk_star.clone(),
+        h0_base(&id_star),
+        (g_x + (&g_y * &sk_star)) * h0_scalar(&id_star),
+        h0_scalar(&id_star),
+    );
+    assert!(!verify_memkey(&forged, &grpkey, id_star));
+    let sig = sign(&forged, &grpkey, &"untraceable".as_bytes()).unwrap();
+    assert!(verify(&sig, &grpkey, "untraceable".as_bytes()).is_err());
+}
+

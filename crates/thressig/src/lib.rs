@@ -50,8 +50,19 @@ fn hash_to_field(tag: &[u8], id: &usize) -> FieldElement {
     FieldElement::from_msg_hash(&digest)
 }
 
-fn h0(id: &usize) -> FieldElement {
-    hash_to_field(b"H0-h|", id)
+/// Cam20's H0(id) = (a', h) (Section 4.1): a scalar a' and a base h in G1 that every issuer
+/// derives from the MemberID alone. h is hashed into the group, so nobody knows its discrete
+/// logarithm; with a base g^{H(id)} of known exponent, two members' credentials would reveal
+/// g^x and g^y1, from which anyone could make credentials on keys no issuer ever saw.
+pub(crate) fn h0_scalar(id: &usize) -> FieldElement {
+    hash_to_field(b"H0-a|", id)
+}
+
+/// The base h of H0(id); see h0_scalar.
+pub(crate) fn h0_base(id: &usize) -> G1 {
+    let mut input = b"dactie-H0-base|".to_vec();
+    input.extend(id.to_be_bytes());
+    G1::from_msg_hash(&input)
 }
 
 pub fn shamir_feldman_share(
@@ -149,7 +160,7 @@ pub fn create_enc_shares(
     sk: &FieldElement,
 ) -> (Vec<EncShare>, Vec<G1>) {
     let alpha = FieldElement::random();
-    let h_blind = &grpkey.g * h0(id) * &alpha;
+    let h_blind = h0_base(id) * &alpha;
 
     let (shares, commits) = shamir_feldman_share(sk, threshold, opener_pubkeys.len(), &h_blind);
 
@@ -307,7 +318,7 @@ pub fn join_mem1(
 ) -> JoinMem1Output {
     let sk = FieldElement::random();
     let g_sk = &grpkey.g * &sk;
-    let h = &grpkey.g * h0(&id);
+    let h = h0_base(&id);
 
     let (enc_shares, commits) = create_enc_shares(&id, grpkey, threshold, opener_pubkeys, &sk);
 
@@ -337,19 +348,45 @@ pub fn join_mem2(sk: &FieldElement, partial_memkey: &Memkey) -> Memkey {
     result
 }
 
-/// True if `memkey` holds the manager's credential on its sk for member `id`: sigma1 =
-/// g^{H0(id)}, e(sigma2, g~) = e(sigma1, X~ Y1~^sk) and e1 = e(sigma1, Y1~). A member checks
+/// True if `memkey` holds the manager's credential on its sk for member `id`: (a', sigma1) =
+/// H0(id), e(sigma2, g~) = e(sigma1, X~ Y1~^sk Y2~^a'), and the cached e1, e2 are right. A member checks
 /// the key it receives before it replaces its own, since signatures made with any other key
 /// are invalid.
 pub fn verify_memkey(memkey: &Memkey, grpkey: &Grpkey, id: usize) -> bool {
-    let (Some(sigma1), Some(sigma2), Some(e1)) = (&memkey.sigma1, &memkey.sigma2, &memkey.e1)
-    else {
+    let (Some(sigma1), Some(sigma2), Some(e1), Some(a), Some(e2)) = (
+        &memkey.sigma1,
+        &memkey.sigma2,
+        &memkey.e1,
+        &memkey.a,
+        &memkey.e2,
+    ) else {
         return false;
     };
-    let x_y_sk = &grpkey.x_pub_tilde + &(&grpkey.y1_pub_tilde * &memkey.sk);
-    *sigma1 == &grpkey.g * h0(&id)
-        && GT::ate_pairing(sigma2, &grpkey.g_tilde) == GT::ate_pairing(sigma1, &x_y_sk)
+    let x_y_sk_a =
+        &grpkey.x_pub_tilde + &(&grpkey.y1_pub_tilde * &memkey.sk) + &(&grpkey.y2_pub_tilde * a);
+    *sigma1 == h0_base(&id)
+        && *a == h0_scalar(&id)
+        && GT::ate_pairing(sigma2, &grpkey.g_tilde) == GT::ate_pairing(sigma1, &x_y_sk_a)
         && *e1 == GT::ate_pairing(sigma1, &grpkey.y1_pub_tilde)
+        && *e2 == GT::ate_pairing(sigma1, &grpkey.y2_pub_tilde)
+}
+
+/// A member key from its parts, with the pairings that signing needs cached.
+pub(crate) fn credential(
+    grpkey: &Grpkey,
+    sk: FieldElement,
+    sigma1: G1,
+    sigma2: G1,
+    a: FieldElement,
+) -> Memkey {
+    Memkey {
+        sk,
+        e1: Some(GT::ate_pairing(&sigma1, &grpkey.y1_pub_tilde)),
+        e2: Some(GT::ate_pairing(&sigma1, &grpkey.y2_pub_tilde)),
+        sigma1: Some(sigma1),
+        sigma2: Some(sigma2),
+        a: Some(a),
+    }
 }
 
 /**
@@ -402,7 +439,7 @@ pub fn join_mgr2(id: usize, args: JoinMgr2Args) -> Result<Memkey, String> {
         return Err(String::from("ID already in use"));
     }
 
-    let h = &grpkey.g * h0(&id);
+    let h = h0_base(&id);
 
     if !spk_dlog::verify(g_sk, &grpkey.g, pi1, &n.to_bytes(false)) {
         return Err(String::from("error"));
@@ -424,16 +461,12 @@ pub fn join_mgr2(id: usize, args: JoinMgr2Args) -> Result<Memkey, String> {
         }
     }
 
+    // Cam20's PS signature on sk: h^{x + y1 sk + y2 a'} = h_sk^{y1} * h^{x + y2 a'}.
+    let a = h0_scalar(&id);
     let sigma1 = h;
-    let sigma2 = h_sk * &mgrkey.y1 + (&sigma1 * &mgrkey.x);
-    let e1 = GT::ate_pairing(&sigma1, &grpkey.y1_pub_tilde);
+    let sigma2 = h_sk * &mgrkey.y1 + (&sigma1 * &(&mgrkey.x + &(&mgrkey.y2 * &a)));
     gml.insert(id, name);
-    Ok(Memkey {
-        sk: FieldElement::new(),
-        sigma1: Some(sigma1),
-        sigma2: Some(sigma2),
-        e1: Some(e1),
-    })
+    Ok(credential(grpkey, FieldElement::new(), sigma1, sigma2, a))
 }
 
 /**
@@ -448,8 +481,8 @@ pub fn sign<T: Serialize>(
 }
 
 /**
- * Like sign(), but without randomizing the credential: sigma1 stays h = g^{H0(id)}, which
- * anyone can compute from the MemberID, so the signature shows which member made it
+ * Like sign(), but without randomizing the credential: sigma1 stays the base h of H0(id),
+ * which anyone can compute from the MemberID, so the signature shows which member made it
  * (signed_by). For messages the sender wants attributed to it, e.g. to build reputation.
  * Its other signatures stay unlinkable to this one under XDH.
  **/
@@ -462,8 +495,21 @@ pub fn sign_attributed<T: Serialize>(
 }
 
 /// True if `sig` was made with sign_attributed by member `id`. Check verify() as well.
-pub fn signed_by(sig: &Signature, grpkey: &Grpkey, id: usize) -> bool {
-    sig.sigma1 == &grpkey.g * h0(&id)
+/// (The group key is not needed since the base of H0 is hashed into G1; the parameter stays
+/// so that callers need not change.)
+pub fn signed_by(sig: &Signature, _grpkey: &Grpkey, id: usize) -> bool {
+    sig.sigma1 == h0_base(&id)
+}
+
+/// a' and the cached e(sigma1, Y2~) of a member key.
+fn second_value(memkey: &Memkey) -> Result<(FieldElement, GT), ThressigError> {
+    let a = memkey.a.clone().ok_or(MemkeySetError {
+        val: "a".to_string(),
+    })?;
+    let e2 = memkey.e2.clone().ok_or(MemkeySetError {
+        val: "e2".to_string(),
+    })?;
+    Ok((a, e2))
 }
 
 fn sign_with<T: Serialize>(
@@ -482,6 +528,7 @@ fn sign_with<T: Serialize>(
     let e1 = &memkey.clone().e1.ok_or(MemkeySetError {
         val: "e1".to_string(),
     })?;
+    let (a, e2) = second_value(memkey)?;
 
     /* Randomize sigma1 and sigma2, unless the signature is attributed */
     let t = if randomize {
@@ -492,8 +539,11 @@ fn sign_with<T: Serialize>(
     let sigma1 = sigma1 * &t;
     let sigma2 = sigma2 * &t;
 
+    // Proof of knowledge of (sk, a') with e(sigma1, Y1~)^sk e(sigma1, Y2~)^a' =
+    // e(sigma2, g~) / e(sigma1, X~), as Cam20's GSign (Section 4.2).
     let k1 = FieldElement::random();
-    let e = e1.pow(&(&k1 * &t));
+    let k2 = FieldElement::random();
+    let e = e1.pow(&(&k1 * &t)) * e2.pow(&(&k2 * &t));
 
     let mut msg_to_send: Vec<u8> = Vec::new();
     msg_to_send.extend(grpkey.to_bytes());
@@ -505,12 +555,14 @@ fn sign_with<T: Serialize>(
     /* c = H(grpkey, sigma1, sigma2, e, msg) */
     let c = FieldElement::from_msg_hash(&msg_to_send);
     let s = (&c * &memkey.sk) + &k1;
+    let s2 = (&c * &a) + &k2;
 
     Ok(Signature {
         sigma1,
         sigma2,
         c,
         s,
+        s2,
     })
 }
 
@@ -534,8 +586,9 @@ pub fn verify<T: Serialize + ?Sized>(
     let e1 = GT::ate_pairing(&(&sig.sigma1).neg(), &grpkey.x_pub_tilde);
     /* e2 = e(sigma2,gg) */
     let e2 = GT::ate_pairing(&sig.sigma2, &grpkey.g_tilde);
-    /* e3 = e(sigma1^s1,Y1) */
-    let e3 = GT::ate_pairing(&(&sig.sigma1 * &sig.s), &grpkey.y1_pub_tilde);
+    /* e3 = e(sigma1^s,Y1) e(sigma1^s2,Y2) */
+    let e3 = GT::ate_pairing(&(&sig.sigma1 * &sig.s), &grpkey.y1_pub_tilde)
+        * GT::ate_pairing(&(&sig.sigma1 * &sig.s2), &grpkey.y2_pub_tilde);
     /* r_pub = (e1*e2)^-c*e3 */
     let r_pub = (e1 * e2).pow(&sig.c).inverse() * e3;
 
@@ -602,6 +655,7 @@ pub fn prove_member(
     let e1 = memkey.e1.as_ref().ok_or(MemkeySetError {
         val: "e1".to_string(),
     })?;
+    let (a, e2) = second_value(memkey)?;
 
     /* Randomize the credential as in sign() */
     let t = FieldElement::random();
@@ -609,18 +663,21 @@ pub fn prove_member(
     let sigma2 = sigma2 * &t;
 
     let k = FieldElement::random();
-    let r1 = e1.pow(&(&k * &t)); // e(sigma1', Y1~)^k
+    let k2 = FieldElement::random();
+    let r1 = e1.pow(&(&k * &t)) * e2.pow(&(&k2 * &t)); // e(sigma1', Y1~)^k e(sigma1', Y2~)^k2
     let r2s: Vec<G1> = pairs.iter().map(|(base, _)| base * &k).collect();
     let c = FieldElement::from_msg_hash(&member_transcript(
         grpkey, &sigma1, &sigma2, pairs, &r1, &r2s, msg,
     ));
     let s = (&c * &memkey.sk) + &k;
+    let s2 = (&c * &a) + &k2;
 
     Ok(MemberProof {
         sigma1,
         sigma2,
         c,
         s,
+        s2,
     })
 }
 
@@ -632,11 +689,12 @@ pub fn verify_member(proof: &MemberProof, grpkey: &Grpkey, pairs: &[(G1, G1)], m
     {
         return false;
     }
-    /* e(sigma2', g~) / e(sigma1', X~) = e(sigma1', Y1~)^sk */
+    /* e(sigma2', g~) / e(sigma1', X~) = e(sigma1', Y1~)^sk e(sigma1', Y2~)^a' */
     let cred = GT::ate_pairing(&proof.sigma2, &grpkey.g_tilde)
         * GT::ate_pairing(&(&proof.sigma1).neg(), &grpkey.x_pub_tilde);
     let r1 = cred.pow(&proof.c).inverse()
-        * GT::ate_pairing(&(&proof.sigma1 * &proof.s), &grpkey.y1_pub_tilde);
+        * GT::ate_pairing(&(&proof.sigma1 * &proof.s), &grpkey.y1_pub_tilde)
+        * GT::ate_pairing(&(&proof.sigma1 * &proof.s2), &grpkey.y2_pub_tilde);
     /* value = base^sk */
     let r2s: Vec<G1> = pairs
         .iter()
@@ -692,60 +750,97 @@ pub fn compute_lagrange_coefficients_at_zero(shares: &[usize]) -> Vec<FieldEleme
     coeffs
 }
 
+/// Combines the archives' partial openings of one candidate: prod_j T_{id,j}^{w_j}, which is
+/// e(sigma1, Y1~)^sk if the candidate's shares hide the signer's sk. None if an archive's
+/// partial opening for the candidate is missing.
+fn combined_opening<K: Eq>(
+    candidate: &K,
+    opener_ids: &[usize],
+    w_js: &[FieldElement],
+    all_sj: &HashMap<usize, Vec<(K, GT)>>,
+) -> Option<GT> {
+    let mut combined = GT::one();
+    for (j, w) in opener_ids.iter().zip(w_js) {
+        let (_, t) = all_sj.get(j)?.iter().find(|(c, _)| c == candidate)?;
+        combined = combined * t.pow(w);
+    }
+    Some(combined)
+}
+
+fn opener_coefficients<K>(
+    all_sj: &HashMap<usize, Vec<(K, GT)>>,
+) -> (Vec<usize>, Vec<FieldElement>) {
+    let mut opener_ids: Vec<_> = all_sj.keys().copied().collect();
+    opener_ids.sort();
+    let w_js = compute_lagrange_coefficients_at_zero(&opener_ids);
+    (opener_ids, w_js)
+}
+
+/// e(sigma1, X~) e(sigma1, Y2~)^{a'(id)}: the part of e(sigma2, g~) that does not depend on sk.
+fn opening_base(sig: &Signature, grpkey: &Grpkey, id: usize) -> GT {
+    GT::ate_pairing(&sig.sigma1, &grpkey.x_pub_tilde)
+        * GT::ate_pairing(&sig.sigma1, &grpkey.y2_pub_tilde).pow(&h0_scalar(&id))
+}
+
 /**
- * Manager opens signature by comparing signature with stored gml values.
+ * Opens a signature to the members in `gml` (Cam20, GOpen): member id signed it if
+ * e(sigma1, X~ Y2~^{a'(id)}) * prod_j T_{id,j}^{w_j} = e(sigma2, g~), where the T_{id,j} are
+ * the archives' partial openings with the shares of id's sk.
  **/
-pub fn open<K>(
+pub fn open(
     sig: &Signature,
     grpkey: &Grpkey,
-    gml: &HashSet<K>,
+    gml: &HashSet<usize>,
+    all_sj: &HashMap<usize, Vec<(usize, GT)>>,
+) -> Vec<usize> {
+    // With sigma1 = 1, both sides of the check are 1 for every member.
+    if sig.sigma1.is_identity() {
+        return Vec::new();
+    }
+    let (opener_ids, w_js) = opener_coefficients(all_sj);
+    let pairing_x = GT::ate_pairing(&sig.sigma1, &grpkey.x_pub_tilde);
+    let pairing_y2 = GT::ate_pairing(&sig.sigma1, &grpkey.y2_pub_tilde);
+    let pairing_right = GT::ate_pairing(&sig.sigma2, &grpkey.g_tilde);
+    let mut res: Vec<usize> = gml
+        .iter()
+        .filter(|id| {
+            combined_opening(*id, &opener_ids, &w_js, all_sj).is_some_and(|t| {
+                pairing_x.clone() * pairing_y2.pow(&h0_scalar(id)) * t == pairing_right
+            })
+        })
+        .copied()
+        .collect();
+    res.sort();
+    res
+}
+
+/**
+ * The sharing peers of an opened member: the candidates whose shares hide the same sk, i.e.
+ * whose combined partial opening equals e(sigma2, g~) / e(sigma1, X~ Y2~^{a'(member)}).
+ * A sharing peer's shares carry no a', so peers are matched against the member that `open`
+ * found rather than against the signature alone.
+ **/
+pub fn open_peers_of<K>(
+    sig: &Signature,
+    grpkey: &Grpkey,
+    member: usize,
+    peers: &HashSet<K>,
     all_sj: &HashMap<usize, Vec<(K, GT)>>,
 ) -> Vec<K>
 where
-    K: Eq + Clone,
+    K: Eq + Clone + std::hash::Hash,
 {
-    let mut res = Vec::new();
-    // With sigma1 = 1, both sides of the check below are 1 for every member.
     if sig.sigma1.is_identity() {
-        return res;
+        return Vec::new();
     }
-    let mut opener_ids: Vec<_> = all_sj.keys().copied().collect();
-    opener_ids.sort();
-    // Independent of the member, so computed once rather than per candidate.
-    let pairing_left = GT::ate_pairing(&sig.sigma1, &grpkey.x_pub_tilde);
-    let pairing_right = GT::ate_pairing(&sig.sigma2, &grpkey.g_tilde);
-    let w_js = compute_lagrange_coefficients_at_zero(&opener_ids);
-    for id in gml.iter() {
-        let mut t_idj = Vec::new();
-        let mut missing = false;
-        for j in &opener_ids {
-            if let Some(sj_entries) = all_sj.get(j) {
-                if let Some((_, t)) = sj_entries.iter().find(|(uid, _)| uid == id) {
-                    t_idj.push(t.clone());
-                } else {
-                    missing = true;
-                    break;
-                }
-            } else {
-                missing = true;
-                break;
-            }
-        }
-        if missing {
-            continue;
-        }
-
-        let mut t_combined = GT::one();
-        for (t, w) in t_idj.iter().zip(w_js.iter()) {
-            t_combined = t_combined * t.pow(w);
-        }
-
-        if pairing_left.clone() * t_combined == pairing_right {
-            res.push(id.clone());
-        }
-    }
-
-    res
+    let (opener_ids, w_js) = opener_coefficients(all_sj);
+    let target =
+        GT::ate_pairing(&sig.sigma2, &grpkey.g_tilde) * opening_base(sig, grpkey, member).inverse();
+    peers
+        .iter()
+        .filter(|p| combined_opening(*p, &opener_ids, &w_js, all_sj).is_some_and(|t| t == target))
+        .cloned()
+        .collect()
 }
 
 #[derive(Debug, Error)]

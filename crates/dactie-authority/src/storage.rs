@@ -246,10 +246,12 @@ impl Storage {
         Ok(result)
     }
 
-    //Retrieves all EncShares of a signature
+    /// The sharing peers of an opened member, from the archives' partial openings with the
+    /// peers' shares.
     fn open_peers(
         &self,
         signature: &Signature,
+        member: usize,
         my_open_mls: &MyOpenMls,
     ) -> Result<Vec<PeerId>, MyStorageError> {
         let enc_share_pairings = self
@@ -269,7 +271,7 @@ impl Storage {
                     .push((id, share.pairing));
                 map
             });
-        Ok(my_open_mls.open(signature, gml, all_sj))
+        Ok(my_open_mls.open_peers_of(signature, member, gml, all_sj))
     }
 
     pub fn open_signature(
@@ -284,10 +286,13 @@ impl Storage {
         if have < need {
             return Err(NotEnoughPartialOpeningsError { have, need });
         }
-        let res = (
-            self.open_ids(&signature, my_open_mls)?,
-            self.open_peers(&signature, my_open_mls)?,
-        );
+        // Peers are matched against the opened member (their shares carry no a').
+        let ids = self.open_ids(&signature, my_open_mls)?;
+        let mut peers = Vec::new();
+        for (id, _) in &ids {
+            peers.extend(self.open_peers(&signature, *id, my_open_mls)?);
+        }
+        let res = (ids, peers);
         if !res.0.is_empty() {
             self.signature_enc_id_pairing_map
                 .lock()
