@@ -95,6 +95,8 @@ impl Peer {
                     .mesh_n(gossip.mesh.n)
                     .mesh_n_high(gossip.mesh.high)
                     .mesh_outbound_min(gossip.mesh.outbound_min)
+                    .gossip_lazy(gossip.gossip_lazy)
+                    .gossip_factor(gossip.gossip_factor)
                     .build()
                     .map_err(io::Error::other)
                     .unwrap(); // Temporary hack because `build` does not return a proper `std::error::Error`.

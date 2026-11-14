@@ -11,6 +11,12 @@ use std::str::FromStr;
 pub(crate) struct GossipConfig {
     pub(crate) flood_publish: bool,
     pub(crate) mesh: MeshConfig,
+    /// Gossip emission (IHAVE/IWANT): per heartbeat, a peer announces its recent messages
+    /// to max(gossip_lazy, gossip_factor × its non-mesh peers) peers, which can then fetch
+    /// them. libp2p's defaults are 6 and 0.25; the DACTIE nodes use 0 and 0, so an
+    /// eclipsed victim's messages can leave it only through its mesh.
+    pub(crate) gossip_lazy: usize,
+    pub(crate) gossip_factor: f64,
     /// TCP port the bootstrap peer listens on and everyone else dials.
     ///
     /// Configurable because it was a fixed 10001: consecutive invocations of

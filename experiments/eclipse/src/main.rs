@@ -71,6 +71,16 @@ struct Args {
     #[clap(long)]
     mesh_n_high: Option<usize>,
 
+    /// Gossip emission: peers announced per heartbeat at least (libp2p default 6; the
+    /// DACTIE nodes use 0). With --gossip-factor 0 as well, emission is off.
+    #[clap(long, default_value_t = 6)]
+    gossip_lazy: usize,
+
+    /// Gossip emission: share of non-mesh peers announced per heartbeat (libp2p default
+    /// 0.25; the DACTIE nodes use 0).
+    #[clap(long, default_value_t = 0.25)]
+    gossip_factor: f64,
+
     /// TCP port the bootstrap peer binds. Give consecutive invocations
     /// different ports: the previous run's peers may still hold the socket,
     /// and the bind fails with AddrInUse before a single run has started.
@@ -88,23 +98,27 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // D and the flood setting go in the name: without them a second run at the
     // other setting silently truncates the first.
     x.push(format!(
-        "eclipse_{}_{}_{}_A{}_D{}_flood{}_{:?}.csv",
+        "eclipse_{}_{}_{}_A{}_D{}_flood{}_lazy{}_factor{}_{:?}.csv",
         args.n_peers_min,
         args.n_peers_max,
         args.stop_time,
         args.attack_n,
         args.mesh_n,
         args.flood_publish,
+        args.gossip_lazy,
+        args.gossip_factor,
         args.interval
     ));
     avg.push(format!(
-        "eclipse_avg_{}_{}_{}_A{}_D{}_flood{}_{:?}.csv",
+        "eclipse_avg_{}_{}_{}_A{}_D{}_flood{}_lazy{}_factor{}_{:?}.csv",
         args.n_peers_min,
         args.n_peers_max,
         args.stop_time,
         args.attack_n,
         args.mesh_n,
         args.flood_publish,
+        args.gossip_lazy,
+        args.gossip_factor,
         args.interval
     ));
 
@@ -122,11 +136,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     writeln!(
         &file,
-        "total_peers,honest_peers,attacker_peers,mesh_n,flood_publish,run,received_messages"
+        "total_peers,honest_peers,attacker_peers,mesh_n,flood_publish,gossip_lazy,gossip_factor,run,received_messages"
     )?;
     writeln!(
         &file_avg,
-        "total_peers,honest_peers,attacker_peers,mesh_n,flood_publish,received_messages"
+        "total_peers,honest_peers,attacker_peers,mesh_n,flood_publish,gossip_lazy,gossip_factor,received_messages"
     )?;
 
     start_experiment_series(StartExperimentSeriesArgs {
@@ -143,6 +157,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
         gossip: GossipConfig {
             flood_publish: args.flood_publish,
             mesh: MeshConfig::new(args.mesh_n, args.mesh_n_low, args.mesh_n_high),
+            gossip_lazy: args.gossip_lazy,
+            gossip_factor: args.gossip_factor,
             bootstrap_port: args.bootstrap_port,
         },
     })
@@ -196,10 +212,12 @@ async fn start_experiment_series(args: StartExperimentSeriesArgs) -> Result<(), 
             let total_peers = n_peers + args.attack_n;
             writeln!(
                 &args.file,
-                "{total_peers},{n_peers},{attack_n},{mesh_n},{flood},{run},{receivers}",
+                "{total_peers},{n_peers},{attack_n},{mesh_n},{flood},{lazy},{factor},{run},{receivers}",
                 attack_n = args.attack_n,
                 mesh_n = args.gossip.mesh.n,
-                flood = args.gossip.flood_publish
+                flood = args.gossip.flood_publish,
+                lazy = args.gossip.gossip_lazy,
+                factor = args.gossip.gossip_factor
             )?;
 
             avg_receivers += receivers;
@@ -214,10 +232,12 @@ async fn start_experiment_series(args: StartExperimentSeriesArgs) -> Result<(), 
         let total_peers = n_peers + args.attack_n;
         writeln!(
             &args.avg_file,
-            "{total_peers},{n_peers},{attack_n},{mesh_n},{flood},{avg_receivers}",
+            "{total_peers},{n_peers},{attack_n},{mesh_n},{flood},{lazy},{factor},{avg_receivers}",
             attack_n = args.attack_n,
             mesh_n = args.gossip.mesh.n,
-            flood = args.gossip.flood_publish
+            flood = args.gossip.flood_publish,
+            lazy = args.gossip.gossip_lazy,
+            factor = args.gossip.gossip_factor
         )?;
     }
 
