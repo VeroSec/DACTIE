@@ -588,4 +588,3 @@ fn test_two_members_cannot_mint_a_credential() {
     let sig = sign(&forged, &grpkey, &"untraceable".as_bytes()).unwrap();
     assert!(verify(&sig, &grpkey, "untraceable".as_bytes()).is_err());
 }
-

@@ -306,6 +306,59 @@ impl MyOpenMls {
         self.save_key_store()
     }
 
+    /// Starts a join with several AAs: one sk and one set of shares for the archive keys and
+    /// threshold accepted so far (see `add_opener_pubkeys`).
+    pub fn start_threshold_join(&self, id: usize, grpkey: Vec<u8>) -> Result<(), MyOpenMLSError> {
+        let opener_pubkeys = self.opener_pubkeys.lock().unwrap().clone();
+        let threshold = self.get_opener_threshold()?;
+        self.key_store
+            .lock()
+            .unwrap()
+            .start_threshold_join(id, grpkey, &opener_pubkeys, threshold)
+            .map_err(InvalidKeyMaterial)
+    }
+
+    pub fn threshold_join_started(&self) -> bool {
+        self.key_store.lock().unwrap().threshold_join_started()
+    }
+
+    /// The JoinKeyMaterial for one AA of a threshold join, over that AA's nonce.
+    pub fn join_key_material_for(
+        &self,
+        n: &thressig::G1,
+    ) -> Result<JoinKeyMaterial, MyOpenMLSError> {
+        self.key_store
+            .lock()
+            .unwrap()
+            .join_key_material_for(n)
+            .map_err(InvalidKeyMaterial)
+    }
+
+    /// Combines the AAs' partial credentials into the member key and saves it.
+    pub fn combine_partial_credentials(
+        &self,
+        partials: &[thressig::issuers::PartialCredential],
+        pubs: &[thressig::issuers::IssuerPub],
+        threshold: usize,
+    ) -> Result<(), MyOpenMLSError> {
+        self.key_store
+            .lock()
+            .unwrap()
+            .combine_partial_credentials(partials, pubs, threshold)
+            .map_err(InvalidKeyMaterial)?;
+        self.save_key_store()
+    }
+
+    /// On an archive: the AAs besides the authority whose ID shares it accepts.
+    pub fn set_issuers(&self, issuers: Vec<PeerId>) -> Result<(), MyOpenMLSError> {
+        self.key_store.lock().unwrap().set_issuers(issuers);
+        self.save_key_store()
+    }
+
+    pub fn is_issuer(&self, peer: &PeerId) -> bool {
+        self.key_store.lock().unwrap().is_issuer(peer)
+    }
+
     pub fn add_partial_memkey(&self, partial_memkey: Vec<u8>) -> Result<(), MyOpenMLSError> {
         self.key_store
             .lock()

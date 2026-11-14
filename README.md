@@ -76,10 +76,11 @@ Logs go to `target/e2e/`. The nodes keep running for inspection; stop them with:
 tmux kill-session -t camera; docker rm -f camera-pg1 camera-pg2
 ```
 
-Two longer runs:
+Three longer runs:
 
 - `scripts/e2e_expiry.sh` (about 3 minutes): sharing peers that do not renew are removed at the end of their epoch.
 - `scripts/e2e_nested.sh` (about 5 minutes): private groups, and removing an expired peer from them.
+- `scripts/e2e_threshold.sh` (about 4 minutes): three AAs, any two of which issue a member key (PROTOCOL.md, section 8).
 
 ## Walkthrough: run a network by hand
 

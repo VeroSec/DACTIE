@@ -4,10 +4,12 @@ use libp2p::gossipsub::IdentTopic;
 use libp2p::identity::{Keypair, ParseError};
 use libp2p::kad::store::MemoryStore;
 use libp2p::kad::{Mode, PROTOCOL_NAME};
+use libp2p::request_response::OutboundRequestId;
 use libp2p::request_response::ProtocolSupport;
 use libp2p::swarm::{NetworkBehaviour, SwarmEvent};
 use libp2p::{gossipsub, identify, kad, request_response, PeerId, StreamProtocol};
 use openmls::key_packages::KeyPackage;
+use std::collections::HashSet;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::iter;
 use std::time::Duration;
@@ -19,7 +21,7 @@ use crate::abstswarm::event_handler::EventHandler;
 use crate::abstswarm::instruction_handler::InstructionHandler;
 use crate::abstswarm::AbstSwarmError::{MLSError, SendError};
 use crate::abstswarm::{AbstSwarmError, Notification};
-use crate::storage::{ReturnMemkeyArgs, Storage};
+use crate::storage::{PendingIssuance, ReturnMemkeyArgs, Storage};
 use dactie_utils::admission;
 use dactie_utils::mls_wrapper::MyOpenMLSError::SerializationError;
 use dactie_utils::mls_wrapper::{MyOpenMLSError, MyOpenMls};
@@ -242,6 +244,9 @@ impl MyBehaviour {
         Ok(())
     }
 
+    /// Sends each archive its share of member `id`'s key. Signed with this AA's member key; an
+    /// AA that only holds a key share has none and sends unsigned (`signed` false), which the
+    /// archives accept from the AAs that the registrar announced.
     fn send_out_id_enc_shares(
         &mut self,
         my_open_mls: &MyOpenMls,
@@ -249,17 +254,94 @@ impl MyBehaviour {
         id: usize,
         enc_shares: &[EncShare],
         commits: &[thressig::G1],
-    ) -> Result<(), AbstSwarmError> {
+        signed: bool,
+    ) -> Result<HashSet<OutboundRequestId>, AbstSwarmError> {
+        let mut requests = HashSet::new();
         for (peer_id, enc_share) in archvive_peer_ids.iter().zip(enc_shares) {
-            self.request_response.send_request(
-                peer_id,
-                my_open_mls.sign(RequestMessage::AddIDShare {
-                    id,
-                    enc_share: enc_share.clone(),
-                    commits: commits.to_owned(),
-                })?,
-            );
+            let body = RequestMessage::AddIDShare {
+                id,
+                enc_share: enc_share.clone(),
+                commits: commits.to_owned(),
+            };
+            let request = if signed {
+                my_open_mls.sign(body)?
+            } else {
+                Request {
+                    body,
+                    signature: None,
+                }
+            };
+            requests.insert(self.request_response.send_request(peer_id, request));
         }
+        Ok(requests)
+    }
+
+    /// One AA's side of a threshold join: checks the request and computes the partial
+    /// credential, sends the member's shares to every archive, and answers only when every
+    /// archive has stored them (`send_partial`). An archive that holds different shares for the
+    /// MemberID refuses, and then this AA sends nothing: one MemberID gets one key, even if
+    /// another AA is dishonest (Cam20's ledger check).
+    fn issue_partial(
+        &mut self,
+        my_open_mls: &MyOpenMls,
+        storage: &Storage,
+        channel: request_response::ResponseChannel<Response>,
+        args: ReturnMemkeyArgs,
+    ) -> Result<(), AbstSwarmError> {
+        let (enc_shares, commits) = (args.enc_shares.to_vec(), args.commits.to_vec());
+        let (id, name, partial) = storage.issue_partial(args)?;
+        let archives = storage.get_archive_peer_ids();
+        if archives.is_empty() {
+            log::warn!("Not issuing for member {id}: no archives to store its shares");
+            return Ok(());
+        }
+        let waiting = self.send_out_id_enc_shares(
+            my_open_mls,
+            &archives,
+            id,
+            &enc_shares,
+            &commits,
+            storage.is_registrar(),
+        )?;
+        log::info!(
+            "Partial credential for member {id} waits for {} archives",
+            waiting.len()
+        );
+        storage.add_pending_issuance(
+            id,
+            PendingIssuance {
+                channel,
+                partial,
+                name,
+                waiting,
+            },
+        );
+        Ok(())
+    }
+
+    /// Sends a partial credential once every archive has stored the member's shares.
+    fn send_partial(
+        &mut self,
+        storage: &Storage,
+        id: usize,
+        join: PendingIssuance,
+    ) -> Result<(), AbstSwarmError> {
+        if !storage.commit_issued(id, join.name)? {
+            log::warn!("Member {id} was issued meanwhile; not sending a second partial credential");
+            return Ok(());
+        }
+        log::info!("Sending the partial credential of member {id}");
+        self.request_response
+            .send_response(
+                join.channel,
+                Response {
+                    body: ResponseMessage::PartialMemKey {
+                        partial: join.partial,
+                    },
+                    signature: None,
+                },
+            )
+            .unwrap_or(());
         Ok(())
     }
 
@@ -365,6 +447,35 @@ impl MyBehaviour {
         Ok(())
     }
 
+    /// Splits the issuing key among `n` AAs with threshold `t` (console `split_key`), writes the
+    /// other AAs' directories under `dir`, and tells the archives to accept their ID shares.
+    fn split_issuing_key(
+        &mut self,
+        storage: &Storage,
+        my_open_mls: &MyOpenMls,
+        n: usize,
+        t: usize,
+        dir: String,
+    ) -> Result<(), AbstSwarmError> {
+        let others = storage.split_issuing_key(n, t, std::path::Path::new(&dir))?;
+        let issuers: Vec<PeerId> = others.iter().map(|(_, peer)| *peer).collect();
+        for archive in storage.get_archive_peer_ids() {
+            self.request_response.send_request(
+                &archive,
+                my_open_mls.sign(RequestMessage::IssuerSet {
+                    issuers: issuers.clone(),
+                })?,
+            );
+        }
+        for (index, peer) in &others {
+            println!("AA {index}: PeerId {peer}, directory {dir}/aa{index}");
+        }
+        println!(
+            "Split the issuing key into {n} shares, threshold {t}. Start AA i with -K {dir}/aa<i>."
+        );
+        Ok(())
+    }
+
     fn end_init_archive(
         &mut self,
         storage: &Storage,
@@ -415,7 +526,14 @@ impl MyBehaviour {
             let archive_ids = storage.get_archive_peer_ids();
             let group_numb = my_open_mls.create_mls_group(&archive_ids)?;
             my_open_mls.move_to_common(group_numb);
-            self.send_out_id_enc_shares(my_open_mls, &archive_ids, id, &enc_shares, &commits)?;
+            self.send_out_id_enc_shares(
+                my_open_mls,
+                &archive_ids,
+                id,
+                &enc_shares,
+                &commits,
+                true,
+            )?;
             storage.to_file()?;
         } else {
             log::error!(
@@ -472,8 +590,28 @@ impl MyBehaviour {
         storage: &Storage,
     ) -> Result<(), AbstSwarmError> {
         log::debug!("Received Request::Event: {:?}", request_event);
+        if let request_response::Event::OutboundFailure {
+            request_id, error, ..
+        } = &request_event
+        {
+            if let Some((id, _)) = storage.issuance_answer(*request_id, false) {
+                log::warn!("Not issuing for member {id}: an archive is unreachable ({error})");
+            }
+        }
         if let request_response::Event::Message { peer, message } = request_event {
             match message {
+                // An AA that only holds a key share (threshold issuance) takes part in joins
+                // and nothing else; the registrar does the rest.
+                request_response::Message::Request { request, .. }
+                    if !storage.is_registrar()
+                        && !matches!(
+                            request.body,
+                            RequestMessage::VerifyIdentity { .. }
+                                | RequestMessage::JoinKeyMaterial { .. }
+                        ) =>
+                {
+                    log::debug!("Ignoring a request from {peer}: this AA only issues credentials");
+                }
                 request_response::Message::Request {
                     request, channel, ..
                 } => {
@@ -504,6 +642,7 @@ impl MyBehaviour {
                                         threshold: storage.get_threshold(),
                                         epoch_secs,
                                         peers_per_member,
+                                        issuers: storage.issuer_info(),
                                     }
                                 } else {
                                     ResponseMessage::IdentityVerified {
@@ -514,6 +653,7 @@ impl MyBehaviour {
                                         threshold: None,
                                         epoch_secs,
                                         peers_per_member,
+                                        issuers: storage.issuer_info(),
                                     }
                                 };
                                 log::info!("Verified Identity sending out response...");
@@ -547,6 +687,23 @@ impl MyBehaviour {
                                 log::warn!("Rejecting join from {peer}: its shares do not match the archives and threshold");
                                 return Ok(());
                             }
+                            if storage.issuer_info().is_some() {
+                                return self.issue_partial(
+                                    my_open_mls,
+                                    storage,
+                                    channel,
+                                    ReturnMemkeyArgs {
+                                        peer_id: &peer,
+                                        g_sk: &g_sk,
+                                        h_sk: &h_sk,
+                                        commits: &commits,
+                                        enc_shares: &enc_shares,
+                                        pi1,
+                                        pi2,
+                                        pi3,
+                                    },
+                                );
+                            }
                             let (id, partial_memkey) = storage.return_memkey(ReturnMemkeyArgs {
                                 peer_id: &peer,
                                 g_sk: &g_sk,
@@ -557,12 +714,14 @@ impl MyBehaviour {
                                 pi2,
                                 pi3,
                             })?;
+                            // A single AA does not wait for the archives' answers.
                             self.send_out_id_enc_shares(
                                 my_open_mls,
                                 &storage.get_archive_peer_ids(),
                                 id,
                                 &enc_shares,
                                 &commits,
+                                true,
                             )?;
                             // The joining PeerID is linked to the member's name, so it does not
                             // join the common group: sharing peers register with a slot tag.
@@ -820,14 +979,27 @@ impl MyBehaviour {
                         _ => {}
                     }
                 }
-                request_response::Message::Response { response, .. } => {
-                    //Ignore all other Responses for now
-                    if let ResponseMessage::OpenPending = response.body {
+                request_response::Message::Response {
+                    response,
+                    request_id,
+                } => match response.body {
+                    ResponseMessage::OpenPending => {
                         log::info!(
                             "Archive {peer} queued the opening request for operator approval"
                         );
                     }
-                }
+                    ResponseMessage::IdShareStored { .. } => {
+                        if let Some((id, join)) = storage.issuance_answer(request_id, true) {
+                            self.send_partial(storage, id, join)?;
+                        }
+                    }
+                    ResponseMessage::IdShareConflict { id } => {
+                        log::warn!("Not issuing for member {id}: archive {peer} holds different shares for it");
+                        storage.issuance_answer(request_id, false);
+                    }
+                    //Ignore all other Responses for now
+                    _ => {}
+                },
             }
         }
         Ok(())
@@ -894,6 +1066,9 @@ impl EventHandler for MyBehaviour {
     }
 
     fn expire_peers(&mut self, my_open_mls: &MyOpenMls, storage: &Storage) {
+        if !storage.is_registrar() {
+            return;
+        }
         let expired = storage.expired_peers();
         if expired.is_empty() {
             return;
@@ -946,6 +1121,11 @@ impl InstructionHandler for MyBehaviour {
 
             Instruction::EndInitArchive => {
                 if let Err(error) = self.end_init_archive(storage, my_open_mls) {
+                    Self::notify(notification_tx, Notification::Err(error));
+                }
+            }
+            Instruction::SplitIssuingKey { n, t, dir } => {
+                if let Err(error) = self.split_issuing_key(storage, my_open_mls, n, t, dir) {
                     Self::notify(notification_tx, Notification::Err(error));
                 }
             }
