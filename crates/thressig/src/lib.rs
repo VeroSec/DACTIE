@@ -10,6 +10,7 @@ use std::collections::{HashMap, HashSet};
 use std::ops::Neg;
 use structs::*;
 use thiserror::Error;
+pub mod issuers;
 mod spk_dlog;
 pub mod structs;
 pub mod tags;
@@ -309,6 +310,15 @@ pub type JoinMem1Output = (
     Vec<G1>,
 );
 
+/// g^sk, h^sk and the proofs pi1, pi2, pi3 of `join_mem1_proofs`.
+pub type JoinMem1Proofs = (
+    G1,
+    G1,
+    (FieldElement, FieldElement),
+    (FieldElement, FieldElement),
+    (FieldElement, FieldElement),
+);
+
 pub fn join_mem1(
     id: usize,
     n: G1,
@@ -317,14 +327,26 @@ pub fn join_mem1(
     opener_pubkeys: &[G2],
 ) -> JoinMem1Output {
     let sk = FieldElement::random();
-    let g_sk = &grpkey.g * &sk;
-    let h = h0_base(&id);
-
     let (enc_shares, commits) = create_enc_shares(&id, grpkey, threshold, opener_pubkeys, &sk);
+    let (g_sk, h_sk, pi1, pi2, pi3) = join_mem1_proofs(id, &n, grpkey, &sk, &enc_shares, &commits);
+    (g_sk, h_sk, pi1, pi2, pi3, sk, enc_shares, commits)
+}
 
-    let h_sk = &h * &sk;
-    let pi1 = spk_dlog::sign(&g_sk, &grpkey.g, &n.to_bytes(false), &sk);
-    let pi2 = spk_dlog::sign(&h_sk, &h, &n.to_bytes(false), &sk);
+/// g^sk, h^sk and the proofs pi1–pi3 for one issuer's nonce `n`. With several issuers, a
+/// member keeps one sk and one set of shares and proves them to each issuer with its nonce.
+pub fn join_mem1_proofs(
+    id: usize,
+    n: &G1,
+    grpkey: &Grpkey,
+    sk: &FieldElement,
+    enc_shares: &[EncShare],
+    commits: &[G1],
+) -> JoinMem1Proofs {
+    let g_sk = &grpkey.g * sk;
+    let h = h0_base(&id);
+    let h_sk = &h * sk;
+    let pi1 = spk_dlog::sign(&g_sk, &grpkey.g, &n.to_bytes(false), sk);
+    let pi2 = spk_dlog::sign(&h_sk, &h, &n.to_bytes(false), sk);
     // The first commitment hides the same sk as h_sk, so the archives' shares open this member.
     let pi3 = spk_dlog::sign_eq(
         &h_sk,
@@ -332,10 +354,9 @@ pub fn join_mem1(
         &commits[0],
         &enc_shares[0].h_blind,
         &n.to_bytes(false),
-        &sk,
+        sk,
     );
-
-    (g_sk, h_sk, pi1, pi2, pi3, sk, enc_shares, commits)
+    (g_sk, h_sk, pi1, pi2, pi3)
 }
 
 /**
@@ -418,6 +439,68 @@ pub struct JoinMgr2Args<'a> {
     pub enc_shares: &'a [EncShare],
 }
 
+/// What a member sends to be issued a credential: its key g^sk and h^sk with the proofs
+/// pi1–pi3, and its key shares for the archives with their commitments.
+pub(crate) struct JoinRequest<'a> {
+    pub(crate) grpkey: &'a Grpkey,
+    pub(crate) n: &'a G1,
+    pub(crate) g_sk: &'a G1,
+    pub(crate) h_sk: &'a G1,
+    pub(crate) opener_pubkeys: &'a [G2],
+    pub(crate) commits: &'a [G1],
+    pub(crate) pi1: &'a (FieldElement, FieldElement),
+    pub(crate) pi2: &'a (FieldElement, FieldElement),
+    pub(crate) pi3: &'a (FieldElement, FieldElement),
+    pub(crate) enc_shares: &'a [EncShare],
+}
+
+/// The checks every issuer runs before it signs a member's key (a single manager in
+/// `join_mgr2`, each threshold issuer in `issuers::join_issuer2`). Returns sigma1 = h, the
+/// base of H0(id).
+pub(crate) fn check_join_request(id: usize, req: &JoinRequest) -> Result<G1, String> {
+    let JoinRequest {
+        grpkey,
+        n,
+        g_sk,
+        h_sk,
+        opener_pubkeys,
+        commits,
+        pi1,
+        pi2,
+        pi3,
+        enc_shares,
+    } = *req;
+    let h = h0_base(&id);
+
+    if !spk_dlog::verify(g_sk, &grpkey.g, pi1.clone(), &n.to_bytes(false)) {
+        return Err(String::from("error"));
+    }
+
+    if !spk_dlog::verify(h_sk, &h, pi2.clone(), &n.to_bytes(false)) {
+        return Err(String::from("error"));
+    }
+
+    // Without this, a member could share a different secret and could never be opened.
+    let h_blind = check_share_layout(enc_shares, commits, opener_pubkeys.len())?;
+    if !spk_dlog::verify_eq(
+        h_sk,
+        &h,
+        &commits[0],
+        &h_blind,
+        pi3.clone(),
+        &n.to_bytes(false),
+    ) {
+        return Err(String::from("Shares do not hide the member key"));
+    }
+
+    for (i, enc_share) in enc_shares.iter().enumerate() {
+        if !verify_enc_share_correctness(enc_share, grpkey, &opener_pubkeys[i], commits) {
+            return Err(String::from("Could not verify share"));
+        }
+    }
+    Ok(h)
+}
+
 pub fn join_mgr2(id: usize, args: JoinMgr2Args) -> Result<Memkey, String> {
     let JoinMgr2Args {
         gml,
@@ -439,27 +522,21 @@ pub fn join_mgr2(id: usize, args: JoinMgr2Args) -> Result<Memkey, String> {
         return Err(String::from("ID already in use"));
     }
 
-    let h = h0_base(&id);
-
-    if !spk_dlog::verify(g_sk, &grpkey.g, pi1, &n.to_bytes(false)) {
-        return Err(String::from("error"));
-    }
-
-    if !spk_dlog::verify(h_sk, &h, pi2, &n.to_bytes(false)) {
-        return Err(String::from("error"));
-    }
-
-    // Without this, a member could share a different secret and could never be opened.
-    let h_blind = check_share_layout(enc_shares, commits, opener_pubkeys.len())?;
-    if !spk_dlog::verify_eq(h_sk, &h, &commits[0], &h_blind, pi3, &n.to_bytes(false)) {
-        return Err(String::from("Shares do not hide the member key"));
-    }
-
-    for (i, enc_share) in enc_shares.iter().enumerate() {
-        if !verify_enc_share_correctness(enc_share, grpkey, &opener_pubkeys[i], commits) {
-            return Err(String::from("Could not verify share"));
-        }
-    }
+    let h = check_join_request(
+        id,
+        &JoinRequest {
+            grpkey,
+            n,
+            g_sk,
+            h_sk,
+            opener_pubkeys,
+            commits,
+            pi1: &pi1,
+            pi2: &pi2,
+            pi3: &pi3,
+            enc_shares,
+        },
+    )?;
 
     // Cam20's PS signature on sk: h^{x + y1 sk + y2 a'} = h_sk^{y1} * h^{x + y2 a'}.
     let a = h0_scalar(&id);
