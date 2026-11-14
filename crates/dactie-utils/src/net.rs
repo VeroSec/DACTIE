@@ -8,6 +8,16 @@ pub const MESH_N_LOW: usize = 10;
 pub const MESH_N: usize = 12;
 pub const MESH_N_HIGH: usize = 24;
 
+/// Gossip emission (IHAVE/IWANT) is off in every node: per heartbeat a node announces its
+/// recent messages to GOSSIP_LAZY peers or GOSSIP_FACTOR of its non-mesh peers, whichever is
+/// more, and both are 0. A message then travels only along the mesh, so gossip can no longer
+/// add direct receipts of a source's message beyond its mesh peers, and IHAVE/IWANT traffic
+/// cannot add to the load of a saturated node. libp2p's defaults are 6 and 0.25; the
+/// anonymity experiments ran with those (`--gossip-lazy`, `--gossip-factor`), which can only
+/// add direct receipts, so their results bound this setting from above.
+pub const GOSSIP_LAZY: usize = 0;
+pub const GOSSIP_FACTOR: f64 = 0.0;
+
 /// Returns true for addresses that must not be added to the DHT because no remote
 /// host can dial them.
 ///

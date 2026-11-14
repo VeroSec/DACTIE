@@ -110,6 +110,7 @@ All nodes use libp2p over TCP with Noise and Yamux. GossipSub is configured as f
 - Maximum message size 8 MiB, instead of the default 64 KiB that silently dropped complete MISP events.
 - Sharing peers use `flood_publish(false)` and `MessageAuthenticity::Anonymous`. Without flood publishing, a new message leaves its publisher only towards its mesh peers. Anonymous authenticity puts no author or sequence number into gossip messages.
 - All nodes use the mesh band `mesh_n_low = 10`, `mesh_n = 12`, `mesh_n_high = 24` (`crates/dactie-utils/src/net.rs`). GossipSub grafts only below `mesh_n_low` and prunes only above `mesh_n_high`, so the paper's anonymity bound is evaluated at `mesh_n_high`. The experiments in `experiments/anonymity` and `experiments/eclipse` set the band themselves with `-D`, `--mesh-n-low` and `--mesh-n-high`.
+- Gossip emission (IHAVE/IWANT) is off in all nodes (`gossip_lazy = 0`, `gossip_factor = 0`, same file), so messages travel only along the mesh. The anonymity experiments ran with libp2p's defaults (`--gossip-lazy 6`, `--gossip-factor 0.25`); gossip can only add direct receipts of a source's message, so their results bound the nodes' setting from above.
 
 ### Admission to GossipSub
 

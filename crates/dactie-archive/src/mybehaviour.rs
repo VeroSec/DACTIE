@@ -1,7 +1,9 @@
 use crate::db::{Db, Deferred, Row};
 use crate::mybehaviour::MyBehaviourError::PubSubBehaviourError;
 use dactie_utils::admission;
-use dactie_utils::net::{is_unroutable_addr, MESH_N, MESH_N_HIGH, MESH_N_LOW};
+use dactie_utils::net::{
+    is_unroutable_addr, GOSSIP_FACTOR, GOSSIP_LAZY, MESH_N, MESH_N_HIGH, MESH_N_LOW,
+};
 use dactie_utils::shared_structs::*;
 use dactie_utils::{dedup, stem};
 use libp2p::futures::TryStreamExt;
@@ -129,6 +131,8 @@ impl MyBehaviour {
             .mesh_n_low(MESH_N_LOW)
             .mesh_n(MESH_N)
             .mesh_n_high(MESH_N_HIGH)
+            .gossip_lazy(GOSSIP_LAZY)
+            .gossip_factor(GOSSIP_FACTOR)
             .fanout_ttl(admission::FANOUT_TTL)
             .build()
             .map_err(io::Error::other)

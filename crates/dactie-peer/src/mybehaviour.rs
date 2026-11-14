@@ -7,7 +7,9 @@ use dactie_utils::admission;
 use dactie_utils::conn_cap;
 use dactie_utils::dedup;
 use dactie_utils::key_store;
-use dactie_utils::net::{is_unroutable_addr, MESH_N, MESH_N_HIGH, MESH_N_LOW};
+use dactie_utils::net::{
+    is_unroutable_addr, GOSSIP_FACTOR, GOSSIP_LAZY, MESH_N, MESH_N_HIGH, MESH_N_LOW,
+};
 use dactie_utils::slot_store::SlotStore;
 use dactie_utils::stem::{
     self, Resend, Route, StemAck, StemCodec, StemConfig, StemMessage, STEM_PROTOCOL,
@@ -193,6 +195,8 @@ impl MyBehaviour {
             .mesh_n_low(MESH_N_LOW)
             .mesh_n(MESH_N)
             .mesh_n_high(MESH_N_HIGH)
+            .gossip_lazy(GOSSIP_LAZY)
+            .gossip_factor(GOSSIP_FACTOR)
             .fanout_ttl(admission::FANOUT_TTL)
             // Real CTI events are far larger than gossipsub's 65536-byte default,
             // which a 64KiB MISP event already exceeds once the group signature
