@@ -20,6 +20,7 @@ cp "$ENV_FILE" build/hosts.env
 envsubst < network/crypto-config.yaml.tmpl > build/crypto-config.yaml
 envsubst < network/configtx.yaml.tmpl > build/configtx.yaml
 tools() {
+    # shellcheck disable=SC2046  # "--user uid:gid" as two words, or nothing
     docker run --rm $(local_docker_user) -v "$HERE/build:/work" -w /work -e FABRIC_CFG_PATH=/work \
         "hyperledger/fabric-tools:$FABRIC_VERSION" "$@"
 }
@@ -29,6 +30,7 @@ tools cryptogen generate --config=crypto-config.yaml --output=crypto
 PROFILE=ChannelUsingRaft
 if [ "${IDEMIX:-0}" = 1 ]; then
     idemixgen() {
+        # shellcheck disable=SC2046  # "--user uid:gid" as two words, or nothing
         docker run --rm $(local_docker_user) -v "$HERE/build:/work" -w /work --entrypoint /idemixgen \
             dactie-fabric-loadgen:2 "$@"
     }

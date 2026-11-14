@@ -1,7 +1,9 @@
+# shellcheck shell=bash
 # Shared by generate.sh, deploy.sh and sweep.sh.
 FABRIC_VERSION=${FABRIC_VERSION:-2.5.16}
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
+# shellcheck source=/dev/null  # a hosts/*.env file or build/hosts.env, chosen at runtime
 load_env() { set -a; source "$1"; set +a; }
 
 # Containers that write files into this directory run as the calling user. Rootless Docker
@@ -45,4 +47,5 @@ base_dir() {
 }
 
 # --user for containers that write into base_dir on the hosts: evaluated by the remote shell.
+# shellcheck disable=SC2016  # the $(id ...) is for the remote shell
 host_docker_user() { if [ -z "$ORDERER_SSH" ]; then local_docker_user; else echo '--user $(id -u):$(id -g)'; fi; }

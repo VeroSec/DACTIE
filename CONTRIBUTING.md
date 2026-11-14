@@ -42,18 +42,24 @@ Things to know:
 
 ## 2. Code passes the linters
 
-Every Python file passes `ruff check` with ruff's default rules (`ruff.toml`), and the Rust code
-is formatted with rustfmt and passes clippy without warnings. CI uses ruff 0.17.5 and the Rust
-version of `rust-toolchain.toml`:
+Every file passes its linter, with the versions pinned in `scripts/lint.sh` (Rust: the version
+of `rust-toolchain.toml`):
 
-```sh
-pipx run ruff==0.17.5 check .                          # --fix applies the automatic fixes
-cargo fmt --all                                        # formats; --check only reports
-cargo clippy --workspace --all-targets -- -D warnings  # --fix applies the automatic fixes
-```
+| Code | Linter |
+| --- | --- |
+| Python | ruff, default rules (`ruff.toml`) |
+| Rust | rustfmt, and clippy without warnings |
+| Shell scripts | shellcheck, all severities (`.shellcheckrc`) |
+| Dockerfiles | hadolint |
+| GitHub workflows | actionlint |
+| Go | gofmt and go vet |
 
-Silence a clippy lint only where the code is right as it is, with `#[allow(clippy::...)]` and a
-comment that says why.
+Run them all with `scripts/lint.sh`, or one with `scripts/lint.sh python|rust|shell|docker|actions|go`;
+it needs Docker, and cargo for Rust. CI runs the same script. Automatic fixes: `cargo fmt --all`,
+`cargo clippy --fix`, and `ruff check --fix`.
+
+Silence a lint only where the code is right as it is, on that line, with a comment that says why
+(`#[allow(clippy::...)]`, `# shellcheck disable=SC...`, `# noqa: ...`).
 
 ## 3. Docker builds are checked
 

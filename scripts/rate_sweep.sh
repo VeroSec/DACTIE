@@ -36,6 +36,6 @@ for rate in ${RATES:-25 50 75 100 110 125 150 175}; do
   r minerva2 "$HP; logs -t --since $t0 $P-peer_1-1 | grep BENCH_RX" > "$D/r$rate.peer_1"
   r minerva3 "$HP; logs -t --since $t0 $P-peer_2-1 | grep BENCH_RX" > "$D/r$rate.peer_2"
   r minerva4 "$HP; logs -t --since $t0 $P-peer_3-1 | grep BENCH_RX" > "$D/r$rate.peer_3"
-  echo "$(date -u +%T) rate $rate: $(wc -l < $D/r$rate.peer_1) / $(wc -l < $D/r$rate.peer_2) / $(wc -l < $D/r$rate.peer_3) receipts; cpu: $(tr '\n' ' ' < $D/r$rate.cpu)"
+  echo "$(date -u +%T) rate $rate: $(wc -l < "$D/r$rate.peer_1") / $(wc -l < "$D/r$rate.peer_2") / $(wc -l < "$D/r$rate.peer_3") receipts; cpu: $(tr '\n' ' ' < "$D/r$rate.cpu")"
 done
 echo SWEEP-DONE

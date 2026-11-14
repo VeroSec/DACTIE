@@ -22,7 +22,7 @@ wait_count() { # file pattern count seconds
     done
     fail "waited $4 s for $3x '$2' in $(basename "$1")"
 }
-run() { tmux new-window -d -t $S -n "$1" "cd $W && RUST_LOG=${3:-info} $2 2>&1 | tee $W/$1.log"; }
+run() { tmux new-window -d -t "$S" -n "$1" "cd $W && RUST_LOG=${3:-info} $2 2>&1 | tee $W/$1.log"; }
 send() { tmux send-keys -t "$S:$1" "$2" Enter; }
 peer_id() { grep -o 'Local PeerId: [A-Za-z0-9]*' "$W/$1.log" | head -1 | awk '{print $3}'; }
 
@@ -31,19 +31,19 @@ start_network() {
     rm -rf "$W"; mkdir -p "$W"
     # A fresh database password per run, so that none is written into the repository.
     PG_PASS=$(od -An -tx1 -N12 /dev/urandom | tr -d ' \n')
-    tmux kill-session -t $S 2>/dev/null
-    docker rm -f $S-pg1 $S-pg2 >/dev/null 2>&1
+    tmux kill-session -t "$S" 2>/dev/null
+    docker rm -f "$S-pg1" "$S-pg2" >/dev/null 2>&1
     for i in 1 2; do
-        docker run -d --rm --name $S-pg$i -e POSTGRES_USER=archive -e POSTGRES_PASSWORD="$PG_PASS" \
+        docker run -d --rm --name "$S-pg$i" -e POSTGRES_USER=archive -e POSTGRES_PASSWORD="$PG_PASS" \
             -e POSTGRES_DB=archivedb -v "$REPO/init.sql:/docker-entrypoint-initdb.d/init.sql:ro" \
             -p 127.0.0.1:$((PG_PORT + i)):5432 postgres:16 >/dev/null || fail "postgres $i"
     done
     # During init the server listens on the socket only, so TCP readiness means init.sql ran.
     for i in 1 2; do
-        for _ in $(seq 1 60); do docker exec $S-pg$i pg_isready -q -h 127.0.0.1 -U archive && break; sleep 1; done
+        for _ in $(seq 1 60); do docker exec "$S-pg$i" pg_isready -q -h 127.0.0.1 -U archive && break; sleep 1; done
     done
 
-    tmux new-session -d -s $S -n main "sleep infinity"
+    tmux new-session -d -s "$S" -n main "sleep infinity"
     mkdir -p "$W"/{aa,arc1,arc2}
     run aa "$BIN/dactie-authority -K $W/aa --port $AA_PORT $*"
     wait_count "$W/aa.log" 'Local PeerId' 1 30

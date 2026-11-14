@@ -12,7 +12,7 @@ mkdir -p ./key_material/
 if [ ! -f ./key_material/boot_id.env ]; then
     echo "BOOT_PEER_ID=<insert_here>" > ./key_material/boot_id.env
 fi
-for i in {0..9}; do mkdir -p ./key_material/key_material_$i; done
+for i in {0..9}; do mkdir -p "./key_material/key_material_$i"; done
 
 #Builds Docker images
 # The peer image is built with the bench feature: the BENCH load generator is

@@ -1,0 +1,3 @@
+# Rule 2 (CONTRIBUTING.md): shellcheck follows the files a script sources, relative to the script.
+external-sources=true
+source-path=SCRIPTDIR
