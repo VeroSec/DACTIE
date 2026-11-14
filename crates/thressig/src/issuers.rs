@@ -129,9 +129,11 @@ pub struct JoinIssuer2Args<'a> {
 }
 
 /// One issuer's side of the join: the checks of `join_mgr2`, then its partial credential.
-/// Like `join_mgr2`, it refuses a MemberID already in its `gml`; with quorums of t of n
-/// issuers, any two quorums share 2t - n issuers, so a second credential for one MemberID
-/// needs more than 2t - n dishonest issuers.
+/// Like `join_mgr2`, it refuses a MemberID already in its `gml`. Two quorums of t of n
+/// issuers share at least 2t - n issuers, so a second credential for one MemberID needs all
+/// of those shared issuers to be dishonest: safe only while fewer than 2t - n issuers are
+/// dishonest (with 2 of 3, while all are honest). Cam20 closes this gap with an append-only
+/// ledger of one entry per MemberID that every issuer reads before it signs.
 pub fn join_issuer2(id: usize, args: JoinIssuer2Args) -> Result<PartialCredential, String> {
     let JoinIssuer2Args {
         gml,
@@ -202,10 +204,13 @@ pub fn combine_partials(
     id: usize,
     sk: &FieldElement,
 ) -> Result<Memkey, String> {
+    // Check first, then keep one partial per issuer, so that a bad partial cannot hide a
+    // good one from the same issuer.
     let mut seen = HashSet::new();
     let valid: Vec<&PartialCredential> = partials
         .iter()
-        .filter(|p| seen.insert(p.index) && verify_partial(p, pubs, grpkey, id, sk))
+        .filter(|p| verify_partial(p, pubs, grpkey, id, sk))
+        .filter(|p| seen.insert(p.index))
         .take(t)
         .collect();
     if t == 0 || valid.len() < t {
@@ -372,8 +377,11 @@ mod tests {
         let one_good = vec![bad.clone(), j.partials[1].clone()];
         assert!(combine_partials(&one_good, &j.pubs, 2, &j.grpkey, j.id, &j.sk).is_err());
         // ... but the bad one is skipped when two good ones are there.
-        let two_good = vec![bad, j.partials[1].clone(), j.partials[2].clone()];
+        let two_good = vec![bad.clone(), j.partials[1].clone(), j.partials[2].clone()];
         assert!(combine_partials(&two_good, &j.pubs, 2, &j.grpkey, j.id, &j.sk).is_ok());
+        // A bad partial does not hide a good one from the same issuer.
+        let shadowed = vec![bad, j.partials[0].clone(), j.partials[1].clone()];
+        assert!(combine_partials(&shadowed, &j.pubs, 2, &j.grpkey, j.id, &j.sk).is_ok());
     }
 
     #[test]
