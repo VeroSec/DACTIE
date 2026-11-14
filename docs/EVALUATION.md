@@ -167,6 +167,8 @@ on a peer.
   accept up to 8 MiB; they must agree, or a receiver drops the message without an error.
 - **Signature encoding.** The compact byte encoding instead of `amcl_wrapper`'s hex strings
   takes a signature from 614 to 226 bytes on the wire. All nodes must run a matching build.
+  Since the credential follows Cam20 exactly (2026-11-14), a signature carries a second response
+  scalar and takes 282 bytes.
 
 ## Signature microbenchmark
 

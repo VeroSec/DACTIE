@@ -100,6 +100,8 @@ impl StoredKeyMaterial {
             sigma1: None,
             sigma2: None,
             e1: None,
+            a: None,
+            e2: None,
         });
         self.grpkey = Some(grpkey);
         self.id = Some(id);

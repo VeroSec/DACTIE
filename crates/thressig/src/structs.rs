@@ -69,12 +69,19 @@ pub struct Mgrkey {
     pub y2: FieldElement,
 }
 
+/// A member's group secret key: its sk and the issuer's PS signature on it, as in Cam20,
+/// Section 4.1: (a', sigma1 = h, sigma2 = h^{x + y1 sk + y2 a'}) with (a', h) = H0(id).
+/// e1 = e(sigma1, Y1~) and e2 = e(sigma1, Y2~) are cached for signing.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Memkey {
     pub sk: FieldElement,
     pub sigma1: Option<G1>,
     pub sigma2: Option<G1>,
     pub e1: Option<GT>,
+    #[serde(default)]
+    pub a: Option<FieldElement>,
+    #[serde(default)]
+    pub e2: Option<GT>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -85,8 +92,12 @@ pub struct Signature {
     pub sigma2: G1,
     #[serde(with = "fr_bytes")]
     pub c: FieldElement,
+    /// Response for sk.
     #[serde(with = "fr_bytes")]
     pub s: FieldElement,
+    /// Response for a' (Cam20's second hidden value, see Memkey).
+    #[serde(with = "fr_bytes")]
+    pub s2: FieldElement,
 }
 
 /// Proves knowledge of the sk of some member's credential and that value = base^sk for given
@@ -100,8 +111,12 @@ pub struct MemberProof {
     pub sigma2: G1,
     #[serde(with = "fr_bytes")]
     pub c: FieldElement,
+    /// Response for sk.
     #[serde(with = "fr_bytes")]
     pub s: FieldElement,
+    /// Response for a' (Cam20's second hidden value, see Memkey).
+    #[serde(with = "fr_bytes")]
+    pub s2: FieldElement,
 }
 
 /// A member's tag for one of its k slots in an epoch, H(epoch, slot)^sk.

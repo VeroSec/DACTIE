@@ -1416,21 +1416,38 @@ impl MyOpenMls {
         thressig::verify_enc_share_correctness(enc_share, &group_key, &elgamal_pk, commits)
     }
 
-    pub fn open<K>(
+    /// The members in `gml` that made `signature`, from the archives' partial openings.
+    pub fn open(
         &self,
         signature: &Signature,
-        gml: HashSet<K>,
-        all_sj: HashMap<usize, Vec<(K, thressig::GT)>>,
-    ) -> Vec<K>
-    where
-        K: Eq + Clone,
-    {
+        gml: HashSet<usize>,
+        all_sj: HashMap<usize, Vec<(usize, thressig::GT)>>,
+    ) -> Vec<usize> {
         let group_key = match self.key_store.lock().unwrap().get_grpkey() {
             Some(v) => v,
             None => return Vec::new(),
         };
 
         thressig::open(signature, &group_key, &gml, &all_sj)
+    }
+
+    /// The sharing peers of `member`, which `open` found to have made `signature`.
+    pub fn open_peers_of<K>(
+        &self,
+        signature: &Signature,
+        member: usize,
+        peers: HashSet<K>,
+        all_sj: HashMap<usize, Vec<(K, thressig::GT)>>,
+    ) -> Vec<K>
+    where
+        K: Eq + Clone + std::hash::Hash,
+    {
+        let group_key = match self.key_store.lock().unwrap().get_grpkey() {
+            Some(v) => v,
+            None => return Vec::new(),
+        };
+
+        thressig::open_peers_of(signature, &group_key, member, &peers, &all_sj)
     }
 
     /*Encrypts a message for specific group
