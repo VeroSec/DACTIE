@@ -19,7 +19,7 @@ harness output of one cell.
 | Latency table | `latency/rerun-2026-10-26.csv` (runs `off-*`, receiver `peer_1`), every receipt in `latency/raw-2026-10-26.csv` |
 | Comparison with Hyperledger Fabric (arrival rates 25 to 175 msg/s) | DACTIE `latency/rate-sweep-2026-11-08/`, `latency/rate-sweep-2026-11-11/`; Fabric `fabric/rate-sweep-2026-11-11/`; side by side `fabric/rate-sweep-2026-11-11/comparison.csv`; Fabric with anonymous Idemix clients `fabric/rate-sweep-2026-11-13-idemix/` |
 | Soak test (33.4 hours) | `latency/soak/` |
-| Microbenchmark | `benchmark/README.md` |
+| Microbenchmark | `benchmark/thressig-epyc7763-2026-11-15.txt`; setup and older results in `experiments/benchmark/README.md` |
 
 ## Single-attacker anonymity: `anonymity_parsed.csv`, `sizes/`
 
