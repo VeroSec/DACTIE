@@ -163,17 +163,17 @@ grid (`output/<attackers>/`, 375 runs) and a large one (`old_output/<attackers>/
 attacker peers, `attacker_ratio`, `received_messages`, the share of the other
 honest peers that received the victim's message (`message_ratio`), `gossip` and
 `grid`; `eclipse_gossip_on.csv` and `eclipse_gossip_off.csv` split it by setting.
-Rebuild them with `python3 scripts/parse_eclipse_rerun.py`. `queue.log` logs the
-start and end of every series, `stats.log` the conntrack count, the kernel's
-"table full" messages since the start, the running series and the load once a minute.
+Rebuild them with `python3 scripts/parse_eclipse_rerun.py`. `stats.log` logs the
+conntrack count, the kernel's "table full" messages since the start, the running
+series and the load once a minute.
 
 The kernel dropped packets once, on 2026-11-15 from 15:21:43 to 15:21:48 UTC
 (20 "table full" messages, none before or after), while five large series ran.
 Those five were then interrupted. Each keeps its runs completed before the burst
 in `eclipse_100_120_*.csv` (whole numbers of honest peers only); the original
 with the later rows is kept as `*.csv.killed`, `RESUME` holds the number of honest
-peers the series was restarted from, and `eclipse_<resume>_120_*.csv` and
-`run2.log` hold the rest. The parser reads both CSVs and skips `*.killed`. In
+peers the series was restarted from, and `eclipse_<resume>_120_*.csv` holds the
+rest. The parser reads both CSVs and skips `*.killed`. In
 `gossip-on/old_output/10/`, the row for 111 honest peers was removed from
 `eclipse_avg_100_120_*.csv`, since it was written after the burst. Every series
 has all its runs: 105 per large series, 3 per number of honest peers in the small ones.
