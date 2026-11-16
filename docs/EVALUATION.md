@@ -19,7 +19,7 @@ data files and their columns are described in [results/README.md](../results/REA
 | Timing estimators | simulation | `scripts/anonymity_coalition.sh OUT 0 0.2` | `scripts/repeated_timing_summary.py` | `results/coalition/timing/` |
 | Repeated messages, PeerID rotation | simulation | `scripts/anonymity_repeated.sh` | `scripts/repeated_timing_summary.py` | `results/repeated/` |
 | Cost of the source's loop re-send | model | `scripts/stem_loop_cost.py 100 500` | – | [DANDELION.md](DANDELION.md) |
-| Eclipse attacks | simulation | `experiments/eclipse` | `scripts/parse_eclipse_output.py` | `results/eclipse/` |
+| Eclipse attacks | simulation | `experiments/eclipse` | `scripts/parse_eclipse_rerun.py` | `results/eclipse/rerun-2026-11-15/` |
 
 The payloads of the latency runs are in `workloads/`: a MISP event from the abuse.ch
 MalwareBazaar feed (`workloads/misp/`) and STIX 2.1 bundles from the MITRE ATT&CK ICS domain
@@ -221,16 +221,23 @@ messages each and gives the cost of the source's re-send when its message loops 
 The eclipse harness (`experiments/eclipse`) lets attackers stop forwarding a victim's
 messages after a set time and counts how many honest peers still receive the victim's
 measurement message, without flood publishing. Its
-[README](../experiments/eclipse/README.md) describes the setup and the two series of the
-paper (847 runs, 12 to 220 peers). The repository does not record the exact commands of those
-series; one run of the kind they contain is
+[README](../experiments/eclipse/README.md) describes the setup and the rerun behind the paper's
+figure: the configuration of the release, gossip emission on and off, 1,320 runs each with 12
+to 220 peers (2026-11-15/16). One series of its small grid, here with gossip emission off:
 
 ```bash
-cargo run --release -p dactie-experiment-eclipse -- -n 6 -N 6 -A 60 -a 15 -s 30 -r 20
+cargo run --release -p dactie-experiment-eclipse -- -n 2 -N 25 -A 100 -s 180 -i fix=5 -r 3 \
+    --gossip-lazy 0 --gossip-factor 0 -o /tmp/eclipse/
+python3 scripts/parse_eclipse_rerun.py /tmp/eclipse/eclipse_results.csv
 ```
 
-`python3 scripts/parse_eclipse_output.py` collects the runs in `results/eclipse/` into
-`results/eclipse/eclipse_parsed.csv`.
+Every run appends one row to the results CSV (`--results`, by default
+`<out-path>/eclipse_results.csv`), which several series can share; the log of each series
+stays in `--out-path`. The parser splits the rows by gossip setting into the two series of
+the figure. All peers of a series run in one process over loopback TCP. Before running
+several series in parallel, read the README's section on the conntrack table: when it is
+full, the kernel drops packets silently. The parsed runs of the paper are in
+`results/eclipse/rerun-2026-11-15/`.
 
 ## Comparison with Hyperledger Fabric
 

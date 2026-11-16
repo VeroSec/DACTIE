@@ -95,6 +95,8 @@ impl Peer {
                     .mesh_n(gossip.mesh.n)
                     .mesh_n_high(gossip.mesh.high)
                     .mesh_outbound_min(gossip.mesh.outbound_min)
+                    .gossip_lazy(gossip.gossip_lazy)
+                    .gossip_factor(gossip.gossip_factor)
                     .build()
                     .map_err(io::Error::other)
                     .unwrap(); // Temporary hack because `build` does not return a proper `std::error::Error`.
@@ -169,7 +171,7 @@ impl Peer {
                         },
                         ControlSignal::Pub(val) => {
                             if val == self.get_peer_id(){
-                                 println!("Stopping");
+                                 say!("Stopping");
                                 let message = "Stop".repeat(30);
                                 let _ = self.swarm.behaviour_mut().gossipsub.publish(IdentTopic::new("Test"),message); //Not handled
                             }

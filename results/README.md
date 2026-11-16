@@ -15,7 +15,8 @@ harness output of one cell.
 | Timing estimators (extended version) | `coalition/timing/q0/`, `coalition/timing/q0.2/` |
 | Repeated messages and PeerID rotation (extended version) | `repeated/` |
 | Early single-attacker series (not in the paper) | `anonymity-early/` |
-| Eclipse attacks (847 runs) | `eclipse/eclipse_parsed.csv`, raw runs in `eclipse/output/`, `eclipse/old_output/` |
+| Eclipse attacks, gossip emission on and off (1,320 runs each) | `eclipse/rerun-2026-11-15/eclipse_gossip_on.csv`, `eclipse_gossip_off.csv`, both in `eclipse_gossip_parsed.csv` |
+| Eclipse attacks of the camera-ready paper (847 runs) | `eclipse/eclipse_parsed.csv` |
 | Latency table | `latency/rerun-2026-10-26.csv` (runs `off-*`, receiver `peer_1`), every receipt in `latency/raw-2026-10-26.csv` |
 | Comparison with Hyperledger Fabric (arrival rates 25 to 175 msg/s) | DACTIE `latency/rate-sweep-2026-11-08/`, `latency/rate-sweep-2026-11-11/`; Fabric `fabric/rate-sweep-2026-11-11/`; side by side `fabric/rate-sweep-2026-11-11/comparison.csv`; Fabric with anonymous Idemix clients `fabric/rate-sweep-2026-11-13-idemix/` |
 | Soak test (33.4 hours) | `latency/soak/` |
@@ -152,11 +153,28 @@ python3 scripts/repeated_timing_summary.py results
 
 ## Eclipse attacks: `eclipse/`
 
-One row per run, 847 in all: network size, honest and attacker peers, the
-attacker share (`attacker_ratio`), the share of honest peers that received the
-victim's message (`message_ratio`), and the source folder (`series`: `output` or
-`old_output`). The setup is described in `dactie-experiment-eclipse/README.md`.
-Rebuild the CSV with `python3 scripts/parse_eclipse_output.py`.
+Setup, grids and results are described in `experiments/eclipse/README.md`.
+
+`rerun-2026-11-15/` holds the paper's figure: the configuration of the release,
+with gossip emission on and off, each with a small grid (375 runs) and a large one
+(945 runs), on labrada from 2026-11-15 05:37 to 2026-11-16 09:58 UTC.
+`eclipse_gossip_parsed.csv` has one row per run (2,640): network size, honest and
+attacker peers, `attacker_ratio`, `received_messages`, the share of the other
+honest peers that received the victim's message (`message_ratio`), `gossip` and
+`grid`; `eclipse_gossip_on.csv` and `eclipse_gossip_off.csv` split it by setting.
+`scripts/parse_eclipse_rerun.py` made them from the harness output, which stays on
+labrada.
+
+The kernel dropped packets once, on 2026-11-15 from 15:21:43 to 15:21:48 UTC
+(20 "table full" messages, none before or after), while five large series ran.
+Those five were then interrupted; their runs completed before the burst are kept,
+and the rest was run again, so every series has all its runs: 105 per large
+series, 3 per number of honest peers in the small ones.
+
+`eclipse_parsed.csv` holds the 847 runs of the camera-ready paper, which used
+libp2p's default mesh band 5/6/12 (see `experiments/eclipse/README.md`), one row
+per run with the source folder as `series`. Their raw output and parser are in the
+repository's history up to `f0e0ad3`.
 
 ## Latency: `latency/`
 
