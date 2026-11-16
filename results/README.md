@@ -16,7 +16,6 @@ harness output of one cell.
 | Repeated messages and PeerID rotation (extended version) | `repeated/` |
 | Early single-attacker series (not in the paper) | `anonymity-early/` |
 | Eclipse attacks, gossip emission on and off (1,320 runs each) | `eclipse/rerun-2026-11-15/eclipse_gossip_on.csv`, `eclipse_gossip_off.csv`, raw runs in `eclipse/rerun-2026-11-15/gossip-on/`, `gossip-off/` |
-| Earlier eclipse series (847 runs, superseded) | `eclipse/eclipse_parsed.csv`, raw runs in `eclipse/output/`, `eclipse/old_output/` |
 | Latency table | `latency/rerun-2026-10-26.csv` (runs `off-*`, receiver `peer_1`), every receipt in `latency/raw-2026-10-26.csv` |
 | Comparison with Hyperledger Fabric (arrival rates 25 to 175 msg/s) | DACTIE `latency/rate-sweep-2026-11-08/`, `latency/rate-sweep-2026-11-11/`; Fabric `fabric/rate-sweep-2026-11-11/`; side by side `fabric/rate-sweep-2026-11-11/comparison.csv`; Fabric with anonymous Idemix clients `fabric/rate-sweep-2026-11-13-idemix/` |
 | Soak test (33.4 hours) | `latency/soak/` |
@@ -178,11 +177,9 @@ rest. The parser reads both CSVs and skips `*.killed`. In
 `eclipse_avg_100_120_*.csv`, since it was written after the burst. Every series
 has all its runs: 105 per large series, 3 per number of honest peers in the small ones.
 
-The earlier 847 runs (`eclipse_parsed.csv`, `output/`, `old_output/`), which the
-paper reported before the rerun, used an earlier harness version with libp2p's
-default mesh band 5/6/12 instead of the release's 10/12/24 (see
-`experiments/eclipse/README.md`). One row per run, with the source folder as
-`series`; rebuild with `python3 scripts/parse_eclipse_output.py`.
+The earlier 847 runs of the camera-ready paper, with libp2p's default mesh band
+5/6/12, are in the repository's history up to `f0e0ad3` (see
+`experiments/eclipse/README.md`).
 
 ## Latency: `latency/`
 

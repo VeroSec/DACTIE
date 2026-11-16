@@ -19,7 +19,7 @@ data files and their columns are described in [results/README.md](../results/REA
 | Timing estimators | simulation | `scripts/anonymity_coalition.sh OUT 0 0.2` | `scripts/repeated_timing_summary.py` | `results/coalition/timing/` |
 | Repeated messages, PeerID rotation | simulation | `scripts/anonymity_repeated.sh` | `scripts/repeated_timing_summary.py` | `results/repeated/` |
 | Cost of the source's loop re-send | model | `scripts/stem_loop_cost.py 100 500` | – | [DANDELION.md](DANDELION.md) |
-| Eclipse attacks | simulation | `experiments/eclipse` | `scripts/parse_eclipse_output.py` | `results/eclipse/` |
+| Eclipse attacks | simulation | `experiments/eclipse` | `scripts/parse_eclipse_rerun.py` | `results/eclipse/rerun-2026-11-15/` |
 
 The payloads of the latency runs are in `workloads/`: a MISP event from the abuse.ch
 MalwareBazaar feed (`workloads/misp/`) and STIX 2.1 bundles from the MITRE ATT&CK ICS domain
