@@ -15,7 +15,8 @@ harness output of one cell.
 | Timing estimators (extended version) | `coalition/timing/q0/`, `coalition/timing/q0.2/` |
 | Repeated messages and PeerID rotation (extended version) | `repeated/` |
 | Early single-attacker series (not in the paper) | `anonymity-early/` |
-| Eclipse attacks (847 runs) | `eclipse/eclipse_parsed.csv`, raw runs in `eclipse/output/`, `eclipse/old_output/` |
+| Eclipse attacks, gossip emission on and off (1,320 runs each) | `eclipse/rerun-2026-11-15/eclipse_gossip_on.csv`, `eclipse_gossip_off.csv`, raw runs in `eclipse/rerun-2026-11-15/gossip-on/`, `gossip-off/` |
+| Earlier eclipse series (847 runs, superseded) | `eclipse/eclipse_parsed.csv`, raw runs in `eclipse/output/`, `eclipse/old_output/` |
 | Latency table | `latency/rerun-2026-10-26.csv` (runs `off-*`, receiver `peer_1`), every receipt in `latency/raw-2026-10-26.csv` |
 | Comparison with Hyperledger Fabric (arrival rates 25 to 175 msg/s) | DACTIE `latency/rate-sweep-2026-11-08/`, `latency/rate-sweep-2026-11-11/`; Fabric `fabric/rate-sweep-2026-11-11/`; side by side `fabric/rate-sweep-2026-11-11/comparison.csv`; Fabric with anonymous Idemix clients `fabric/rate-sweep-2026-11-13-idemix/` |
 | Soak test (33.4 hours) | `latency/soak/` |
@@ -152,11 +153,35 @@ python3 scripts/repeated_timing_summary.py results
 
 ## Eclipse attacks: `eclipse/`
 
-One row per run, 847 in all: network size, honest and attacker peers, the
-attacker share (`attacker_ratio`), the share of honest peers that received the
-victim's message (`message_ratio`), and the source folder (`series`: `output` or
-`old_output`). The setup is described in `dactie-experiment-eclipse/README.md`.
-Rebuild the CSV with `python3 scripts/parse_eclipse_output.py`.
+Setup, grids and results are described in `experiments/eclipse/README.md`.
+
+`rerun-2026-11-15/` holds the paper's figure: the configuration of the release,
+with gossip emission on (`gossip-on/`) and off (`gossip-off/`), each with a small
+grid (`output/<attackers>/`, 375 runs) and a large one (`old_output/<attackers>/`,
+945 runs), on labrada from 2026-11-15 05:37 to 2026-11-16 09:58 UTC.
+`eclipse_gossip_parsed.csv` has one row per run (2,640): network size, honest and
+attacker peers, `attacker_ratio`, `received_messages`, the share of the other
+honest peers that received the victim's message (`message_ratio`), `gossip` and
+`grid`; `eclipse_gossip_on.csv` and `eclipse_gossip_off.csv` split it by setting.
+Rebuild them with `python3 scripts/parse_eclipse_rerun.py`. `queue.log` logs the
+start and end of every series, `stats.log` the conntrack count, the kernel's
+"table full" messages since the start, the running series and the load once a minute.
+
+The kernel dropped packets once, on 2026-11-15 from 15:21:43 to 15:21:48 UTC
+(20 "table full" messages, none before or after), while five large series ran.
+Those five were then interrupted. Each keeps its runs completed before the burst
+in `eclipse_100_120_*.csv` (whole numbers of honest peers only); the original
+with the later rows is kept as `*.csv.killed`, `RESUME` holds the number of honest
+peers the series was restarted from, and `eclipse_<resume>_120_*.csv` and
+`run2.log` hold the rest. The parser reads both CSVs and skips `*.killed`. In
+`gossip-on/old_output/10/`, the row for 111 honest peers was removed from
+`eclipse_avg_100_120_*.csv`, since it was written after the burst. Every series
+has all its runs: 105 per large series, 3 per number of honest peers in the small ones.
+
+The earlier 847 runs (`eclipse_parsed.csv`, `output/`, `old_output/`), which the
+paper reported before the rerun, used an earlier harness version whose exact
+flags the repository does not record. One row per run, with the source folder as
+`series`; rebuild with `python3 scripts/parse_eclipse_output.py`.
 
 ## Latency: `latency/`
 

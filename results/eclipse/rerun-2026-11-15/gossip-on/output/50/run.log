@@ -1,0 +1,254 @@
+Starting Experiment
+Starting Run 1 from 3, with peer_n=2, attack_time=10secs, pub_interval=Fix(5)
+Sending Control Signal
+Sending Attack Signal
+Sending Publish Signal
+Stopping
+peers stopped
+0 Peers from 2 received victim messages.
+Starting Run 2 from 3, with peer_n=2, attack_time=10secs, pub_interval=Fix(5)
+Sending Control Signal
+Sending Attack Signal
+Sending Publish Signal
+Stopping
+peers stopped
+0 Peers from 2 received victim messages.
+Starting Run 3 from 3, with peer_n=2, attack_time=10secs, pub_interval=Fix(5)
+Sending Control Signal
+Sending Attack Signal
+Sending Publish Signal
+Stopping
+peers stopped
+1 Peers from 2 received victim messages.
+All Repetitions done!
+On Average 0.33333334 Peers from 2 received victim messages.
+Starting Run 1 from 3, with peer_n=3, attack_time=10secs, pub_interval=Fix(5)
+Sending Control Signal
+Sending Attack Signal
+Sending Publish Signal
+Stopping
+peers stopped
+0 Peers from 3 received victim messages.
+Starting Run 2 from 3, with peer_n=3, attack_time=10secs, pub_interval=Fix(5)
+Sending Control Signal
+Sending Attack Signal
+Sending Publish Signal
+Stopping
+peers stopped
+0 Peers from 3 received victim messages.
+Starting Run 3 from 3, with peer_n=3, attack_time=10secs, pub_interval=Fix(5)
+Sending Control Signal
+Sending Attack Signal
+Sending Publish Signal
+Stopping
+peers stopped
+2 Peers from 3 received victim messages.
+All Repetitions done!
+On Average 0.6666667 Peers from 3 received victim messages.
+Starting Run 1 from 3, with peer_n=4, attack_time=10secs, pub_interval=Fix(5)
+Sending Control Signal
+Sending Attack Signal
+Sending Publish Signal
+Stopping
+peers stopped
+3 Peers from 4 received victim messages.
+Starting Run 2 from 3, with peer_n=4, attack_time=10secs, pub_interval=Fix(5)
+Sending Control Signal
+Sending Attack Signal
+Sending Publish Signal
+Stopping
+peers stopped
+3 Peers from 4 received victim messages.
+Starting Run 3 from 3, with peer_n=4, attack_time=10secs, pub_interval=Fix(5)
+Sending Control Signal
+Sending Attack Signal
+Sending Publish Signal
+Stopping
+peers stopped
+3 Peers from 4 received victim messages.
+All Repetitions done!
+On Average 3 Peers from 4 received victim messages.
+Starting Run 1 from 3, with peer_n=5, attack_time=10secs, pub_interval=Fix(5)
+Sending Control Signal
+Sending Attack Signal
+Sending Publish Signal
+Stopping
+peers stopped
+0 Peers from 5 received victim messages.
+Starting Run 2 from 3, with peer_n=5, attack_time=10secs, pub_interval=Fix(5)
+Sending Control Signal
+Sending Attack Signal
+Sending Publish Signal
+Stopping
+peers stopped
+4 Peers from 5 received victim messages.
+Starting Run 3 from 3, with peer_n=5, attack_time=10secs, pub_interval=Fix(5)
+Sending Control Signal
+Sending Attack Signal
+Sending Publish Signal
+Stopping
+peers stopped
+4 Peers from 5 received victim messages.
+All Repetitions done!
+On Average 2.6666667 Peers from 5 received victim messages.
+Starting Run 1 from 3, with peer_n=6, attack_time=10secs, pub_interval=Fix(5)
+Sending Control Signal
+Sending Attack Signal
+Sending Publish Signal
+Stopping
+peers stopped
+5 Peers from 6 received victim messages.
+Starting Run 2 from 3, with peer_n=6, attack_time=10secs, pub_interval=Fix(5)
+Sending Control Signal
+Sending Attack Signal
+Sending Publish Signal
+Stopping
+peers stopped
+5 Peers from 6 received victim messages.
+Starting Run 3 from 3, with peer_n=6, attack_time=10secs, pub_interval=Fix(5)
+Sending Control Signal
+Sending Attack Signal
+Sending Publish Signal
+Stopping
+peers stopped
+5 Peers from 6 received victim messages.
+All Repetitions done!
+On Average 5 Peers from 6 received victim messages.
+Starting Run 1 from 3, with peer_n=7, attack_time=10secs, pub_interval=Fix(5)
+Sending Control Signal
+Sending Attack Signal
+Sending Publish Signal
+Stopping
+peers stopped
+6 Peers from 7 received victim messages.
+Starting Run 2 from 3, with peer_n=7, attack_time=10secs, pub_interval=Fix(5)
+Sending Control Signal
+Sending Attack Signal
+Sending Publish Signal
+Stopping
+peers stopped
+6 Peers from 7 received victim messages.
+Starting Run 3 from 3, with peer_n=7, attack_time=10secs, pub_interval=Fix(5)
+Sending Control Signal
+Sending Attack Signal
+Sending Publish Signal
+Stopping
+peers stopped
+6 Peers from 7 received victim messages.
+All Repetitions done!
+On Average 6 Peers from 7 received victim messages.
+Starting Run 1 from 3, with peer_n=8, attack_time=10secs, pub_interval=Fix(5)
+Sending Control Signal
+Sending Attack Signal
+Sending Publish Signal
+Stopping
+peers stopped
+7 Peers from 8 received victim messages.
+Starting Run 2 from 3, with peer_n=8, attack_time=10secs, pub_interval=Fix(5)
+Sending Control Signal
+Sending Attack Signal
+Sending Publish Signal
+Stopping
+peers stopped
+7 Peers from 8 received victim messages.
+Starting Run 3 from 3, with peer_n=8, attack_time=10secs, pub_interval=Fix(5)
+Sending Control Signal
+Sending Attack Signal
+Sending Publish Signal
+Stopping
+peers stopped
+7 Peers from 8 received victim messages.
+All Repetitions done!
+On Average 7 Peers from 8 received victim messages.
+Starting Run 1 from 3, with peer_n=9, attack_time=10secs, pub_interval=Fix(5)
+Sending Control Signal
+Sending Attack Signal
+Sending Publish Signal
+Stopping
+peers stopped
+8 Peers from 9 received victim messages.
+Starting Run 2 from 3, with peer_n=9, attack_time=10secs, pub_interval=Fix(5)
+Sending Control Signal
+Sending Attack Signal
+Sending Publish Signal
+Stopping
+peers stopped
+8 Peers from 9 received victim messages.
+Starting Run 3 from 3, with peer_n=9, attack_time=10secs, pub_interval=Fix(5)
+Sending Control Signal
+Sending Attack Signal
+Sending Publish Signal
+Stopping
+peers stopped
+8 Peers from 9 received victim messages.
+All Repetitions done!
+On Average 8 Peers from 9 received victim messages.
+Starting Run 1 from 3, with peer_n=10, attack_time=10secs, pub_interval=Fix(5)
+Sending Control Signal
+Sending Attack Signal
+Sending Publish Signal
+Stopping
+peers stopped
+9 Peers from 10 received victim messages.
+Starting Run 2 from 3, with peer_n=10, attack_time=10secs, pub_interval=Fix(5)
+Sending Control Signal
+Sending Attack Signal
+Sending Publish Signal
+Stopping
+peers stopped
+9 Peers from 10 received victim messages.
+Starting Run 3 from 3, with peer_n=10, attack_time=10secs, pub_interval=Fix(5)
+Sending Control Signal
+Sending Attack Signal
+Sending Publish Signal
+Stopping
+peers stopped
+9 Peers from 10 received victim messages.
+All Repetitions done!
+On Average 9 Peers from 10 received victim messages.
+Starting Run 1 from 3, with peer_n=11, attack_time=10secs, pub_interval=Fix(5)
+Sending Control Signal
+Sending Attack Signal
+Sending Publish Signal
+Stopping
+peers stopped
+10 Peers from 11 received victim messages.
+Starting Run 2 from 3, with peer_n=11, attack_time=10secs, pub_interval=Fix(5)
+Sending Control Signal
+Sending Attack Signal
+Sending Publish Signal
+Stopping
+peers stopped
+10 Peers from 11 received victim messages.
+Starting Run 3 from 3, with peer_n=11, attack_time=10secs, pub_interval=Fix(5)
+Sending Control Signal
+Sending Attack Signal
+Sending Publish Signal
+Stopping
+peers stopped
+10 Peers from 11 received victim messages.
+All Repetitions done!
+On Average 10 Peers from 11 received victim messages.
+Starting Run 1 from 3, with peer_n=12, attack_time=10secs, pub_interval=Fix(5)
+Sending Control Signal
+Sending Attack Signal
+Sending Publish Signal
+Stopping
+peers stopped
+11 Peers from 12 received victim messages.
+Starting Run 2 from 3, with peer_n=12, attack_time=10secs, pub_interval=Fix(5)
+Sending Control Signal
+Sending Attack Signal
+Sending Publish Signal
+Stopping
+peers stopped
+11 Peers from 12 received victim messages.
+Starting Run 3 from 3, with peer_n=12, attack_time=10secs, pub_interval=Fix(5)
+Sending Control Signal
+Sending Attack Signal
+Sending Publish Signal
+Stopping
+peers stopped
+11 Peers from 12 received victim messages.
+All Repetitions done!
+On Average 11 Peers from 12 received victim messages.

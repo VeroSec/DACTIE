@@ -1,0 +1,4 @@
+total_peers,honest_peers,attacker_peers,mesh_n,flood_publish,gossip_lazy,gossip_factor,run,received_messages
+12,2,10,12,false,0,0,1,1
+12,2,10,12,false,0,0,2,1
+12,2,10,12,false,0,0,3,1

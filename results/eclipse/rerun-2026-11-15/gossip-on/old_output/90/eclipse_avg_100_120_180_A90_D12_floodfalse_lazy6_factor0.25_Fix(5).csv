@@ -1,0 +1,8 @@
+total_peers,honest_peers,attacker_peers,mesh_n,flood_publish,gossip_lazy,gossip_factor,received_messages
+190,100,90,12,false,6,0.25,99
+191,101,90,12,false,6,0.25,100
+192,102,90,12,false,6,0.25,101
+193,103,90,12,false,6,0.25,102
+194,104,90,12,false,6,0.25,103
+195,105,90,12,false,6,0.25,104
+196,106,90,12,false,6,0.25,105

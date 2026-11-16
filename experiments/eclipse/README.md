@@ -43,7 +43,7 @@ The recipients of this message report if they got it or not.
 cargo run --package dactie-experiment-eclipse --bin dactie-experiment-eclipse -- -n 6 -N 6 -A 60 -a 15 -s 30 -r 20 
 ```
 ## Why this experiment exists
-DACTIE disables GossipSub's flood publishing (`flood_publish(false)` in `crates/dactie-peer/src/mybehaviour.rs`), because with it the publisher sends every new message directly to every known subscriber, and any attacker among them learns who the sender is. Flood publishing is, however, one of GossipSub's defenses against eclipse attacks (Vyzovitis et al., *GossipSub: Attack-Resilient Message Propagation in the Filecoin and ETH2.0 Networks*, 2020). This experiment checks whether DACTIE stays available without it. The paper reports only the summary below.
+DACTIE disables GossipSub's flood publishing (`flood_publish(false)` in `crates/dactie-peer/src/mybehaviour.rs`), because with it the publisher sends every new message directly to every known subscriber, and any attacker among them learns who the sender is. Flood publishing is, however, one of GossipSub's defenses against eclipse attacks (Vyzovitis et al., *GossipSub: Attack-Resilient Message Propagation in the Filecoin and ETH2.0 Networks*, 2020). This experiment checks whether DACTIE stays available without it, and whether gossip emission matters for that. The paper reports only the summary below.
 
 ## Setup
 Let `H` be the set of honest peers and `A` the set of attacker peers, with `N = H ∪ A`, `H ∩ A = ∅`, `n = |N|` and the attacker fraction `α = |A| / n`.
@@ -54,23 +54,45 @@ Let `H` be the set of honest peers and `A` the set of attacker peers, with `N = 
 
 If all of `V`'s mesh peers are attackers, no message from `V` reaches another honest peer, and the eclipse succeeded. A run needs at least two honest peers: `V` and one receiver.
 
-The runs of the paper are in `results/eclipse/` at the repository root. Their folders are named after the number of attackers, and the file name `experiment_<min honest>_<max honest>_<stop time>_<interval>.csv` gives the series. Each setting in `output/` was repeated three times:
+All peers of a run share one process and connect over loopback TCP. Options added after the first series (`--flood-publish`, `-D/--mesh-n`, `--mesh-n-low`, `--mesh-n-high`, `--gossip-lazy`, `--gossip-factor`, `--bootstrap-port`) are listed by `--help`; the defaults are the configuration of the release (mesh band 10/12/24, flood publishing off, libp2p's default gossip emission).
+
+## Results with the released configuration (2026-11-15/16)
+The paper's figure. Every peer uses the mesh band 10/12/24 and no flood publishing (both defaults), and gossip emission either as in the release (`--gossip-lazy 6 --gossip-factor 0.25`, libp2p's defaults) or off (`--gossip-lazy 0 --gossip-factor 0`). The data is in `results/eclipse/rerun-2026-11-15/`, one folder per setting (`gossip-on/`, `gossip-off/`) and per number of attackers `A`. Every run publishes the measurement message after 180 s and takes about 233 s.
+
+| Grid | Folder | Attackers `A` | Honest peers | `n` | Runs | Flags per series |
+| --- | --- | --- | --- | --- | --- | --- |
+| small | `output/<A>/` | 10, 20, …, 100 | 2 to ⌊A/4⌋ | 12–125 | 375 | `-n 2 -N <⌊A/4⌋> -A <A> -s 180 -i fix=5 -r 3` |
+| large | `old_output/<A>/` | 10, 30, 40, …, 100 | 100–120 | 110–220 | 945 | `-n 100 -N 120 -A <A> -s 180 -i fix=5 -r 5` |
+
+| Gossip emission | Grid | Victim cut off | Partly delivered |
+| --- | --- | --- | --- |
+| on (release) | small | 21 of 375: 2–8 honest peers, `α ≥ 10/11` | 0 |
+| on (release) | large | 0 of 945 | 0 |
+| off | small | 102 of 375: 2–19 honest peers, `α ≥ 0.80` | 0 |
+| off | large | 0 of 945 | 0 |
+
+- With the release configuration, every attack failed when attackers made up less than 10/11 of the network (fewer than ten per honest peer) or when at least 9 honest peers remained.
+- Turning gossip emission off makes the same attacks succeed about five times as often in small networks, and with up to 19 honest peers and 80 % attackers: gossip repairs what the mesh fails to deliver. It brings no measurable anonymity gain, since with emission on the source never reached more than its mesh peers directly in the anonymity runs (`results/sizes/`). The release therefore keeps gossip emission on.
+- No run ended in a partial eclipse: either every other honest peer received the message, or none did.
+
+## Running many series on one host
+Each run connects its peers roughly all to all over loopback, and Linux tracks every such connection in its conntrack table. When the table is full, the kernel drops packets silently; in the results this looks like cut-off victims with fewer attackers than mesh peers, or partial deliveries. A first rerun with up to 20 processes at once on labrada (`nf_conntrack_max` 262144) was discarded for that reason. Before trusting a run, check the kernel log for its time window:
+
+```bash
+journalctl -k --since "<start>" | grep -c "table full"
+```
+
+A process with `n` peers peaked at up to about `2.1 n²` entries (at run boundaries, when the connections of one run are in TIME_WAIT while the next run connects). Start processes only while the sum of these estimates fits below `nf_conntrack_max`, and give each one its own `--bootstrap-port`.
+
+## Reproducing the figure
+`python3 scripts/parse_eclipse_rerun.py` (from the repository root) collects `results/eclipse/rerun-2026-11-15/` into `eclipse_gossip_parsed.csv`, one row per run (2,640 rows), and splits it into `eclipse_gossip_on.csv` and `eclipse_gossip_off.csv`, the two series of the paper's figure (filled and hollow). It adds `attacker_ratio` and `message_ratio = received_messages / (honest_peers - 1)`, and prints the summary above. The figure plots `message_ratio` against `honest_peers` and against `attacker_ratio`.
+
+## Earlier series (847 runs, superseded)
+Before the rerun, the paper reported 847 runs of an earlier harness version, all with libp2p's default gossip emission; the repository does not record their exact flags. They are in `results/eclipse/`, named `experiment_<min honest>_<max honest>_<stop time>_<interval>.csv`:
 
 | Folder | Attackers | Honest peers | Network size `n` | Runs |
 | --- | --- | --- | --- | --- |
 | `results/eclipse/output/<A>/` | 10, 20, …, 100 | 2 to about A/4 | 12–125 | 375 |
 | `results/eclipse/old_output/<A>/` | 10, 60–100 | 100–120 | 110–220 | 472 |
 
-## Results
-Across all 847 runs:
-
-- Every attack failed when attackers made up less than 86 % of the network (`α < 0.86`).
-- Every attack failed when at least 10 honest peers remained, regardless of `α`.
-- All 41 successful eclipses (`output/` only) had at most 9 honest peers and `α ≥ 0.87`. No run ended in a partial eclipse: either every other honest peer received the message, or none did.
-
-So DACTIE stays available with flood publishing disabled, unless an attacker controls almost the entire network.
-
-## Reproducing the figures
-`python3 scripts/parse_eclipse_output.py` (from the repository root) collects the single runs of `results/eclipse/output/` and `results/eclipse/old_output/` into `results/eclipse/eclipse_parsed.csv`, one row per run (847 rows). It skips the `experiment_avg_*.csv` files, which hold per-setting averages, and adds `attacker_ratio`, `message_ratio = received_messages / (honest_peers - 1)` and the source folder as `series`. The paper's eclipse figure plots `message_ratio` against `honest_peers` and against `attacker_ratio`.
-
-Options added after these runs (`--flood-publish`, `-D/--mesh-n`, `--mesh-n-low`, …) are listed by `--help`.
+Every attack failed when attackers made up less than 86 % of the network or when at least 10 honest peers remained; all 41 successful eclipses (`output/` only) had at most 9 honest peers and `α ≥ 0.87`, and none was partial. `python3 scripts/parse_eclipse_output.py` collects them into `results/eclipse/eclipse_parsed.csv` (847 rows, with the source folder as `series`).

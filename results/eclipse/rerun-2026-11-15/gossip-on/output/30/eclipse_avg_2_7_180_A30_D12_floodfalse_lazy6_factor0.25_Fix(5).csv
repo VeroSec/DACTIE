@@ -1,0 +1,7 @@
+total_peers,honest_peers,attacker_peers,mesh_n,flood_publish,gossip_lazy,gossip_factor,received_messages
+32,2,30,12,false,6,0.25,0.6666667
+33,3,30,12,false,6,0.25,2
+34,4,30,12,false,6,0.25,3
+35,5,30,12,false,6,0.25,4
+36,6,30,12,false,6,0.25,5
+37,7,30,12,false,6,0.25,6

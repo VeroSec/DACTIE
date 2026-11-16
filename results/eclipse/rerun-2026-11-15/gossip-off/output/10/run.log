@@ -1,0 +1,24 @@
+Starting Experiment
+Starting Run 1 from 3, with peer_n=2, attack_time=10secs, pub_interval=Fix(5)
+Sending Control Signal
+Sending Attack Signal
+Sending Publish Signal
+Stopping
+peers stopped
+1 Peers from 2 received victim messages.
+Starting Run 2 from 3, with peer_n=2, attack_time=10secs, pub_interval=Fix(5)
+Sending Control Signal
+Sending Attack Signal
+Sending Publish Signal
+Stopping
+peers stopped
+1 Peers from 2 received victim messages.
+Starting Run 3 from 3, with peer_n=2, attack_time=10secs, pub_interval=Fix(5)
+Sending Control Signal
+Sending Attack Signal
+Sending Publish Signal
+Stopping
+peers stopped
+1 Peers from 2 received victim messages.
+All Repetitions done!
+On Average 1 Peers from 2 received victim messages.
