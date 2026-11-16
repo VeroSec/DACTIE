@@ -253,29 +253,37 @@ both systems on the testbed:
   one Raft orderer, one endorsing peer, LevelDB, and blocks of 30 transactions or 1 s, as in
   Thakkar et al.
 
-Both systems were measured on 2026-11-11:
+Fabric was measured on 2026-11-11 and DACTIE on 2026-11-14, with the current credential
+(Cam20's, #18) and its verification as one multi-pairing (#21), up to 250 per second
+(`results/latency/rate-sweep-2026-11-14/`):
 
 | Arrival rate (per s) | DACTIE at `peer_1`: throughput, mean / p95 | Fabric at `peer0.org1`: throughput, mean / p95 |
 | --- | --- | --- |
-| 25 | 25.0, 24.1 / 29 ms | 25.2, 561 / 1,018 ms |
-| 50 | 50.0, 17.3 / 26 ms | 49.8, 345 / 615 ms |
-| 75 | 75.0, 15.7 / 23 ms | 75.0, 247 / 426 ms |
-| 100 | 100.0, 15.6 / 23 ms | 100.2, 197 / 332 ms |
-| 110 | 110.0, 15.8 / 24 ms | 109.8, 182 / 305 ms |
-| 125 | 125.0, 18.4 / 28 ms | 125.4, 166 / 274 ms |
-| 150 | 140.3, 1,845 / 5,264 ms | 150.0, 141 / 231 ms |
-| 175 | 141.4, 4,762 / 12,867 ms, 4.3 % lost | 174.6, 128 / 204 ms |
+| 25 | 25.0, 24.1 / 28 ms | 25.2, 561 / 1,018 ms |
+| 50 | 50.0, 17.1 / 26 ms | 49.8, 345 / 615 ms |
+| 75 | 75.0, 14.7 / 23 ms | 75.0, 247 / 426 ms |
+| 100 | 100.0, 14.5 / 23 ms | 100.2, 197 / 332 ms |
+| 110 | 110.0, 14.4 / 23 ms | 109.8, 182 / 305 ms |
+| 125 | 125.0, 14.9 / 24 ms | 125.4, 166 / 274 ms |
+| 150 | 150.0, 16.3 / 26 ms | 150.0, 141 / 231 ms |
+| 175 | 175.0, 20.5 / 33 ms | 174.6, 128 / 204 ms |
+| 200 | 200.0, 33.6 / 56 ms | 199.8, 117 / 184 ms |
+| 225 | 212.0, 1,785 / 4,444 ms, 0.8 % lost | – |
+| 250 | 214.3, 4,150 / 12,314 ms, 1.7 % lost | 250.2, 101 / 155 ms |
 | 1,000 | – | 1,000, 63 / 87 ms |
 
-**Latency.** Up to 125 messages per second, DACTIE delivers within 16 to 24 ms on average and
-Fabric commits within 166 to 561 ms. Most of Fabric's latency is waiting for a block to fill:
-30 transactions or 1 s, and from 50 per second on every block is full.
+**Latency.** Up to 175 messages per second, DACTIE delivers within 14 to 24 ms on average and
+Fabric commits within 128 to 561 ms; at 200 per second, DACTIE needs 34 ms and Fabric 117 ms.
+Most of Fabric's latency is waiting for a block to fill: 30 transactions or 1 s, and from 50
+per second on every block is full.
 
-**Saturation.** DACTIE saturates at about 141 messages per second, with one CPU core busy at
-each receiving peer (93–95 % in `results/latency/rate-sweep-2026-11-11/cpu/r150.cpu`). That is
-close to the rate that verifying the group signatures one after another allows; verifying them
-in parallel would raise it. Fabric committed every transaction at every rate up to 1,000 per
-second, with no node above 1.7 cores. Its peers check ECDSA signatures, and its clients are not
+**Saturation.** DACTIE saturates at about 213 messages per second. From 200 per second on,
+every receiving peer and both archives use about one full CPU core
+(`results/latency/rate-sweep-2026-11-14/cpu/`). On one core of these hosts, verifying a group
+signature takes 5.0 ms (`results/latency/rate-sweep-2026-11-14/thressig-bench-minerva3.txt`),
+so a peer that verifies them one after another manages about 200 per second; verifying them in
+parallel would raise the limit. Fabric committed every
+transaction at every rate up to 1,000 per second, with no node above 1.7 cores. Its peers check ECDSA signatures, and its clients are not
 anonymous in this setup; with anonymous clients, see below.
 
 **Thakkar et al.'s workload.** Their 20-byte value
@@ -314,7 +322,8 @@ anonymous senders is its Idemix MSP.
     2.2 ms per signature, two per transaction during the run;
   - every node that checks the transaction needs 35.0 ms for the proof (a pairing check) and
     3.6 ms for the signature;
-  - a DACTIE receiver spends about 7 ms per message.
+  - a DACTIE receiver needs 5.0 ms to verify a message, on one core of minerva3
+    (`results/latency/rate-sweep-2026-11-14/thressig-bench-minerva3.txt`).
 - **Saturation:**
   - Fabric with anonymous clients keeps up to about 20 transactions per second.
   - Up to 15 per second, every transaction commits within 0.92 to 0.94 s on average, against
@@ -340,14 +349,22 @@ anonymous senders is its Idemix MSP.
 
 Anonymity thus costs Fabric far more than it costs DACTIE. On the same hosts and with the same
 record, Fabric with anonymous clients keeps up to about 20 transactions per second, against
-DACTIE's 141 messages per second. Below saturation, its latency is 0.9 s, against DACTIE's 16
+DACTIE's 213 messages per second. Below saturation, its latency is 0.9 s, against DACTIE's 14
 to 24 ms.
 
+**The sweep of 2026-11-11.** It ran `main` at `398cc56`, the same day as Fabric, with the
+credential before #18 and verification by separate pairings. Up to 125 messages per second it
+gave the same latencies within 3.5 ms, but it saturated at about 141 messages per second, with
+each receiving peer at one full core (93–95 % in
+`results/latency/rate-sweep-2026-11-11/cpu/r150.cpu`); at 175 per second 4.3 % were lost.
+Verifying with one multi-pairing raised the limit by half, although the current credential
+costs one pairing more per verification.
+
 **The sweep of 2026-11-08.** It ran the released build `bec9c1c` and gave the same DACTIE
-numbers within a few milliseconds, with 13.7 % lost at 175 per second. From 100 messages per
+numbers as 2026-11-11 within a few milliseconds, with 13.7 % lost at 175 per second. From 100 messages per
 second on, the archives fell behind and forwarded some messages again after GossipSub's 60 s
 duplicate cache had expired, so peers received them twice (the `duplicates` column). Peers now
-drop such late copies (`crates/dactie-utils/src/dedup.rs`), and the 2026-11-11 rerun has none.
+drop such late copies (`crates/dactie-utils/src/dedup.rs`), and the later sweeps have none.
 
 Fabric's latency also includes ordering all transactions, which DACTIE does not do and CTI
 sharing does not need.

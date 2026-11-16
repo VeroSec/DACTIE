@@ -643,6 +643,30 @@ fn sign_with<T: Serialize>(
     })
 }
 
+/// The commitment a verifier recomputes from a proof of knowledge of (sk, a') on a randomized
+/// credential: (e(sigma1^-1, X~) e(sigma2, g~))^-c e(sigma1^s, Y1~) e(sigma1^s2, Y2~). Written as
+/// e(sigma1^c, X~) e(sigma2^-c, g~) e(sigma1^s, Y1~) e(sigma1^s2, Y2~), it is one multi-pairing
+/// with a single final exponentiation instead of four pairings and a power in GT.
+fn proof_commitment(
+    sigma1: &G1,
+    sigma2: &G1,
+    c: &FieldElement,
+    s: &FieldElement,
+    s2: &FieldElement,
+    grpkey: &Grpkey,
+) -> GT {
+    let a = sigma1 * c;
+    let b = (sigma2 * c).neg();
+    let d = sigma1 * s;
+    let e = sigma1 * s2;
+    GT::ate_multi_pairing(vec![
+        (&a, &grpkey.x_pub_tilde),
+        (&b, &grpkey.g_tilde),
+        (&d, &grpkey.y1_pub_tilde),
+        (&e, &grpkey.y2_pub_tilde),
+    ])
+}
+
 /**
  * Verifier checks signature and ZKP of sk.
  **/
@@ -659,15 +683,7 @@ pub fn verify<T: Serialize + ?Sized>(
         return Err(SignatureInvalid);
     }
 
-    /* e1 = e(sigma1^-1,X) */
-    let e1 = GT::ate_pairing(&(&sig.sigma1).neg(), &grpkey.x_pub_tilde);
-    /* e2 = e(sigma2,gg) */
-    let e2 = GT::ate_pairing(&sig.sigma2, &grpkey.g_tilde);
-    /* e3 = e(sigma1^s,Y1) e(sigma1^s2,Y2) */
-    let e3 = GT::ate_pairing(&(&sig.sigma1 * &sig.s), &grpkey.y1_pub_tilde)
-        * GT::ate_pairing(&(&sig.sigma1 * &sig.s2), &grpkey.y2_pub_tilde);
-    /* r_pub = (e1*e2)^-c*e3 */
-    let r_pub = (e1 * e2).pow(&sig.c).inverse() * e3;
+    let r_pub = proof_commitment(&sig.sigma1, &sig.sigma2, &sig.c, &sig.s, &sig.s2, grpkey);
 
     let mut msg_to_send: Vec<u8> = Vec::new();
     msg_to_send.extend(grpkey.to_bytes());
@@ -767,11 +783,14 @@ pub fn verify_member(proof: &MemberProof, grpkey: &Grpkey, pairs: &[(G1, G1)], m
         return false;
     }
     /* e(sigma2', g~) / e(sigma1', X~) = e(sigma1', Y1~)^sk e(sigma1', Y2~)^a' */
-    let cred = GT::ate_pairing(&proof.sigma2, &grpkey.g_tilde)
-        * GT::ate_pairing(&(&proof.sigma1).neg(), &grpkey.x_pub_tilde);
-    let r1 = cred.pow(&proof.c).inverse()
-        * GT::ate_pairing(&(&proof.sigma1 * &proof.s), &grpkey.y1_pub_tilde)
-        * GT::ate_pairing(&(&proof.sigma1 * &proof.s2), &grpkey.y2_pub_tilde);
+    let r1 = proof_commitment(
+        &proof.sigma1,
+        &proof.sigma2,
+        &proof.c,
+        &proof.s,
+        &proof.s2,
+        grpkey,
+    );
     /* value = base^sk */
     let r2s: Vec<G1> = pairs
         .iter()

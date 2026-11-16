@@ -19,7 +19,7 @@ harness output of one cell.
 | Latency table | `latency/rerun-2026-10-26.csv` (runs `off-*`, receiver `peer_1`), every receipt in `latency/raw-2026-10-26.csv` |
 | Comparison with Hyperledger Fabric (arrival rates 25 to 175 msg/s) | DACTIE `latency/rate-sweep-2026-11-08/`, `latency/rate-sweep-2026-11-11/`; Fabric `fabric/rate-sweep-2026-11-11/`; side by side `fabric/rate-sweep-2026-11-11/comparison.csv`; Fabric with anonymous Idemix clients `fabric/rate-sweep-2026-11-13-idemix/` |
 | Soak test (33.4 hours) | `latency/soak/` |
-| Microbenchmark | `benchmark/README.md` |
+| Microbenchmark | `benchmark/thressig-epyc7763-2026-11-15.txt`; setup and older results in `experiments/benchmark/README.md` |
 
 ## Single-attacker anonymity: `anonymity_parsed.csv`, `sizes/`
 
@@ -203,7 +203,7 @@ and maximum latency in ms, resident memory in MB and established connections.
 ## Comparison with Hyperledger Fabric: `latency/rate-sweep-2026-11-*/`, `fabric/`
 
 Arrival-rate sweeps on the same testbed: 1 KiB MISP messages at 25, 50, 75, 100, 110, 125, 150
-and 175 messages per second. Each rate runs about 100 s: the publisher stops 60 s after its
+and 175 messages per second (the 2026-11-14 sweep also at 200, 225 and 250). Each rate runs about 100 s: the publisher stops 60 s after its
 start line plus the `docker stats` round and its own stop. DACTIE runs without the stem and
 with Nagle off. Setup and results are in `docs/EVALUATION.md`.
 
@@ -213,6 +213,11 @@ with Nagle off. Setup and results are in `docs/EVALUATION.md`.
   sweep, receivers `peer_1` and `peer_2`. `peer_3` verified and forwarded every message but
   logged no receipts, most likely because its topic subscription was not saved before the
   sweep recreated it.
+- **`latency/rate-sweep-2026-11-14/`:** `main` with the Cam20 credential (#18) and verification
+  as one multi-pairing (#21, `f4e047c`), receivers `peer_1` to `peer_3`, up to 250 messages per
+  second. `thressig-bench-minerva3.txt` times signing (4.1 ms) and verifying (5.0 ms) on one
+  core of minerva3 with the same code. Its `comparison.csv` puts it beside every Fabric series below:
+  `python3 experiments/fabric/compare.py results/latency/rate-sweep-2026-11-14 results/fabric/rate-sweep-2026-11-11/misp-1KiB results/fabric/rate-sweep-2026-11-11/thakkar-20B fabricidemix=results/fabric/rate-sweep-2026-11-13-idemix/idemix-misp-1KiB fabricx509rerun=results/fabric/rate-sweep-2026-11-13-idemix/x509-misp-1KiB`.
 
 The DACTIE directories hold:
 

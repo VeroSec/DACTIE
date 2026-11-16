@@ -1,0 +1,76 @@
+# cargo bench -p dactie-benchmark --bench thressig at f4e047c, rust:1.100 container on minerva3
+# (Xeon Gold 6342, 2.8 GHz; idle host), pinned with taskset -c 2, 2026-11-14
+Gnuplot not found, using plotters backend
+signature size: 282 bytes (bincode)
+Benchmarking per_message/sign
+Benchmarking per_message/sign: Warming up for 3.0000 s
+Benchmarking per_message/sign: Collecting 100 samples in estimated 5.3104 s (1300 iterations)
+Benchmarking per_message/sign: Analyzing
+per_message/sign        time:   [4.0837 ms 4.0894 ms 4.0952 ms]
+Found 1 outliers among 100 measurements (1.00%)
+  1 (1.00%) high mild
+Benchmarking per_message/verify
+Benchmarking per_message/verify: Warming up for 3.0000 s
+Benchmarking per_message/verify: Collecting 100 samples in estimated 5.0161 s (1000 iterations)
+Benchmarking per_message/verify: Analyzing
+per_message/verify      time:   [4.9955 ms 5.0014 ms 5.0078 ms]
+Found 1 outliers among 100 measurements (1.00%)
+  1 (1.00%) high mild
+
+Benchmarking join/full_join/3_archives
+Benchmarking join/full_join/3_archives: Warming up for 3.0000 s
+Benchmarking join/full_join/3_archives: Collecting 20 samples in estimated 5.8353 s (100 iterations)
+Benchmarking join/full_join/3_archives: Analyzing
+join/full_join/3_archives
+                        time:   [58.307 ms 58.373 ms 58.446 ms]
+Found 1 outliers among 20 measurements (5.00%)
+  1 (5.00%) high mild
+
+open: 10 members, 1 sharing peers each, 20 stored shares
+Benchmarking open/archive_partial_open/10
+Benchmarking open/archive_partial_open/10: Warming up for 3.0000 s
+Benchmarking open/archive_partial_open/10: Collecting 10 samples in estimated 21.629 s (440 iterations)
+Benchmarking open/archive_partial_open/10: Analyzing
+open/archive_partial_open/10
+                        time:   [49.193 ms 49.219 ms 49.239 ms]
+Found 1 outliers among 10 measurements (10.00%)
+  1 (10.00%) high severe
+Benchmarking open/combine/10
+Benchmarking open/combine/10: Warming up for 3.0000 s
+Benchmarking open/combine/10: Collecting 10 samples in estimated 21.106 s (495 iterations)
+Benchmarking open/combine/10: Analyzing
+open/combine/10         time:   [42.690 ms 42.745 ms 42.804 ms]
+Found 1 outliers among 10 measurements (10.00%)
+  1 (10.00%) high severe
+open: 100 members, 1 sharing peers each, 200 stored shares
+Benchmarking open/archive_partial_open/100
+Benchmarking open/archive_partial_open/100: Warming up for 3.0000 s
+
+Warning: Unable to complete 10 samples in 20.0s. You may wish to increase target time to 27.0s or enable flat sampling.
+Benchmarking open/archive_partial_open/100: Collecting 10 samples in estimated 27.031 s (55 iterations)
+Benchmarking open/archive_partial_open/100: Analyzing
+open/archive_partial_open/100
+                        time:   [491.66 ms 491.85 ms 492.07 ms]
+Benchmarking open/combine/100
+Benchmarking open/combine/100: Warming up for 3.0000 s
+Benchmarking open/combine/100: Collecting 10 samples in estimated 35.243 s (110 iterations)
+Benchmarking open/combine/100: Analyzing
+open/combine/100        time:   [320.52 ms 320.58 ms 320.68 ms]
+open: 500 members, 1 sharing peers each, 1000 stored shares
+Benchmarking open/archive_partial_open/500
+Benchmarking open/archive_partial_open/500: Warming up for 3.0000 s
+
+Warning: Unable to complete 10 samples in 20.0s. You may wish to increase target time to 24.6s.
+Benchmarking open/archive_partial_open/500: Collecting 10 samples in estimated 24.570 s (10 iterations)
+Benchmarking open/archive_partial_open/500: Analyzing
+open/archive_partial_open/500
+                        time:   [2.4585 s 2.4593 s 2.4600 s]
+Benchmarking open/combine/500
+Benchmarking open/combine/500: Warming up for 3.0000 s
+Benchmarking open/combine/500: Collecting 10 samples in estimated 31.059 s (20 iterations)
+Benchmarking open/combine/500: Analyzing
+open/combine/500        time:   [1.5553 s 1.5561 s 1.5570 s]
+Found 2 outliers among 10 measurements (20.00%)
+  1 (10.00%) low mild
+  1 (10.00%) high mild
+
