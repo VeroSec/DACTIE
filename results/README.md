@@ -179,8 +179,9 @@ peers the series was restarted from, and `eclipse_<resume>_120_*.csv` and
 has all its runs: 105 per large series, 3 per number of honest peers in the small ones.
 
 The earlier 847 runs (`eclipse_parsed.csv`, `output/`, `old_output/`), which the
-paper reported before the rerun, used an earlier harness version whose exact
-flags the repository does not record. One row per run, with the source folder as
+paper reported before the rerun, used an earlier harness version with libp2p's
+default mesh band 5/6/12 instead of the release's 10/12/24 (see
+`experiments/eclipse/README.md`). One row per run, with the source folder as
 `series`; rebuild with `python3 scripts/parse_eclipse_output.py`.
 
 ## Latency: `latency/`
