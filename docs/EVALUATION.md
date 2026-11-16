@@ -228,12 +228,16 @@ to 220 peers (2026-11-15/16). One series of its small grid, here with gossip emi
 ```bash
 cargo run --release -p dactie-experiment-eclipse -- -n 2 -N 25 -A 100 -s 180 -i fix=5 -r 3 \
     --gossip-lazy 0 --gossip-factor 0 -o /tmp/eclipse/
+python3 scripts/parse_eclipse_rerun.py /tmp/eclipse/eclipse_results.csv
 ```
 
-All peers of a series run in one process over loopback TCP. Before running several series in
-parallel, read the README's section on the conntrack table: when it is full, the kernel drops
-packets silently. `python3 scripts/parse_eclipse_rerun.py` collects
-`results/eclipse/rerun-2026-11-15/` into one CSV per setting.
+Every run appends one row to the results CSV (`--results`, by default
+`<out-path>/eclipse_results.csv`), which several series can share; the log of each series
+stays in `--out-path`. The parser splits the rows by gossip setting into the two series of
+the figure. All peers of a series run in one process over loopback TCP. Before running
+several series in parallel, read the README's section on the conntrack table: when it is
+full, the kernel drops packets silently. The parsed runs of the paper are in
+`results/eclipse/rerun-2026-11-15/`.
 
 ## Comparison with Hyperledger Fabric
 

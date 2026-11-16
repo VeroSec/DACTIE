@@ -91,17 +91,17 @@ pub(crate) async fn experiment_prop_peer_id(
     });
     peers.push(peer_task);
 
-    println!("Sending Control Signal");
+    say!("Sending Control Signal");
     control_tx.send(ControlSignal::Run).unwrap();
 
     attack_interval.tick().await;
 
-    println!("Sending Attack Signal");
+    say!("Sending Attack Signal");
     control_tx.send(ControlSignal::Attack).unwrap();
 
     stop_interval.tick().await;
 
-    println!("Sending Publish Signal");
+    say!("Sending Publish Signal");
     control_tx.send(ControlSignal::Pub(stop_peer_addr)).unwrap();
 
     tokio::time::sleep(Duration::from_secs(30)).await;
@@ -110,7 +110,7 @@ pub(crate) async fn experiment_prop_peer_id(
 
     let mut receivers = 0f32;
     join_all(peers).await;
-    println!("peers stopped");
+    say!("peers stopped");
 
     drop(response_tx);
 

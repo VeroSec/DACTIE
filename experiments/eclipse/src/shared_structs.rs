@@ -1,4 +1,5 @@
 use libp2p::PeerId;
+use std::fmt;
 use std::str::FromStr;
 
 /// The gossipsub knobs this experiment varies.
@@ -13,8 +14,8 @@ pub(crate) struct GossipConfig {
     pub(crate) mesh: MeshConfig,
     /// Gossip emission (IHAVE/IWANT): per heartbeat, a peer announces its recent messages
     /// to max(gossip_lazy, gossip_factor × its non-mesh peers) peers, which can then fetch
-    /// them. libp2p's defaults are 6 and 0.25; the DACTIE nodes use 0 and 0, so an
-    /// eclipsed victim's messages can leave it only through its mesh.
+    /// them. libp2p's defaults, 6 and 0.25, are also those of the DACTIE nodes. With both
+    /// 0, an eclipsed victim's messages can leave it only through its mesh.
     pub(crate) gossip_lazy: usize,
     pub(crate) gossip_factor: f64,
     /// TCP port the bootstrap peer listens on and everyone else dials.
@@ -77,6 +78,16 @@ pub(crate) enum ControlSignal {
 pub(crate) enum PubInterval {
     Fix(u64), //in seconds
     Random((usize, usize)),
+}
+
+/// The interval as in the command line, but without a comma, so that it fits a CSV field.
+impl fmt::Display for PubInterval {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            PubInterval::Fix(secs) => write!(f, "fix={secs}"),
+            PubInterval::Random((start, end)) => write!(f, "random={start}-{end}"),
+        }
+    }
 }
 
 // Implement FromStr for PubInterval to handle argument parsing

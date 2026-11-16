@@ -171,7 +171,7 @@ impl Peer {
                         },
                         ControlSignal::Pub(val) => {
                             if val == self.get_peer_id(){
-                                 println!("Stopping");
+                                 say!("Stopping");
                                 let message = "Stop".repeat(30);
                                 let _ = self.swarm.behaviour_mut().gossipsub.publish(IdentTopic::new("Test"),message); //Not handled
                             }

@@ -8,3 +8,6 @@
 .env
 __pycache__/
 .ruff_cache/
+
+# Eclipse harness logs stay local; only the results CSVs are published
+/results/eclipse/**/*.log
