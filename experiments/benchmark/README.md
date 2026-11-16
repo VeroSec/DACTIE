@@ -36,6 +36,26 @@ verifies and opens to the right member.
 - `open/combine/<n>`: the AA combining the partial openings of `t` archives; checks every
   member and every sharing peer, as `open_signature` does.
 
+## Results (2026-11-15, Cam20 credential, verification as one multi-pairing)
+
+Release build of `f4e047c`, single core (`taskset -c 2`), idle hosts, 3 archives, t = 3, 1 KiB
+payload, one sharing peer per member (2n stored shares). Signature size: 282 bytes.
+
+| Operation | Server (AMD EPYC 7763) | Testbed host (Xeon Gold 6342) |
+| --- | --- | --- |
+| sign | 3.85 ms | 4.09 ms |
+| verify | 5.16 ms | 5.00 ms |
+| full join | 58.3 ms | 58.4 ms |
+| archive partial open, n = 10 / 100 / 500 | 50.2 ms / 499 ms / 2.50 s | 49.2 ms / 492 ms / 2.46 s |
+| combine, n = 10 / 100 / 500 | 42.6 ms / 320 ms / 1.55 s | 42.7 ms / 321 ms / 1.56 s |
+
+The paper reports the server numbers: about 2.5 ms per stored share per archive plus 1.6 ms per
+stored share to combine, so 4.1 s for 500 members. Combining costs half a millisecond more per
+share than on 2026-10-13: with the Cam20 credential it checks each member with one
+exponentiation in G_T more (for `a'`), and every member has two stored shares. Raw output:
+[`results/benchmark/thressig-epyc7763-2026-11-15.txt`](../../results/benchmark/thressig-epyc7763-2026-11-15.txt)
+and [`results/latency/rate-sweep-2026-11-14/thressig-bench-minerva3.txt`](../../results/latency/rate-sweep-2026-11-14/thressig-bench-minerva3.txt).
+
 ## Results (2026-10-11, one share per member, before the constants of `open` were hoisted)
 
 Release build, single thread, 3 archives, t = 3, 1 KiB payload. Signature size: 226 bytes. (Since
